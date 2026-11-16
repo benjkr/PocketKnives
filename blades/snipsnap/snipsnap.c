@@ -1,13 +1,13 @@
 /*
  * SnipSnap - a tiny, fast screen snippet tool for Windows.
  *
- * Three captures: a dragged rectangle, the active window, or the monitor
+ * Three captures: a dragged rectangle, a window you click, or the monitor
  * under the cursor. The result goes to the clipboard as a 24-bit CF_DIB, and
  * the captured area flashes briefly. Nothing else.
  *
  *   snipsnap            run in the background and listen for hotkeys
  *   snipsnap rect       select a rectangle once, then exit
- *   snipsnap window     capture the active window once, then exit
+ *   snipsnap window     pick a window once, then exit
  *   snipsnap full       capture the monitor under the cursor once, then exit
  *   snipsnap quit       stop the background instance
  *
@@ -34,7 +34,8 @@ enum { HK_RECT = 1, HK_WINDOW = 2, HK_FULL = 3, HK_ESC = 4 };
 #define OVERLAY_CLASS L"SnipSnapOverlay"
 #define FLASH_CLASS   L"SnipSnapFlash"
 #define MUTEX_NAME    L"Local\\SnipSnap.Daemon"
-#define FRAME_COLOR   RGB(0, 120, 215)
+#define FRAME_COLOR   RGB(255, 255, 255)   /* selection / hovered-window border */
+#define FRAME_W       2                    /* border thickness, px */
 #define FLASH_ALPHA   150               /* starting opacity of the white flash */
 #define FLASH_MS      150               /* fade-out duration */
 #ifndef SS_ROP
@@ -59,6 +60,12 @@ static const Hotkey FULL_KEYS[] = {
 };
 
 static BOOL g_daemon;   /* running as the background instance */
+
+static BOOL eq(const wchar_t *a, const wchar_t *b)
+{
+    while (*a && *a == *b) { a++; b++; }
+    return *a == *b;
+}
 
 /* ---------------------------------------------------------------- output */
 
@@ -191,28 +198,79 @@ static RECT vscreen(void)
     return r;
 }
 
-/* The monitor under the mouse cursor. */
-static RECT cursor_monitor(void)
+/* The monitor containing a point. */
+static RECT monitor_at(POINT p)
 {
-    POINT p;
     MONITORINFO mi;
     mi.cbSize = sizeof mi;
-    GetCursorPos(&p);
     if (!GetMonitorInfoW(MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST), &mi)) return vscreen();
     return mi.rcMonitor;
 }
 
-/* The visible frame of the active window (no invisible resize borders or
- * shadow), clipped to the screen. Falls back to the cursor's monitor. */
-static RECT active_window(void)
+/* The monitor under the mouse cursor. */
+static RECT cursor_monitor(void)
 {
-    HWND w = GetForegroundWindow();
-    RECT r, v = vscreen(), out;
-    if (!w || IsIconic(w) ||
-        (FAILED(DwmGetWindowAttribute(w, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof r)) &&
-         !GetWindowRect(w, &r)) ||
-        !IntersectRect(&out, &r, &v))
-        return cursor_monitor();
+    POINT p;
+    GetCursorPos(&p);
+    return monitor_at(p);
+}
+
+/* ---------------------------------------------------------- window picking
+ *
+ * The window list is taken when the screen is frozen, top of the z-order
+ * first, so hovering always matches the frozen image. Each entry is the
+ * window's visible frame (DWM extended frame bounds: no invisible resize
+ * border or shadow). */
+
+#define MAX_WINS 512
+typedef struct { RECT r; BOOL desktop; } Win;
+static Win g_wins[MAX_WINS];
+static int g_nwins;
+
+static BOOL CALLBACK collect_window(HWND w, LPARAM lp)
+{
+    RECT r;
+    DWORD cloaked = 0, fl;
+    LONG ex;
+    BYTE a;
+    wchar_t cls[16];
+    (void)lp;
+    if (g_nwins >= MAX_WINS || !IsWindowVisible(w) || IsIconic(w)) return TRUE;
+    ex = GetWindowLongW(w, GWL_EXSTYLE);
+    if (ex & WS_EX_TRANSPARENT) return TRUE;                  /* click-through overlays */
+    if (SUCCEEDED(DwmGetWindowAttribute(w, DWMWA_CLOAKED, &cloaked, sizeof cloaked)) && cloaked)
+        return TRUE;                                          /* other desktops, suspended apps */
+    if ((ex & WS_EX_LAYERED) && GetLayeredWindowAttributes(w, NULL, &a, &fl) &&
+        (fl & LWA_ALPHA) && a == 0)
+        return TRUE;                                          /* fully transparent */
+    if (FAILED(DwmGetWindowAttribute(w, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof r)) &&
+        !GetWindowRect(w, &r))
+        return TRUE;
+    if (r.right <= r.left || r.bottom <= r.top) return TRUE;
+    GetClassNameW(w, cls, ARRAYSIZE(cls));
+    g_wins[g_nwins].r = r;
+    g_wins[g_nwins].desktop = eq(cls, L"Progman") || eq(cls, L"WorkerW");
+    g_nwins++;
+    return TRUE;
+}
+
+static void collect_windows(void)
+{
+    g_nwins = 0;
+    EnumWindows(collect_window, 0);
+}
+
+/* What to capture at a screen point: the topmost window there, or the whole
+ * monitor over the bare desktop. Clipped to the screen. */
+static RECT pick_at(POINT p)
+{
+    RECT r = monitor_at(p), v = vscreen(), out;
+    for (int i = 0; i < g_nwins; i++)
+        if (PtInRect(&g_wins[i].r, p)) {
+            if (!g_wins[i].desktop) r = g_wins[i].r;
+            break;
+        }
+    if (!IntersectRect(&out, &r, &v)) return monitor_at(p);
     return out;
 }
 
@@ -311,7 +369,7 @@ static BOOL to_clipboard(HWND owner, const Shot *s, int rx, int ry, int w, int h
     return ok;
 }
 
-/* -------------------------------------------------- window and full screen */
+/* ------------------------------------------------------------ full screen */
 
 static int snip_area(HWND owner, RECT r)
 {
@@ -325,13 +383,21 @@ static int snip_area(HWND owner, RECT r)
     return ok ? RC_OK : RC_FAIL;
 }
 
-/* -------------------------------------------------------------- rectangle */
+/* ------------------------------------------------- rectangle and window pick
+ *
+ * Both freeze all monitors and show the frozen image dimmed. Rectangle: drag
+ * to select. Window: the window under the cursor shows at full brightness with
+ * a border; click to take it. Either way the result is cropped from the
+ * frozen image, so copying after mouse-up takes only a few ms. */
+
+enum { MODE_RECT, MODE_WINDOW };
 
 static Shot g_shot, g_dim;
 static HWND g_owner;
 static HBRUSH g_frame;
-static BOOL g_drag;
-static int g_ax, g_ay, g_cx, g_cy, g_result = RC_CANCEL;
+static BOOL g_drag, g_pressed, g_has_hover;
+static RECT g_hover;                       /* hovered window, overlay coordinates */
+static int g_mode, g_ax, g_ay, g_cx, g_cy, g_result = RC_CANCEL;
 
 static void cloak(HWND h, BOOL on)
 {
@@ -355,6 +421,45 @@ static void track(LPARAM lp)
     g_cy = y < 0 ? 0 : y >= g_shot.h ? g_shot.h - 1 : y;
 }
 
+/* Point the window pick at the window under an overlay point. */
+static void hover_at(HWND h, int x, int y)
+{
+    POINT p;
+    RECT r;
+    p.x = x + g_shot.x; p.y = y + g_shot.y;
+    r = pick_at(p);
+    OffsetRect(&r, -g_shot.x, -g_shot.y);   /* screen -> overlay coordinates */
+    if (g_has_hover && EqualRect(&r, &g_hover)) return;
+    if (h && g_has_hover) InvalidateRect(h, &g_hover, FALSE);
+    g_hover = r;
+    g_has_hover = TRUE;
+    if (h) InvalidateRect(h, &g_hover, FALSE);
+}
+
+/* Bright (undimmed) area with a border, as for a selection or hovered window. */
+static void paint_lit(HDC dc, RECT clip, RECT a)
+{
+    RECT i, f = a;
+    if (IntersectRect(&i, &a, &clip))
+        BitBlt(dc, i.left, i.top, i.right - i.left, i.bottom - i.top,
+               g_shot.dc, i.left, i.top, SRCCOPY);
+    for (int k = 0; k < FRAME_W && f.right - f.left > 0 && f.bottom - f.top > 0; k++) {
+        FrameRect(dc, &f, g_frame);
+        InflateRect(&f, -1, -1);
+    }
+}
+
+/* Copy an overlay-coordinate area of the frozen image, with the flash. */
+static int take(HWND h, RECT r)
+{
+    RECT sr = r;
+    cloak(h, TRUE);                         /* vanish first, copy after */
+    OffsetRect(&sr, g_shot.x, g_shot.y);    /* overlay -> screen coordinates */
+    flash(sr);
+    return to_clipboard(g_owner, &g_shot, r.left, r.top, r.right - r.left, r.bottom - r.top)
+           ? RC_OK : RC_FAIL;
+}
+
 /* End the session; cloaking makes the overlay vanish at once (~0.2 ms vs ~7
  * ms for a real hide), the slower cleanup happens after. */
 static void finish(HWND h, int result)
@@ -369,33 +474,38 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg) {
     case WM_ERASEBKGND:
         return 1;
+    case WM_SETCURSOR:
+        SetCursor(LoadCursorW(NULL, g_mode == MODE_WINDOW ? IDC_ARROW : IDC_CROSS));
+        return TRUE;
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
-        RECT r = ps.rcPaint, s, i;
+        RECT r = ps.rcPaint;
         if (g_dim.dc) {
             BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top,
                    g_dim.dc, r.left, r.top, SRCCOPY);
-            if (g_drag) {
-                s = sel_rect();
-                if (IntersectRect(&i, &s, &r))
-                    BitBlt(dc, i.left, i.top, i.right - i.left, i.bottom - i.top,
-                           g_shot.dc, i.left, i.top, SRCCOPY);
-                FrameRect(dc, &s, g_frame);
-            }
+            if (g_mode == MODE_RECT && g_drag) paint_lit(dc, r, sel_rect());
+            if (g_mode == MODE_WINDOW && g_has_hover) paint_lit(dc, r, g_hover);
         }
         EndPaint(h, &ps);
         return 0;
     }
     case WM_LBUTTONDOWN:
         if (g_result >= 0) return 0;
-        track(lp);
-        g_ax = g_cx; g_ay = g_cy;
-        g_drag = TRUE;
+        if (g_mode == MODE_WINDOW) {
+            hover_at(h, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+            g_pressed = TRUE;
+        } else {
+            track(lp);
+            g_ax = g_cx; g_ay = g_cy;
+            g_drag = TRUE;
+        }
         SetCapture(h);
         return 0;
     case WM_MOUSEMOVE:
-        if (g_drag) {
+        if (g_mode == MODE_WINDOW) {
+            if (!g_pressed) hover_at(h, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+        } else if (g_drag) {
             RECT a = sel_rect(), b, u;
             track(lp);
             b = sel_rect();
@@ -404,8 +514,13 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     case WM_LBUTTONUP:
-        if (g_drag) {
-            RECT r, sr;
+        if (g_mode == MODE_WINDOW && g_pressed) {
+            /* Take the window on release, so the release doesn't land in the
+             * app underneath once the overlay is gone. */
+            g_pressed = FALSE;
+            ReleaseCapture();
+            if (g_has_hover) finish(h, take(h, g_hover));
+        } else if (g_drag) {
             track(lp);
             g_drag = FALSE;
             ReleaseCapture();
@@ -413,13 +528,7 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
                 InvalidateRect(h, NULL, FALSE);
                 return 0;
             }
-            r = sel_rect();
-            cloak(h, TRUE);                         /* vanish first, copy after */
-            sr = r;
-            OffsetRect(&sr, g_shot.x, g_shot.y);    /* overlay -> screen coordinates */
-            flash(sr);
-            finish(h, to_clipboard(g_owner, &g_shot, r.left, r.top, r.right - r.left,
-                                   r.bottom - r.top) ? RC_OK : RC_FAIL);
+            finish(h, take(h, sel_rect()));
         }
         return 0;
     case WM_RBUTTONDOWN:
@@ -432,7 +541,10 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         if (wp == HK_ESC) finish(h, RC_CANCEL);
         return 0;
     case WM_CAPTURECHANGED:
-        if (g_drag && (HWND)lp != h) { g_drag = FALSE; InvalidateRect(h, NULL, FALSE); }
+        if ((HWND)lp != h && (g_drag || g_pressed)) {
+            g_drag = g_pressed = FALSE;
+            InvalidateRect(h, NULL, FALSE);
+        }
         return 0;
     case WM_ACTIVATE:
         if (LOWORD(wp) == WA_INACTIVE) finish(h, RC_CANCEL);
@@ -454,7 +566,6 @@ static HWND overlay_create(const Shot *s)
         ZeroMemory(&wc, sizeof wc);
         wc.lpfnWndProc = overlay_proc;
         wc.hInstance = GetModuleHandleW(NULL);
-        wc.hCursor = LoadCursorW(NULL, IDC_CROSS);
         wc.lpszClassName = OVERLAY_CLASS;
         RegisterClassW(&wc);
         g_frame = CreateSolidBrush(FRAME_COLOR);
@@ -466,15 +577,17 @@ static HWND overlay_create(const Shot *s)
     return h;
 }
 
-static int snip_rect(HWND owner)
+static int snip_select(HWND owner, int mode)
 {
     HWND h;
     MSG m;
+    POINT cur;
     int quit = 0, have_quit = 0;
 
     ZeroMemory(&g_shot, sizeof g_shot);
     ZeroMemory(&g_dim, sizeof g_dim);
     if (!grab(&g_shot, vscreen())) return RC_FAIL;   /* freeze all monitors */
+    if (mode == MODE_WINDOW) collect_windows();     /* before our overlay exists */
 
     /* Dimmed copy of the frozen screen for the backdrop. */
     if (!shot_alloc(&g_dim, g_shot.x, g_shot.y, g_shot.w, g_shot.h)) {
@@ -492,8 +605,13 @@ static int snip_rect(HWND owner)
     if (!h) { shot_free(&g_dim); shot_free(&g_shot); return RC_FAIL; }
 
     g_owner = owner;
-    g_drag = FALSE;
+    g_mode = mode;
+    g_drag = g_pressed = g_has_hover = FALSE;
     g_result = -1;
+    if (mode == MODE_WINDOW) {              /* light up the window under the cursor now */
+        GetCursorPos(&cur);
+        hover_at(NULL, cur.x - g_shot.x, cur.y - g_shot.y);
+    }
     /* Paint while cloaked so the first visible frame is complete. Showing
      * without activation first, then taking focus, makes it visible ~20 ms
      * sooner than a plain SW_SHOW. */
@@ -503,7 +621,7 @@ static int snip_rect(HWND owner)
     UpdateWindow(h);
     cloak(h, FALSE);
     SetForegroundWindow(h);
-    SetCursor(LoadCursorW(NULL, IDC_CROSS));
+    SetCursor(LoadCursorW(NULL, mode == MODE_WINDOW ? IDC_ARROW : IDC_CROSS));
     /* Esc works even if Windows refused to give the overlay keyboard focus. */
     RegisterHotKey(h, HK_ESC, MOD_NOREPEAT, VK_ESCAPE);
 
@@ -533,8 +651,8 @@ static LRESULT CALLBACK daemon_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     case WM_HOTKEY:
         if (!g_busy) {
             g_busy = TRUE;
-            if (wp == HK_RECT) snip_rect(h);
-            else if (wp == HK_WINDOW) snip_area(h, active_window());
+            if (wp == HK_RECT) snip_select(h, MODE_RECT);
+            else if (wp == HK_WINDOW) snip_select(h, MODE_WINDOW);
             else if (wp == HK_FULL) snip_area(h, cursor_monitor());
             g_busy = FALSE;
         }
@@ -654,12 +772,6 @@ static void first_arg(wchar_t *out, int cap)
     out[n] = 0;
 }
 
-static BOOL eq(const wchar_t *a, const wchar_t *b)
-{
-    while (*a && *a == *b) { a++; b++; }
-    return *a == *b;
-}
-
 static int run(void)
 {
     wchar_t arg[16];
@@ -674,8 +786,8 @@ static int run(void)
         /* A message-only window to own the clipboard data. */
         HWND owner = CreateWindowExW(0, L"STATIC", NULL, 0, 0, 0, 0, 0,
                                      HWND_MESSAGE, NULL, NULL, NULL);
-        int rc = arg[0] == L'r' ? snip_rect(owner)
-               : arg[0] == L'w' ? snip_area(owner, active_window())
+        int rc = arg[0] == L'r' ? snip_select(owner, MODE_RECT)
+               : arg[0] == L'w' ? snip_select(owner, MODE_WINDOW)
                : snip_area(owner, cursor_monitor());
         flash_wait();                  /* the image is already on the clipboard */
         return rc;
@@ -685,7 +797,7 @@ static int run(void)
     say("SnipSnap - copy a rectangle, a window or the screen to the clipboard.\n\n"
         "  snipsnap          run in the background (hotkeys below)\n"
         "  snipsnap rect     select a rectangle once (Esc / right-click cancels)\n"
-        "  snipsnap window   capture the active window once\n"
+        "  snipsnap window   pick a window once (click it; Esc / right-click cancels)\n"
         "  snipsnap full     capture the monitor under the cursor once\n"
         "  snipsnap quit     stop the background instance\n\n"
         "Hotkeys: Ctrl+Alt+R = rectangle, Ctrl+Alt+W = window, Ctrl+Alt+F = full screen\n"

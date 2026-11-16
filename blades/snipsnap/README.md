@@ -3,7 +3,7 @@
 # SnipSnap
 
 A very fast, very small screen snippet tool for Windows 11. It does three things:
-copy a **rectangle**, the **active window**, or the **screen** under the cursor to
+copy a **rectangle**, a **window** you pick, or the **screen** under the cursor to
 the clipboard. The captured area flashes briefly so you know it worked. There's
 no editor, no saved files, no tray icon, and no UI beyond the selection overlay.
 
@@ -16,7 +16,7 @@ memory (private working set).
 ```
 snipsnap          run in the background and listen for hotkeys
 snipsnap rect     select a rectangle once, then exit
-snipsnap window   capture the active window once, then exit
+snipsnap window   pick a window once, then exit
 snipsnap full     capture the monitor under the cursor once, then exit
 snipsnap quit     stop the background instance
 ```
@@ -34,12 +34,16 @@ prints the hotkeys it actually registered. Started without a console, it shows a
 message box only if a hotkey could not be registered. Plain `PrtSc`,
 `Win+Shift+S` and the other Windows screenshot keys are left alone.
 
-**Rectangle:** all monitors freeze and dim. Drag to select; the image is copied
-when you release the mouse. `Esc` or right-click cancels.
+**Rectangle:** all monitors freeze and dim. Drag to select (a white border shows
+the selection); the image is copied when you release the mouse. `Esc` or
+right-click cancels.
 
-**Window:** copies the active (foreground) window's visible frame, without the
-invisible resize border or shadow. It copies what's on screen in that area, so
-anything covering the window is included.
+**Window:** all monitors freeze and dim, and the window under the cursor lights
+up with a white border. Click to copy it; `Esc` or right-click cancels. The
+copy is the window's visible frame (no invisible resize border or shadow), cut
+from the frozen image, so it's on the clipboard a few ms after you click. It
+copies what was on screen in that area, so anything covering the window is
+included. Over the bare desktop, the whole monitor is picked.
 
 **Full screen:** copies the monitor the mouse cursor is on.
 
@@ -66,7 +70,7 @@ Windows 11), measured from outside the program:
 | Path                                          | Time   |
 | --------------------------------------------- | ------ |
 | `Ctrl+Alt+R` → rectangle overlay visible      | ~70 ms |
-| `Ctrl+Alt+W` → window on clipboard (1920×1008) | ~28 ms |
+| Click on a window → on clipboard (486×343)    | ~8 ms  |
 | `Ctrl+Alt+F` → screen on clipboard (1920×1080) | ~32 ms |
 | `Ctrl+Alt+F` → screen on clipboard (2560×1440) | ~43 ms |
 | Mouse release → selection on clipboard        | ~2 ms  |
