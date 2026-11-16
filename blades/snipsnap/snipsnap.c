@@ -47,6 +47,8 @@ static const Hotkey FULL_KEYS[] = {
     { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'F',         "Ctrl+Alt+Shift+F" },
 };
 
+static BOOL g_daemon;   /* running as the background instance */
+
 /* ---------------------------------------------------------------- output */
 
 static HANDLE g_out;
@@ -84,7 +86,7 @@ static void detach_output(void)
     FreeConsole();
 }
 
-/* --------------------------------------------------------------- capture */
+/* ---------------------------------------------------------------- pixels */
 
 typedef struct {
     HDC dc;
@@ -93,7 +95,17 @@ typedef struct {
     int x, y, w, h;     /* virtual-screen origin and size, physical pixels */
 } Shot;
 
-static BOOL shot_alloc(Shot *s, HDC ref, int w, int h)
+static RECT vscreen(void)
+{
+    RECT r;
+    r.left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    r.top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    r.right = r.left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    r.bottom = r.top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    return r;
+}
+
+static BOOL shot_alloc(Shot *s, int x, int y, int w, int h)
 {
     BITMAPINFO bi;
     ZeroMemory(&bi, sizeof bi);
@@ -103,9 +115,9 @@ static BOOL shot_alloc(Shot *s, HDC ref, int w, int h)
     bi.bmiHeader.biPlanes = 1;
     bi.bmiHeader.biBitCount = 32;
     bi.bmiHeader.biCompression = BI_RGB;
-    s->w = w; s->h = h;
-    s->dc = CreateCompatibleDC(ref);
-    s->bmp = CreateDIBSection(ref, &bi, DIB_RGB_COLORS, (void **)&s->px, NULL, 0);
+    s->x = x; s->y = y; s->w = w; s->h = h;
+    s->dc = CreateCompatibleDC(NULL);
+    s->bmp = CreateDIBSection(NULL, &bi, DIB_RGB_COLORS, (void **)&s->px, NULL, 0);
     if (!s->dc || !s->bmp) return FALSE;
     s->old = (HBITMAP)SelectObject(s->dc, s->bmp);
     return TRUE;
@@ -121,13 +133,11 @@ static void shot_free(Shot *s)
 /* Grab the whole virtual desktop (all monitors). */
 static BOOL grab(Shot *s)
 {
-    int x = GetSystemMetrics(SM_XVIRTUALSCREEN), y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    int w = GetSystemMetrics(SM_CXVIRTUALSCREEN), h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    RECT v = vscreen();
     HDC scr = GetDC(NULL);
-    BOOL ok = scr && w > 0 && h > 0 && shot_alloc(s, scr, w, h) &&
-              BitBlt(s->dc, 0, 0, w, h, scr, x, y, SS_ROP);
+    BOOL ok = scr && shot_alloc(s, v.left, v.top, v.right - v.left, v.bottom - v.top) &&
+              BitBlt(s->dc, 0, 0, s->w, s->h, scr, v.left, v.top, SS_ROP);
     if (scr) ReleaseDC(NULL, scr);
-    s->x = x; s->y = y;
     if (!ok) { shot_free(s); return FALSE; }
     GdiFlush();
     return TRUE;
@@ -143,34 +153,35 @@ static BOOL open_clipboard(HWND owner)
 }
 
 /* Copy a sub-rectangle of a shot to the clipboard as a 24bpp bottom-up DIB. */
-static BOOL to_clipboard(HWND owner, const Shot *s, int rx, int ry, int rw, int rh)
+static BOOL to_clipboard(HWND owner, const Shot *s, int rx, int ry, int w, int h)
 {
-    DWORD stride = ((DWORD)rw * 3 + 3) & ~3u;
-    SIZE_T bytes = (SIZE_T)stride * rh;
-    HGLOBAL g = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + bytes);
+    DWORD stride = ((DWORD)w * 3 + 3) & ~3u;
+    SIZE_T bytes = (SIZE_T)stride * h;
+    BOOL ok = FALSE;
+    HGLOBAL g;
     BITMAPINFOHEADER *bh;
     BYTE *dst;
-    BOOL ok = FALSE;
 
+    g = GlobalAlloc(GMEM_MOVEABLE, sizeof *bh + bytes);
     if (!g) return FALSE;
     bh = (BITMAPINFOHEADER *)GlobalLock(g);
     if (!bh) { GlobalFree(g); return FALSE; }
     ZeroMemory(bh, sizeof *bh);
     bh->biSize = sizeof *bh;
-    bh->biWidth = rw;
-    bh->biHeight = rh;                    /* positive = bottom-up */
+    bh->biWidth = w;
+    bh->biHeight = h;                     /* positive = bottom-up */
     bh->biPlanes = 1;
     bh->biBitCount = 24;
     bh->biCompression = BI_RGB;
     bh->biSizeImage = (DWORD)bytes;
 
     dst = (BYTE *)(bh + 1);
-    for (int y = 0; y < rh; y++) {
-        const DWORD *src = s->px + (SIZE_T)(ry + rh - 1 - y) * s->w + rx;
+    for (int y = 0; y < h; y++) {
+        const DWORD *src = s->px + (SIZE_T)(ry + h - 1 - y) * s->w + rx;
         BYTE *d = dst + (SIZE_T)y * stride, *end = d + stride;
-        for (int x = 0; x < rw; x++) {
-            DWORD p = src[x];
-            d[0] = (BYTE)p; d[1] = (BYTE)(p >> 8); d[2] = (BYTE)(p >> 16);
+        for (int x = 0; x < w; x++) {
+            DWORD c = src[x];
+            d[0] = (BYTE)c; d[1] = (BYTE)(c >> 8); d[2] = (BYTE)(c >> 16);
             d += 3;
         }
         while (d < end) *d++ = 0;
@@ -195,17 +206,22 @@ static int snip_full(HWND owner)
     ZeroMemory(&s, sizeof s);
     if (!grab(&s)) return RC_FAIL;
     ok = to_clipboard(owner, &s, 0, 0, s.w, s.h);
-    shot_free(&s);
+    if (g_daemon) shot_free(&s);       /* a one-shot run just exits */
     return ok ? RC_OK : RC_FAIL;
 }
 
 /* -------------------------------------------------------------- rectangle */
 
 static Shot g_shot, g_dim;
-static HWND g_owner;
+static HWND g_owner, g_overlay;
 static HBRUSH g_frame;
 static BOOL g_drag;
-static int g_ax, g_ay, g_cx, g_cy, g_result;
+static int g_ax, g_ay, g_cx, g_cy, g_result = RC_CANCEL;
+
+static void cloak(HWND h, BOOL on)
+{
+    DwmSetWindowAttribute(h, DWMWA_CLOAK, &on, sizeof on);
+}
 
 static RECT sel_rect(void)
 {
@@ -224,10 +240,13 @@ static void track(LPARAM lp)
     g_cy = y < 0 ? 0 : y >= g_shot.h ? g_shot.h - 1 : y;
 }
 
+/* End the session; cloaking makes the overlay vanish at once (~0.2 ms vs ~7
+ * ms for a real hide), the slower cleanup happens after. */
 static void finish(HWND h, int result)
 {
-    if (g_result < 0) g_result = result;
-    ShowWindow(h, SW_HIDE);
+    if (g_result >= 0) return;
+    cloak(h, TRUE);
+    g_result = result;
 }
 
 static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
@@ -239,19 +258,22 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
         RECT r = ps.rcPaint, s, i;
-        BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top,
-               g_dim.dc, r.left, r.top, SRCCOPY);
-        if (g_drag) {
-            s = sel_rect();
-            if (IntersectRect(&i, &s, &r))
-                BitBlt(dc, i.left, i.top, i.right - i.left, i.bottom - i.top,
-                       g_shot.dc, i.left, i.top, SRCCOPY);
-            FrameRect(dc, &s, g_frame);
+        if (g_dim.dc) {
+            BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                   g_dim.dc, r.left, r.top, SRCCOPY);
+            if (g_drag) {
+                s = sel_rect();
+                if (IntersectRect(&i, &s, &r))
+                    BitBlt(dc, i.left, i.top, i.right - i.left, i.bottom - i.top,
+                           g_shot.dc, i.left, i.top, SRCCOPY);
+                FrameRect(dc, &s, g_frame);
+            }
         }
         EndPaint(h, &ps);
         return 0;
     }
     case WM_LBUTTONDOWN:
+        if (g_result >= 0) return 0;
         track(lp);
         g_ax = g_cx; g_ay = g_cy;
         g_drag = TRUE;
@@ -277,9 +299,9 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
                 return 0;
             }
             r = sel_rect();
-            ShowWindow(h, SW_HIDE);                 /* vanish first, copy after */
-            finish(h, to_clipboard(g_owner, &g_shot, r.left, r.top,
-                                   r.right - r.left, r.bottom - r.top) ? RC_OK : RC_FAIL);
+            cloak(h, TRUE);                         /* vanish first, copy after */
+            finish(h, to_clipboard(g_owner, &g_shot, r.left, r.top, r.right - r.left,
+                                   r.bottom - r.top) ? RC_OK : RC_FAIL);
         }
         return 0;
     case WM_RBUTTONDOWN:
@@ -295,7 +317,7 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         if (g_drag && (HWND)lp != h) { g_drag = FALSE; InvalidateRect(h, NULL, FALSE); }
         return 0;
     case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE && IsWindowVisible(h)) finish(h, RC_CANCEL);
+        if (LOWORD(wp) == WA_INACTIVE) finish(h, RC_CANCEL);
         return 0;
     case WM_CLOSE:
         finish(h, RC_CANCEL);
@@ -304,20 +326,36 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(h, msg, wp, lp);
 }
 
+static HWND overlay_create(int x, int y, int w, int h_)
+{
+    WNDCLASSW wc;
+    BOOL on = TRUE;
+    HWND h;
+    ZeroMemory(&wc, sizeof wc);
+    wc.lpfnWndProc = overlay_proc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_CROSS);
+    wc.lpszClassName = OVERLAY_CLASS;
+    RegisterClassW(&wc);
+    g_frame = CreateSolidBrush(FRAME_COLOR);
+    h = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, OVERLAY_CLASS, L"SnipSnap", WS_POPUP,
+                        x, y, w, h_, NULL, NULL, wc.hInstance, NULL);
+    if (h) DwmSetWindowAttribute(h, DWMWA_TRANSITIONS_FORCEDISABLED, &on, sizeof on);
+    return h;
+}
+
 static int snip_rect(HWND owner)
 {
-    static BOOL registered;
     HWND h;
     MSG m;
-    BOOL on = TRUE;
     int quit = 0, have_quit = 0;
 
     ZeroMemory(&g_shot, sizeof g_shot);
     ZeroMemory(&g_dim, sizeof g_dim);
-    if (!grab(&g_shot)) return RC_FAIL;
+    if (!grab(&g_shot)) return RC_FAIL;          /* freeze the screen */
 
     /* Dimmed copy of the frozen screen for the backdrop. */
-    if (!shot_alloc(&g_dim, g_shot.dc, g_shot.w, g_shot.h)) {
+    if (!shot_alloc(&g_dim, g_shot.x, g_shot.y, g_shot.w, g_shot.h)) {
         shot_free(&g_dim);
         shot_free(&g_shot);
         return RC_FAIL;
@@ -328,33 +366,23 @@ static int snip_rect(HWND owner)
         while (src < end) *d++ = (*src++ >> 1) & 0x7F7F7F;
     }
 
-    if (!registered) {
-        WNDCLASSW wc;
-        ZeroMemory(&wc, sizeof wc);
-        wc.lpfnWndProc = overlay_proc;
-        wc.hInstance = GetModuleHandleW(NULL);
-        wc.hCursor = LoadCursorW(NULL, IDC_CROSS);
-        wc.lpszClassName = OVERLAY_CLASS;
-        RegisterClassW(&wc);
-        g_frame = CreateSolidBrush(FRAME_COLOR);
-        registered = TRUE;
-    }
+    /* The background instance reuses one overlay window; showing an existing
+     * window is ~3x cheaper than creating one. */
+    if (!g_overlay) g_overlay = overlay_create(g_shot.x, g_shot.y, g_shot.w, g_shot.h);
+    else SetWindowPos(g_overlay, HWND_TOPMOST, g_shot.x, g_shot.y, g_shot.w, g_shot.h,
+                      SWP_NOACTIVATE);
+    h = g_overlay;
+    if (!h) { shot_free(&g_dim); shot_free(&g_shot); return RC_FAIL; }
 
     g_owner = owner;
     g_drag = FALSE;
     g_result = -1;
-    h = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, OVERLAY_CLASS, L"SnipSnap",
-                        WS_POPUP, g_shot.x, g_shot.y, g_shot.w, g_shot.h,
-                        NULL, NULL, GetModuleHandleW(NULL), NULL);
-    if (!h) { shot_free(&g_dim); shot_free(&g_shot); return RC_FAIL; }
-
-    /* Appear instantly: no fade-in, and paint while cloaked so no blank frame. */
-    DwmSetWindowAttribute(h, DWMWA_TRANSITIONS_FORCEDISABLED, &on, sizeof on);
-    DwmSetWindowAttribute(h, DWMWA_CLOAK, &on, sizeof on);
-    ShowWindow(h, SW_SHOW);
+    /* Paint while cloaked so the first visible frame is complete. */
+    cloak(h, TRUE);
+    ShowWindow(h, SW_SHOWNOACTIVATE);
+    InvalidateRect(h, NULL, FALSE);
     UpdateWindow(h);
-    on = FALSE;
-    DwmSetWindowAttribute(h, DWMWA_CLOAK, &on, sizeof on);
+    cloak(h, FALSE);
     SetForegroundWindow(h);
     SetCursor(LoadCursorW(NULL, IDC_CROSS));
     /* Esc works even if Windows refused to give the overlay keyboard focus. */
@@ -362,13 +390,15 @@ static int snip_rect(HWND owner)
 
     while (g_result < 0) {
         BOOL r = GetMessageW(&m, NULL, 0, 0);
-        if (r <= 0) { have_quit = 1; quit = (int)m.wParam; g_result = RC_CANCEL; break; }
+        if (r <= 0) { have_quit = 1; quit = (int)m.wParam; finish(h, RC_CANCEL); break; }
         TranslateMessage(&m);
         DispatchMessageW(&m);
     }
-
     UnregisterHotKey(h, HK_ESC);
-    DestroyWindow(h);
+    if (!g_daemon) return g_result;    /* a one-shot run just exits */
+
+    ShowWindow(h, SW_HIDE);
+    cloak(h, FALSE);
     shot_free(&g_dim);
     shot_free(&g_shot);
     if (have_quit) PostQuitMessage(quit);
@@ -420,6 +450,7 @@ static int run_daemon(void)
         say("SnipSnap is already running. Use 'snipsnap quit' to stop it.\n");
         return RC_OK;
     }
+    g_daemon = TRUE;
 
     ZeroMemory(&wc, sizeof wc);
     wc.lpfnWndProc = daemon_proc;
@@ -441,6 +472,19 @@ static int run_daemon(void)
         if (g_out == INVALID_HANDLE_VALUE)
             MessageBoxA(NULL, msg, "SnipSnap", MB_ICONERROR);
         return RC_FAIL;
+    }
+
+    /* Warm-up before the first hotkey: create the overlay and show it once
+     * while cloaked, so later snips only have to unhide it. */
+    {
+        RECT v = vscreen();
+        g_overlay = overlay_create(v.left, v.top, v.right - v.left, v.bottom - v.top);
+    }
+    if (g_overlay) {
+        cloak(g_overlay, TRUE);
+        ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
+        ShowWindow(g_overlay, SW_HIDE);
+        cloak(g_overlay, FALSE);
     }
 
     say("SnipSnap running in the background.\n  Rectangle:   ");
@@ -519,9 +563,7 @@ static int run(void)
         /* A message-only window to own the clipboard data. */
         HWND owner = CreateWindowExW(0, L"STATIC", NULL, 0, 0, 0, 0, 0,
                                      HWND_MESSAGE, NULL, NULL, NULL);
-        int rc = arg[0] == L'r' ? snip_rect(owner) : snip_full(owner);
-        if (owner) DestroyWindow(owner);
-        return rc;
+        return arg[0] == L'r' ? snip_rect(owner) : snip_full(owner);
     }
     if (eq(arg, L"quit") || eq(arg, L"stop")) return quit_daemon();
 
