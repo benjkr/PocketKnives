@@ -55,8 +55,7 @@ You need Windows 11 (or Windows 10 2004+). Nothing else: QuickTooth is a single 
 To build it yourself you need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and Visual Studio (or its Build Tools) with "Desktop development with C++", for the native linker.
 
 ```powershell
-git clone https://github.com/benjkr/quicktooth
-cd quicktooth
+cd blades\quicktooth     # in a PocketKnives checkout
 .\publish.ps1            # builds and installs to %LOCALAPPDATA%\Programs\QuickTooth, then starts it
 .\installer\build.ps1    # or: builds dist\QuickTooth-Setup-<version>.exe (needs Inno Setup 6.7+)
 ```
@@ -108,7 +107,7 @@ The source is in `src/`:
 
 `sim/` is a browser simulator of the Windows 11 taskbar that runs QuickTooth's own code (`src/QuickTooth.Core`) against a mocked Bluetooth stack with tunable delays. It's for previewing and testing changes without a real taskbar. See [`sim/README.md`](sim/README.md).
 
-Working on QuickTooth (people and coding agents alike): start with [`AGENTS.md`](AGENTS.md). It has the rules every change follows and points to a spec for each area in `docs/specs/`.
+Working on QuickTooth (people and coding agents alike): start with the suite's [`AGENTS.md`](../../AGENTS.md), then this blade's [`AGENTS.md`](AGENTS.md). Together they have the rules every change follows, and this blade's points to a spec for each area in `docs/specs/`.
 
 ## Credits
 

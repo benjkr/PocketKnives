@@ -1,6 +1,6 @@
 # Browser simulator (`sim/`)
 
-Part of the specs (index in `AGENTS.md`). What it does now; the full command reference is
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it does now; the full command reference is
 `sim/README.md`. Keep both current in the same change, and lean.
 
 ## What it is

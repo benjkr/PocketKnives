@@ -12,7 +12,7 @@ while the PC is locked), and to try changes before they reach the real taskbar.
 ## Setup
 
 ```powershell
-cd sim
+cd blades\quicktooth\sim   # from the PocketKnives root
 bun install            # playwright 1.60.0; uses its Chromium (revision 1223) — run `bunx playwright install chromium` if it's missing
 bun qt-sim.mjs doctor  # shows the browser and ffmpeg in use
 ```

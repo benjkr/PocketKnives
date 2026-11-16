@@ -1,6 +1,6 @@
 # Icon and animation
 
-Part of the specs (index in `AGENTS.md`). What the app does now; numbers are in
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the app does now; numbers are in
 `src/QuickTooth.Core/Tunables.cs`. Keep it current in the same change, and lean.
 
 ## Artwork

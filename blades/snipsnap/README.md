@@ -90,3 +90,7 @@ build.bat
 
 The script finds VS itself if you're not in a developer prompt. It stops a
 running instance first so the exe isn't locked, then produces `snipsnap.exe`.
+
+Working on SnipSnap (people and coding agents alike): start with the suite's
+[`AGENTS.md`](../../AGENTS.md), then this blade's [`AGENTS.md`](AGENTS.md), which
+points to a spec for each area in `docs/specs/`.

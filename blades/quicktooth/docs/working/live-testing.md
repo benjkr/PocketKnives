@@ -1,7 +1,8 @@
-# Real devices, the installed app and the desktop
+# Real devices and the installed QuickTooth
 
-Read before anything that talks to real Bluetooth devices, installs or restarts QuickTooth, or
-looks at the user's screen.
+Read before anything that talks to real Bluetooth devices, or installs, starts or stops
+QuickTooth. The suite-wide rules (the installed blades, the desktop) are in
+[live testing](../../../../docs/working/live-testing.md).
 
 ## Bluetooth devices
 
@@ -21,20 +22,16 @@ looks at the user's screen.
 
 ## The installed app
 
-- It's `main`'s build (`AGENTS.md`). Don't replace it to try a branch. Run checks from a build in a
-  scratch folder instead; starting the tray from another path also adds a stray
-  `NotifyIconSettings` entry, so ask the user first.
+- Starting the tray from another path (a scratch build) adds a stray `NotifyIconSettings` entry, so
+  ask the user first.
+- A tray CLI command (`--exit`, `--toggle`, `--connect`, `--disconnect`, `--show-menu`) acts on the
+  running tray exactly like a click, from any copy of the exe. `--autostart on|off` writes the Run
+  value.
 - Before an install test, record three things:
   - the Run value `HKCU\…\Run\QuickTooth`;
   - the hash of `%APPDATA%\QuickTooth\settings.json`;
   - QuickTooth's `NotifyIconSettings` `IsPromoted` value.
 
-  Afterwards, check all three are back, the tray is running, and say so.
-- A tray CLI command (`--exit`, `--connect`) acts on the running tray exactly like a click.
-
-## The desktop
-
-- Never change the theme or restart Explorer. Screenshots only of the tray corner, never the whole
-  desktop.
+  Afterwards, check all three are back and the tray is running, and say so.
 - The taskbar may be hidden or the PC locked. Look at the tray in the simulator instead of
   guessing from the screen.

@@ -1,6 +1,6 @@
 # Bluetooth: finding the headset, connecting, battery
 
-Part of the specs (index in `AGENTS.md`). What the app does now. Keep it current in the same
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the app does now. Keep it current in the same
 change, and lean. Windows side: `BluetoothAudio`, `Native/CoreAudio.cs`, `Native/PnpEndpoints.cs`,
 `Battery.cs`, behind `IDeviceBackend` (`WindowsDevices`).
 

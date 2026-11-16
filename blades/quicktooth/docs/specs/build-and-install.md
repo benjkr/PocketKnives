@@ -1,6 +1,6 @@
 # Build, install and release
 
-Part of the specs (index in `AGENTS.md`). What it does now. Keep it current in the same change,
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it does now. Keep it current in the same change,
 and lean.
 
 ## The build
@@ -29,11 +29,17 @@ and lean.
   - Uninstalling removes the app, its folder, the Start menu entry and the autostart value, and
     keeps `%APPDATA%\QuickTooth`.
   - Unsigned, so Windows SmartScreen warns on download.
-- **What goes on the user's PC**: only builds of `main`, from a release tag once tags exist; never a
-  branch or PR build. Say which commit or tag is installed.
+- **What goes on the user's PC**: only builds of `master`, from a release tag once tags exist;
+  never a branch or PR build. Say which commit or tag is installed.
+
+## Releases
+
+- Bump `<Version>` in `src/QuickTooth/QuickTooth.csproj`, tag `master` as `quicktooth-vX.Y.Z`
+  ([pull requests](../../../../docs/working/pull-requests.md)) and build the installer from the tag.
 
 ## Before a public release
 
+- The installer is unsigned: say so (SmartScreen) wherever it's offered.
 - The README's icon credit must name the artwork's author (Alex Martynov), its CC Attribution
   licence, and say it was modified.
 - Never ship `dist/QuickTooth-Setup-1.0.0.exe`: it bundles an unpatched runtime.

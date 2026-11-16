@@ -1,6 +1,6 @@
 # Tray icon
 
-Part of the specs (index in `AGENTS.md`). What the app does now; defaults are in
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the app does now; defaults are in
 `src/QuickTooth.Core/Tunables.cs`. Keep it current in the same change as the code, and lean:
 rewrite a bullet when something changes; history goes in commits and PRs.
 

@@ -28,9 +28,9 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
   and every interface received is a unique instance (`UniqueComInterfaceMarshaller`) released
   with `FinalRelease`. Regexes use `GeneratedRegex` where they're hot.
 - Only `BluetoothAudio.SendOneShot` sends to a device, and only to one container ID.
-- One source of truth: no copies of logic or values (the simulator's JavaScript copies were
-  removed for this reason), no configuration for things that never vary, and no special case
-  unless the platform forces it, with a comment saying which platform quirk.
+- One source of truth (a suite rule, [`AGENTS.md`](../../../../AGENTS.md)): here it means the
+  simulator never gets a JavaScript copy of core logic or numbers; its copies were removed for
+  this reason.
 
 ## File map
 

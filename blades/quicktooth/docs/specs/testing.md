@@ -1,6 +1,6 @@
 # Testing: what to run and what it proves
 
-Part of the specs (index in `AGENTS.md`). Keep it current in the same change, and lean.
+Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). Keep it current in the same change, and lean.
 
 ## Shared code (looks and behaviour)
 
