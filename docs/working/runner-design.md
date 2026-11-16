@@ -1,7 +1,7 @@
 # Runner design: how blades run together
 
 **Status: a proposal, not decided.** Nothing here is built. Decided by the user so far: there will
-be a settings window (minimalistic, native Windows XP/7-style controls, every blade's icon in it).
+be a settings window (minimalistic, Windows XP/7 style, a native look, every blade's icon in it).
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 
@@ -102,34 +102,39 @@ their own process.
 
 ## The settings window (decided: there is one)
 
-One window changes each blade's behaviour, looks and settings. It's minimalistic and native: plain
-Win32 common controls, no UI framework, in the `pk` runner. A throwaway prototype (C# Native AOT,
-placeholder values, wired to nothing) looks like this, captured off-screen with `PrintWindow`:
+One window changes each blade's behaviour, looks and settings. Proposed: plain Win32 common
+controls in the `pk` runner, with no UI framework. A throwaway prototype (C# Native AOT,
+placeholder values, wired to nothing) looks like this, rendered off-screen at 100% with
+`PrintWindow`. Nobody has seen it on a screen yet.
 
-![The prototype, themed: General, SnipSnap and QuickTooth tabs](runner-design/settings-themed.png)
+Native Win32 offers two looks, both shown with the same controls: group boxes, check boxes, hotkey
+boxes, an up-down, a drop-down, tabs and OK / Cancel / Apply, in the system font (Segoe UI 9),
+with square corners (a DWM setting) and no caption icon, as on XP/7 property dialogs.
 
-- **The look: themed common controls** (comctl32 v6, the manifest QuickTooth already uses). These
-  are the controls of the Windows 7 and 10 era: group boxes, check boxes, hotkey boxes, an
-  up-down, a drop-down, tabs and OK / Cancel / Apply, in the system font (Segoe UI 9). Square
-  corners (a DWM setting) and no caption icon, as on XP/7 property dialogs.
-- **The other native look: classic controls**, the same window with themes switched off
-  (`SetWindowTheme`), which also gives it the classic title bar. Grey and 3D, like Windows 2000 or
-  XP's classic theme. The list's check boxes stay themed there.
+- **Classic** (proposed, as the closer match to "XP/7 style"): themes switched off with
+  `SetWindowTheme`. Grey and 3D, with the classic title bar: what XP and 7 looked like with their
+  Classic theme. In the prototype the list's check boxes still come out themed; making them classic
+  too is a native fix (classic check-box images for the list).
 
-  ![The same prototype with themes switched off](runner-design/settings-classic.png)
+  ![The prototype, classic: General, SnipSnap and QuickTooth tabs](runner-design/settings-classic.png)
 
-- **What native controls can't give**: XP's Luna or 7's Aero glass. In the themed look the title
-  bar stays Windows 11's, and native controls have no dark mode. Drawing the old chrome by hand
-  would no longer be native, so it's out.
+- **Themed** (comctl32 v6, the manifest QuickTooth already uses): Windows 11's own drawing of the
+  same controls, with rounded buttons, accent-coloured check boxes and Windows 11's title bar. It
+  matches the rest of the PC, but it's not the XP/7 look.
+
+  ![The same prototype, themed](runner-design/settings-themed.png)
+
+- **What native controls can't give**: XP's Luna or 7's Aero glass, or a dark mode. Drawing the
+  old chrome by hand would no longer be native, so it's out.
 - **Icons**: each blade's icon on its tab (16 px), at the top of its page with its name and one
   line on what it does (32 px), and in the General tab's list (32 px, the native Tiles view, as in
   7's Explorer, with a check box per blade). Win32 can't draw SVG, so each blade also keeps
   `blades/<name>/assets/icon.ico` (16–48 px, rendered from its `icon.svg`; SnipSnap's is 9 KB),
   and the runner builds them into its exe. QuickTooth already has one
-  (`blades/quicktooth/assets/quicktooth.ico`).
+  (`blades/quicktooth/assets/quicktooth.ico`, the same artwork as its `icon.svg`).
 - **Measured** (the prototype with both icons): an 864 KB exe with zero AOT warnings; 1.6 MB
-  private working set while open; 77 ms from launch to painted (median of 30). Closed, it costs
-  nothing.
+  private working set while open; 77 ms from launch until it has painted and exited (median of
+  30). Closed, it costs nothing.
 
 How it works with a process per blade:
 
@@ -137,15 +142,20 @@ How it works with a process per blade:
 - **Opening it**: a Start menu entry ("PocketKnives Settings"), "Settings…" in QuickTooth's tray
   menu, and `snipsnap settings` (SnipSnap has no tray icon by design).
 - **Who reads and writes a blade's settings: only the blade.** `blade.json` lists the settings
-  (key, kind, label, choices, default), so the window builds each page by itself. It reads the
-  values with `<blade> --settings` (`key=value` lines) and applies them with
+  (key, kind, label, fixed choices, default), so the window builds each page by itself. It reads
+  the values with `<blade> --settings` (`key=value` lines) and applies them with
   `<blade> --set key=value …`, which checks them and writes the blade's own file: SnipSnap an INI
-  file through kernel32 (no new DLL), C# blades their JSON settings. That's one process start per
-  blade when the window opens and per Apply (9–15 ms, measured).
+  file through kernel32 (no new DLL), C# blades their JSON settings. Choices that are live data,
+  such as QuickTooth's paired devices, come from the blade too, in its `--settings` output. That's
+  one process start per blade when the window opens and per Apply (9–17 ms each, measured).
+- **Which blades run** is the runner's own setting, in its own file under
+  `%APPDATA%\PocketKnives`. Ticking a blade starts it now and at every sign-in. Unticking stops it
+  with its stop command and leaves it out at sign-in.
 - **A running blade picks up a change** when `--set` posts it `PocketKnives.Reload.v1`. It re-reads
   its file and applies it (SnipSnap re-registers its hotkeys). For SnipSnap, reading an INI file
   and this reload take 1 KB (16,384 → 17,408 bytes, zero warnings, still only its four DLLs;
-  measured on a scratch copy).
+  measured on a scratch copy). Printing, checking and writing settings (`--settings`, `--set`)
+  weren't measured.
 - **Which things become settings is the owner's call.** The prototype shows:
 
   | Setting | Today |
@@ -194,8 +204,8 @@ and `PocketKnives.Windows`; C only when the budget is the product.
 - **What it costs**:
   - A small `pk` runner with the settings window (C# AOT, about 0.86 MB, nothing resident) and a
     `blade.json` for each blade.
-  - `--settings`, `--set` and the reload message in each blade (about 1 KB in SnipSnap), plus an
-    `icon.ico` for SnipSnap.
+  - `--settings`, `--set` and the reload message in each blade (reading and reloading measured at
+    1 KB in SnipSnap; the rest not yet), plus an `icon.ico` for SnipSnap.
   - Extracting the shared projects from QuickTooth, checked with its "identical behaviour" rule:
     every simulator scenario's log, timeline and final state diffed before and after.
   - Later, with the user's go on their PC: one sign-in entry for the runner instead of SnipSnap's
