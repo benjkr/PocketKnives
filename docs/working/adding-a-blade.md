@@ -3,7 +3,9 @@
 Read before starting a new blade or importing an existing tool as one. How blades are launched
 together, what code they share and which language a new blade uses by default aren't decided yet
 ([runner design](runner-design.md)). This page says what's true today; it gains the runner's part
-once the user picks one. Until then, ask the user which language a new blade is written in.
+once the user picks one. Until then, ask the user which language a new blade is written in. A
+settings window is decided: every blade will get a page in it, with its icon and its settings
+(how they're declared is part of the runner design).
 
 ## Folder layout
 

@@ -77,7 +77,7 @@ in a blade's docs are from that blade's folder.
 | Final reply of a task; showing numbers | [Replies](docs/working/replies.md) |
 | Commits, branches, PRs, merges, releases, GitHub comments | [Pull requests and releases](docs/working/pull-requests.md) |
 | Adding a new blade | [Adding a blade](docs/working/adding-a-blade.md) |
-| How blades run together, shared code, the default language (not decided yet) | [Runner design](docs/working/runner-design.md) |
+| How blades run together, the settings window, shared code, the default language (not decided yet) | [Runner design](docs/working/runner-design.md) |
 
 Each blade's `AGENTS.md` has its own tables for its working rules and specs.
 
