@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>PocketKnives: Fan-Out</title>
+  <desc>Blades fanned from one rivet; the dashed slot is the next blade.</desc>
+  <defs>
+    <linearGradient id="pk1-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7DB6FF"/><stop offset="0.16" stop-color="#DCEBFF"/><stop offset="0.3" stop-color="#4B97FB"/><stop offset="0.6" stop-color="#0D5FE0"/><stop offset="0.9" stop-color="#0846B8"/><stop offset="1" stop-color="#2C6FDB"/></linearGradient>
+    <linearGradient id="pk1-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#90DC7E"/><stop offset="0.16" stop-color="#E4F8DA"/><stop offset="0.3" stop-color="#6ECB5B"/><stop offset="0.6" stop-color="#33A02E"/><stop offset="0.9" stop-color="#1E781C"/><stop offset="1" stop-color="#3F9A36"/></linearGradient>
+    <linearGradient id="pk1-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC66E"/><stop offset="0.16" stop-color="#FFF1D4"/><stop offset="0.3" stop-color="#FFB142"/><stop offset="0.6" stop-color="#FF8A12"/><stop offset="0.9" stop-color="#D85F09"/><stop offset="1" stop-color="#EE8A2A"/></linearGradient>
+    <linearGradient id="pk1-white" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.16" stop-color="#FFFFFF"/><stop offset="0.3" stop-color="#F6F9FE"/><stop offset="0.6" stop-color="#E6EDF8"/><stop offset="0.9" stop-color="#C9D5E8"/><stop offset="1" stop-color="#DCE4F1"/></linearGradient>
+    <radialGradient id="pk1-chrome" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#DDE5F0"/>
+      <stop offset=".8" stop-color="#8C9BB4"/><stop offset="1" stop-color="#B9C5D8"/>
+    </radialGradient>
+    <filter id="pk1-shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="1.3" dy="1.9" stdDeviation="1.4" flood-color="#06143A" flood-opacity=".42"/>
+    </filter>
+  </defs>
+  <g transform="translate(13 50) rotate(-90)"><path d="M0 -6.5H34L43 -0.5V3.5Q43 6.5 40 6.5H0A6.5 6.5 0 0 1 0 -6.5Z" fill="#4B97FB" fill-opacity=".14" stroke="#2F7FEA" stroke-opacity=".8" stroke-width="1.3" stroke-dasharray="2.6 2.2" stroke-linejoin="round"/></g><g filter="url(#pk1-shadow)"><g transform="translate(13 50) rotate(-60)"><path d="M0 -6.5H35L44 -0.5V3.5Q44 6.5 41 6.5H0A6.5 6.5 0 0 1 0 -6.5Z" fill="url(#pk1-green)" stroke="#17520F" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.85 -3.38H24.2" stroke="#fff" stroke-opacity=".85" stroke-width="2.08" stroke-linecap="round"/></g><g transform="translate(13 50) rotate(-30)"><path d="M0 -6.5H36L45 -0.5V3.5Q45 6.5 42 6.5H0A6.5 6.5 0 0 1 0 -6.5Z" fill="url(#pk1-amber)" stroke="#8A3C00" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.85 -3.38H24.75" stroke="#fff" stroke-opacity=".85" stroke-width="2.08" stroke-linecap="round"/></g><g transform="translate(13 50) rotate(0)"><path d="M0 -7.6H39A7.6 7.6 0 0 1 39 7.6H0A7.6 7.6 0 0 1 0 -7.6Z" fill="url(#pk1-blue)" stroke="#0A2F8F" stroke-width="1.5" stroke-linejoin="round"/><path d="M4.56 -3.95H24.18" stroke="#fff" stroke-opacity=".85" stroke-width="2.43" stroke-linecap="round"/></g><circle cx="13" cy="50" r="4.4" fill="url(#pk1-chrome)" stroke="#26344F" stroke-width="1.2"/><circle cx="11.68" cy="48.59" r="1.23" fill="#fff"/></g>
+</svg>
