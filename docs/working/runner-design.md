@@ -1,7 +1,8 @@
 # Runner design: how blades run together
 
 **Status: a proposal, not decided.** Nothing here is built. Decided by the user so far: there will
-be a settings window (minimalistic, Windows XP/7 style, a native look, every blade's icon in it).
+be a settings window (raw and minimal, native Windows controls, a list on the side, every blade's
+icon in it).
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 
@@ -102,39 +103,37 @@ their own process.
 
 ## The settings window (decided: there is one)
 
-One window changes each blade's behaviour, looks and settings. Proposed: plain Win32 common
-controls in the `pk` runner, with no UI framework. A throwaway prototype (C# Native AOT,
-placeholder values, wired to nothing) looks like this, rendered off-screen at 100% with
-`PrintWindow`. Nobody has seen it on a screen yet.
+One window changes each blade's behaviour, looks and settings. The user wants it raw: minimal,
+nothing fancy, brutalist, native Windows controls, a list on the side. Proposed: plain Win32
+controls in the `pk` runner, with no UI framework and no custom drawing. A throwaway prototype
+(C# Native AOT, placeholder values, wired to nothing) looks like this, rendered off-screen at 100%
+with `PrintWindow`. Nobody has seen it on a screen yet.
 
-Native Win32 offers two looks, both shown with the same controls: group boxes, check boxes, hotkey
-boxes, an up-down, a drop-down, tabs and OK / Cancel / Apply, in the system font (Segoe UI 9),
-with square corners (a DWM setting) and no caption icon, as on XP/7 property dialogs.
+![The prototype, raw: the General, SnipSnap and QuickTooth pages](runner-design/settings-raw.png)
 
-- **Classic** (proposed, as the closer match to "XP/7 style"): themes switched off with
-  `SetWindowTheme`. Grey and 3D, with the classic title bar: what XP and 7 looked like with their
-  Classic theme. In the prototype the list's check boxes still come out themed; making them classic
-  too is a native fix (classic check-box images for the list).
+- **Layout**: a list on the left, one row per page ("General", then each blade with its 16 px
+  icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is the blade's
+  name in bold, one line on what it does, then plain bold headings with the controls under them.
+  No tabs, no group boxes, no separators.
+- **Look**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which
+  also gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`)
+  and 1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
+  square corners (a DWM setting), no caption icon. The drop-down keeps its classic 3D button:
+  Windows has no flat variant of it.
+- **The other native look** is one call away: leave visual styles on and the same layout is drawn
+  by Windows 11 (rounded buttons, accent-coloured check boxes, Windows 11's title bar):
 
-  ![The prototype, classic: General, SnipSnap and QuickTooth tabs](runner-design/settings-classic.png)
+  ![The SnipSnap page with visual styles on](runner-design/settings-raw-themed.png)
 
-- **Themed** (comctl32 v6, the manifest QuickTooth already uses): Windows 11's own drawing of the
-  same controls, with rounded buttons, accent-coloured check boxes and Windows 11's title bar. It
-  matches the rest of the PC, but it's not the XP/7 look.
-
-  ![The same prototype, themed](runner-design/settings-themed.png)
-
-- **What native controls can't give**: XP's Luna or 7's Aero glass, or a dark mode. Drawing the
-  old chrome by hand would no longer be native, so it's out.
-- **Icons**: each blade's icon on its tab (16 px), at the top of its page with its name and one
-  line on what it does (32 px), and in the General tab's list (32 px, the native Tiles view, as in
-  7's Explorer, with a check box per blade). Win32 can't draw SVG, so each blade also keeps
-  `blades/<name>/assets/icon.ico` (16–48 px, rendered from its `icon.svg`; SnipSnap's is 9 KB),
-  and the runner builds them into its exe. QuickTooth already has one
-  (`blades/quicktooth/assets/quicktooth.ico`, the same artwork as its `icon.svg`).
-- **Measured** (the prototype with both icons): an 864 KB exe with zero AOT warnings; 1.6 MB
-  private working set while open; 77 ms from launch until it has painted and exited (median of
-  30). Closed, it costs nothing.
+- **Not possible natively**: XP's Luna, 7's Aero glass, a dark mode. Imitating them means drawing
+  the controls ourselves; the user chose the raw look instead.
+- **Icons**: Win32 can't draw SVG, so each blade also keeps `blades/<name>/assets/icon.ico`
+  (16–48 px, rendered from its `icon.svg`; SnipSnap's is 9 KB), and the runner builds them into
+  its exe. QuickTooth already has one (`blades/quicktooth/assets/quicktooth.ico`, the same artwork
+  as its `icon.svg`).
+- **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
+  working set while open; 56 ms from launch until it has painted and exited (median of 30).
+  Closed, it costs nothing.
 
 How it works with a process per blade:
 
@@ -218,6 +217,6 @@ and `PocketKnives.Windows`; C only when the budget is the product.
   2. Write the blade. Tray, hotkeys, settings (`--settings`, `--set`, the reload), log, single
      instance, autostart and the command line come from the shared code.
   3. Fill in `blade.json`, its settings included. The runner and the settings window find it
-     there: the blade gets its tab, icon and controls with no change to either.
+     there: the blade gets its row in the list, its icon and its page with no change to either.
   4. Follow the rest of the [adding a blade](adding-a-blade.md) checklist: the rows in the root
      `AGENTS.md`, `README.md` and live testing.
