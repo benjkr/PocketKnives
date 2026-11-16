@@ -436,14 +436,31 @@ static void hover_at(HWND h, int x, int y)
     if (h) InvalidateRect(h, &g_hover, FALSE);
 }
 
-/* Bright (undimmed) area with a border, as for a selection or hovered window. */
-static void paint_lit(HDC dc, RECT clip, RECT a)
+/* Paint the update area: dimmed backdrop, plus an optional bright (undimmed)
+ * area with a border - the selection or the hovered window. Every pixel is
+ * written exactly once (dim outside, bright inside, border on its ring), so
+ * the compositor can never show a half-painted, flickering state. */
+static void paint_backdrop(HDC dc, RECT clip, const RECT *lit)
 {
-    RECT i, f = a;
-    if (IntersectRect(&i, &a, &clip))
+    RECT i, f, inner;
+    int saved;
+    if (!lit) {
+        BitBlt(dc, clip.left, clip.top, clip.right - clip.left, clip.bottom - clip.top,
+               g_dim.dc, clip.left, clip.top, SRCCOPY);
+        return;
+    }
+    saved = SaveDC(dc);
+    ExcludeClipRect(dc, lit->left, lit->top, lit->right, lit->bottom);
+    BitBlt(dc, clip.left, clip.top, clip.right - clip.left, clip.bottom - clip.top,
+           g_dim.dc, clip.left, clip.top, SRCCOPY);
+    RestoreDC(dc, saved);
+    inner = *lit;
+    InflateRect(&inner, -FRAME_W, -FRAME_W);
+    if (IntersectRect(&i, &inner, &clip))
         BitBlt(dc, i.left, i.top, i.right - i.left, i.bottom - i.top,
                g_shot.dc, i.left, i.top, SRCCOPY);
-    for (int k = 0; k < FRAME_W && f.right - f.left > 0 && f.bottom - f.top > 0; k++) {
+    f = *lit;
+    for (int k = 0; k < FRAME_W && f.right > f.left && f.bottom > f.top; k++) {
         FrameRect(dc, &f, g_frame);
         InflateRect(&f, -1, -1);
     }
@@ -480,13 +497,10 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
-        RECT r = ps.rcPaint;
-        if (g_dim.dc) {
-            BitBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top,
-                   g_dim.dc, r.left, r.top, SRCCOPY);
-            if (g_mode == MODE_RECT && g_drag) paint_lit(dc, r, sel_rect());
-            if (g_mode == MODE_WINDOW && g_has_hover) paint_lit(dc, r, g_hover);
-        }
+        RECT r = ps.rcPaint, s = sel_rect();
+        if (g_dim.dc)
+            paint_backdrop(dc, r, g_mode == MODE_RECT ? (g_drag ? &s : NULL)
+                                                      : (g_has_hover ? &g_hover : NULL));
         EndPaint(h, &ps);
         return 0;
     }
