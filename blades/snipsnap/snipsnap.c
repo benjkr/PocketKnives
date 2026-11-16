@@ -213,7 +213,7 @@ static int snip_full(HWND owner)
 /* -------------------------------------------------------------- rectangle */
 
 static Shot g_shot, g_dim;
-static HWND g_owner, g_overlay;
+static HWND g_owner;
 static HBRUSH g_frame;
 static BOOL g_drag;
 static int g_ax, g_ay, g_cx, g_cy, g_result = RC_CANCEL;
@@ -326,20 +326,24 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(h, msg, wp, lp);
 }
 
-static HWND overlay_create(int x, int y, int w, int h_)
+static HWND overlay_create(const Shot *s)
 {
-    WNDCLASSW wc;
+    static BOOL registered;
     BOOL on = TRUE;
     HWND h;
-    ZeroMemory(&wc, sizeof wc);
-    wc.lpfnWndProc = overlay_proc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_CROSS);
-    wc.lpszClassName = OVERLAY_CLASS;
-    RegisterClassW(&wc);
-    g_frame = CreateSolidBrush(FRAME_COLOR);
+    if (!registered) {
+        WNDCLASSW wc;
+        ZeroMemory(&wc, sizeof wc);
+        wc.lpfnWndProc = overlay_proc;
+        wc.hInstance = GetModuleHandleW(NULL);
+        wc.hCursor = LoadCursorW(NULL, IDC_CROSS);
+        wc.lpszClassName = OVERLAY_CLASS;
+        RegisterClassW(&wc);
+        g_frame = CreateSolidBrush(FRAME_COLOR);
+        registered = TRUE;
+    }
     h = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, OVERLAY_CLASS, L"SnipSnap", WS_POPUP,
-                        x, y, w, h_, NULL, NULL, wc.hInstance, NULL);
+                        s->x, s->y, s->w, s->h, NULL, NULL, GetModuleHandleW(NULL), NULL);
     if (h) DwmSetWindowAttribute(h, DWMWA_TRANSITIONS_FORCEDISABLED, &on, sizeof on);
     return h;
 }
@@ -366,18 +370,15 @@ static int snip_rect(HWND owner)
         while (src < end) *d++ = (*src++ >> 1) & 0x7F7F7F;
     }
 
-    /* The background instance reuses one overlay window; showing an existing
-     * window is ~3x cheaper than creating one. */
-    if (!g_overlay) g_overlay = overlay_create(g_shot.x, g_shot.y, g_shot.w, g_shot.h);
-    else SetWindowPos(g_overlay, HWND_TOPMOST, g_shot.x, g_shot.y, g_shot.w, g_shot.h,
-                      SWP_NOACTIVATE);
-    h = g_overlay;
+    h = overlay_create(&g_shot);
     if (!h) { shot_free(&g_dim); shot_free(&g_shot); return RC_FAIL; }
 
     g_owner = owner;
     g_drag = FALSE;
     g_result = -1;
-    /* Paint while cloaked so the first visible frame is complete. */
+    /* Paint while cloaked so the first visible frame is complete. Showing
+     * without activation first, then taking focus, makes it visible ~20 ms
+     * sooner than a plain SW_SHOW. */
     cloak(h, TRUE);
     ShowWindow(h, SW_SHOWNOACTIVATE);
     InvalidateRect(h, NULL, FALSE);
@@ -397,8 +398,7 @@ static int snip_rect(HWND owner)
     UnregisterHotKey(h, HK_ESC);
     if (!g_daemon) return g_result;    /* a one-shot run just exits */
 
-    ShowWindow(h, SW_HIDE);
-    cloak(h, FALSE);
+    DestroyWindow(h);                  /* the copy is done; nobody waits for this */
     shot_free(&g_dim);
     shot_free(&g_shot);
     if (have_quit) PostQuitMessage(quit);
@@ -472,19 +472,6 @@ static int run_daemon(void)
         if (g_out == INVALID_HANDLE_VALUE)
             MessageBoxA(NULL, msg, "SnipSnap", MB_ICONERROR);
         return RC_FAIL;
-    }
-
-    /* Warm-up before the first hotkey: create the overlay and show it once
-     * while cloaked, so later snips only have to unhide it. */
-    {
-        RECT v = vscreen();
-        g_overlay = overlay_create(v.left, v.top, v.right - v.left, v.bottom - v.top);
-    }
-    if (g_overlay) {
-        cloak(g_overlay, TRUE);
-        ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
-        ShowWindow(g_overlay, SW_HIDE);
-        cloak(g_overlay, FALSE);
     }
 
     say("SnipSnap running in the background.\n  Rectangle:   ");

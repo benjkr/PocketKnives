@@ -7,8 +7,8 @@ copy a **rectangle** or the **whole screen** to the clipboard. There's no editor
 no saved files, no tray icon, and no UI beyond the selection overlay.
 
 It's a single C file built into a ~13 KB native exe. It has no runtime or CRT and
-uses only system DLLs. The background instance idles at about 1 MB of private
-memory.
+uses only system DLLs. The background instance uses about 1–2 MB of its own
+memory (private working set).
 
 ## Usage
 
@@ -51,18 +51,17 @@ Medians on a 4480×1440 two-monitor desktop (GTX 1660 Super, Windows 11):
 
 | Path                                   | Time   |
 | -------------------------------------- | ------ |
-| Hotkey → rectangle overlay visible     | ~50 ms |
-| Hotkey → full screen on clipboard      | ~80 ms |
+| Hotkey → rectangle overlay visible     | ~52 ms |
+| Hotkey → full screen on clipboard      | ~76 ms |
 | `snipsnap rect` launch → overlay       | ~83 ms |
-| `snipsnap full` launch → clipboard     | ~83 ms |
+| `snipsnap full` launch → clipboard     | ~85 ms |
 | Mouse release → overlay gone           | <1 ms  |
 | Mouse release → selection on clipboard | ~2 ms  |
 
 Most of the remaining time is GDI reading the screen back from the compositor
 (about 40–50 ms for 6.45 MP). GPU capture via DXGI Desktop Duplication was
 measured at about 5–10 ms for this step. It was left out on purpose: keeping it
-ready costs about 70 MB of driver memory in the background process and keeps
-DWM busier while idle.
+ready costs about 70 MB of graphics-driver memory in the background process.
 
 ## Build
 

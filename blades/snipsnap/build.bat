@@ -14,7 +14,7 @@ call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 
 :build
 rem Stop a running instance, otherwise the exe is locked and linking fails.
-if exist snipsnap.exe snipsnap.exe quit >nul 2>&1
+if exist snipsnap.exe start "" /wait snipsnap.exe quit
 
 cl /nologo /W4 /WX /O1 /GS- /DSS_NOCRT snipsnap.c ^
    /link /NODEFAULTLIB /ENTRY:WinMainCRTStartup /SUBSYSTEM:WINDOWS ^
