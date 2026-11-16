@@ -120,10 +120,14 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
   and 1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
   square corners (a DWM setting), no caption icon. The drop-down keeps its classic 3D button:
   Windows has no flat variant of it.
-- **The other native look** is one call away: leave visual styles on and the same layout is drawn
-  by Windows 11 (rounded buttons, accent-coloured check boxes, Windows 11's title bar):
+- **The Windows 10/11 look** is the other native option: the same layout with visual styles on,
+  the controls' own themed borders and Explorer's list look. Windows draws it in its current
+  style: Windows 11's here (rounded buttons, accent-coloured check boxes, its title bar and rounded
+  window corners), Windows 10's on Windows 10 (not captured; no Windows 10 PC here). In these
+  captures the window is inactive, so the list's selection is grey instead of light blue, and the
+  corners Windows 11 rounds on screen come out square.
 
-  ![The SnipSnap page with visual styles on](runner-design/settings-raw-themed.png)
+  ![The prototype, Windows 10/11 look: the same three pages](runner-design/settings-modern.png)
 
 - **Not possible natively**: XP's Luna, 7's Aero glass, a dark mode. Imitating them means drawing
   the controls ourselves; the user chose the raw look instead.
