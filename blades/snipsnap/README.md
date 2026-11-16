@@ -1,5 +1,56 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# QuickSnip
+# SnipSnap
 
-Created in [T3 Code](https://t3.codes).
+A very fast, very small screen snippet tool for Windows 11. It does two things:
+copy a **rectangle** or the **whole screen** to the clipboard. There's no editor,
+no saved files, no tray icon, and no UI beyond the selection overlay.
+
+It's a single C file built into a ~12 KB native exe. It has no runtime or CRT and
+uses only system DLLs.
+
+## Usage
+
+```
+snipsnap         run in the background and listen for hotkeys
+snipsnap rect    select a rectangle once, then exit
+snipsnap full    capture the whole screen once, then exit
+snipsnap quit    stop the background instance
+```
+
+| Hotkey (background mode) | Action      |
+| ------------------------ | ----------- |
+| `Ctrl+PrtSc`             | Rectangle   |
+| `Ctrl+Shift+PrtSc`       | Full screen |
+
+If another program already owns a hotkey, SnipSnap falls back to
+`Ctrl+Alt+Shift+S` (rectangle) or `Ctrl+Alt+Shift+F` (full screen). When started
+from a terminal it prints the hotkeys it actually registered. Started without a
+console, it shows a message box only if a hotkey could not be registered. Plain
+`PrtSc`, `Win+Shift+S` and the other Windows screenshot keys are left alone.
+
+**Rectangle:** the screen freezes and dims. Drag to select; the image is copied
+when you release the mouse. `Esc` or right-click cancels.
+
+**Full screen:** copies all monitors as one image.
+
+Captures are in physical pixels (per-monitor DPI aware) and go on the clipboard
+as a 24-bit DIB, which pastes into Paint, Office, browsers, chat apps and so on.
+
+The one-shot modes `rect` and `full` suit launchers (PowerToys Run, AutoHotkey,
+a shortcut key on a `.lnk`). Exit codes: `0` copied, `1` cancelled, `2` failed.
+The exe is a GUI program, so PowerShell doesn't wait for it unless you pipe it
+(`snipsnap full | Out-Null`) or use `Start-Process -Wait`.
+
+To start it with Windows, put a shortcut to `snipsnap.exe` in `shell:startup`.
+
+## Build
+
+Needs Visual Studio (or the Build Tools) with the C++ workload:
+
+```
+build.bat
+```
+
+The script finds VS itself if you're not in a developer prompt. It stops a
+running instance first so the exe isn't locked, then produces `snipsnap.exe`.
