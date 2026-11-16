@@ -318,6 +318,7 @@ static int snip_rect(HWND owner)
 
     /* Dimmed copy of the frozen screen for the backdrop. */
     if (!shot_alloc(&g_dim, g_shot.dc, g_shot.w, g_shot.h)) {
+        shot_free(&g_dim);
         shot_free(&g_shot);
         return RC_FAIL;
     }
@@ -447,10 +448,14 @@ static int run_daemon(void)
     say("\n  Full screen: ");
     say(kf ? kf->name : "(unavailable - hotkeys taken)");
     say("\n  Stop with:   snipsnap quit\n");
-    if ((!kr || !kf) && g_out == INVALID_HANDLE_VALUE)
-        MessageBoxA(NULL, kr ? "Full-screen hotkey could not be registered."
-                             : "Rectangle hotkey could not be registered.",
-                    "SnipSnap", MB_ICONWARNING);
+    /* No console to print to: speak up only if the hotkeys aren't the defaults. */
+    if (g_out == INVALID_HANDLE_VALUE && (kr != RECT_KEYS || kf != FULL_KEYS)) {
+        char msg[256];
+        wsprintfA(msg, "Some default hotkeys are taken by another program.\n\n"
+                       "Rectangle:\t%s\nFull screen:\t%s",
+                  kr ? kr->name : "(unavailable)", kf ? kf->name : "(unavailable)");
+        MessageBoxA(NULL, msg, "SnipSnap", MB_ICONWARNING);
+    }
     detach_output();
 
     while (GetMessageW(&m, NULL, 0, 0) > 0) {
