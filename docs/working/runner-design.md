@@ -30,13 +30,14 @@ median of 40. The pixel loops ran on synthetic buffers; nothing read the screen.
 | C idle loop | 3 KB | 0.62 MB | 0.96 MB | 8.9 ms |
 | C# AOT floor | 840 KB | 1.22 MB | 2.83 MB | 15.0 ms |
 | C# SnipSnap skeleton | 858 KB | 1.20 MB | 2.80 MB | 14.0 ms |
-| C# host + C DLL loaded | 974 KB (with its benchmark code) + 2 KB | 1.21 MB | 2.82 MB | 14.4 ms |
+| C# host + C DLL loaded | 974 KB (with its benchmark code) + 2 KB | 1.21 MB | 2.82 MB | — |
 | SnipSnap, running (user's) | 16 KB | 0.46 MB | 1.66 MB | — |
-| QuickTooth, running (user's) | 5.1 MB | 17.0 MB | 21.1 MB | 17.1 ms (`--version`) |
+| QuickTooth, running (user's) | 5.1 MB | 17.0 MB | 21.1 MB | 17.1 ms (a scratch build, `--version`) |
 
-- SnipSnap's per-pixel loops on a 4480×1440 frame (median of 31): the dimming that runs before the
-  overlay appears takes 3.6–4.6 ms in C and 5.3 ms in C#; the 24-bit clipboard conversion, after
-  the click, takes 4.6–4.9 ms in C and 4.3–4.4 ms in C#.
+- SnipSnap's per-pixel loops on a 4480×1440 frame (six runs each, C and C# alternating, each the
+  median of 31): the dimming that runs before the overlay appears takes 3.9 ms in C (3.4–4.6) and
+  5.3 ms in C# (5.1–7.0); the 24-bit clipboard conversion, after the click, takes 4.3–4.9 ms in
+  both.
 - A call through the C ABI costs 3.1 ns (a managed call: 0.6 ns).
 - For comparison, PowerToys runs here as one process per module; its runner process uses 2.3 MB
   private working set.
@@ -75,8 +76,8 @@ their own process.
 - **Background memory**: on its own, 0.5–0.6 MB becomes about 1.2 MB private working set (1.0 →
   2.8 MB private bytes). Inside the shared process it adds almost nothing, so the suite saves
   SnipSnap's own process: about 0.5 MB private working set (1.7 MB private bytes).
-- **Hotkey to overlay**: about 70 → 71–72 ms (estimated). The measured language difference on that
-  path is the dimming loop, 0.7–1.7 ms slower (vectorising it would win that back); the screen
+- **Hotkey to overlay**: about 70 → 71–73 ms (estimated). The measured language difference on that
+  path is the dimming loop, 1–3 ms slower (vectorising it would win that back); the screen
   readback and DWM are the same calls. A one-shot run from a launcher (`snipsnap rect`) starts 6 ms later (8.9 →
   15.0 ms). In a shared process the hotkey also waits whenever another blade is busy on the UI
   thread (not measured).

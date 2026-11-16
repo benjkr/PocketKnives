@@ -7,7 +7,7 @@ copy a **rectangle**, a **window** you pick, or the **screen** under the cursor 
 the clipboard. The captured area flashes briefly so you know it worked. There's
 no editor, no saved files, no tray icon, and no UI beyond the selection overlay.
 
-It's a single C file built into a ~15 KB native exe. It has no runtime or CRT and
+It's a single C file built into a ~16 KB native exe. It has no runtime or CRT and
 uses only system DLLs. The background instance uses about 1–2 MB of its own
 memory (private working set).
 
@@ -31,7 +31,7 @@ If another program already owns a hotkey, SnipSnap falls back to `Ctrl+PrtSc`
 (rectangle), `Ctrl+Alt+Shift+W` (window) or `Ctrl+Shift+PrtSc` (full screen),
 then `Ctrl+Alt+Shift+R` / `Ctrl+Alt+Shift+F`. When started from a terminal it
 prints the hotkeys it actually registered. Started without a console, it shows a
-message box only if a hotkey could not be registered. Plain `PrtSc`,
+message box only if it had to use a fallback or a hotkey could not be registered. Plain `PrtSc`,
 `Win+Shift+S` and the other Windows screenshot keys are left alone.
 
 **Rectangle:** all monitors freeze and dim. Drag to select (a white border shows

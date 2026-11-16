@@ -10,8 +10,9 @@ the user's screen. Each blade's `docs/working/live-testing.md` adds what's speci
 | SnipSnap | `%LOCALAPPDATA%\Programs\SnipSnap\snipsnap.exe` | a shortcut in `shell:startup` |
 | QuickTooth | `%LOCALAPPDATA%\Programs\QuickTooth\QuickTooth.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\QuickTooth` |
 
-- They're `master`'s builds (`AGENTS.md`). Don't replace, stop or restart them to try a branch.
-  Run checks from a build in a scratch folder instead.
+- Only `master`'s builds go there (`AGENTS.md`); the copies there now were built before this repo
+  existed. Don't replace, stop or restart them to try a branch. Run checks from a build in a
+  scratch folder instead.
 - A running blade is found by its window class or mutex, not its path. So a command run from
   **any** copy of a blade, such as `snipsnap quit` or `QuickTooth.exe --exit`, acts on the user's
   running copy. Each blade's live-testing doc lists the commands that are safe.
