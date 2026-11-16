@@ -19,13 +19,14 @@ snipsnap full    capture the whole screen once, then exit
 snipsnap quit    stop the background instance
 ```
 
-| Hotkey (background mode) | Action      |
-| ------------------------ | ----------- |
-| `Ctrl+PrtSc`             | Rectangle   |
-| `Ctrl+Shift+PrtSc`       | Full screen |
+| Hotkey (background mode) | Action       |
+| ------------------------ | ------------ |
+| `Ctrl+Alt+R`             | Rectangle    |
+| `Ctrl+Alt+W`             | Whole screen |
 
 If another program already owns a hotkey, SnipSnap falls back to
-`Ctrl+Alt+Shift+S` (rectangle) or `Ctrl+Alt+Shift+F` (full screen). When started
+`Ctrl+PrtSc` / `Ctrl+Shift+PrtSc`, then `Ctrl+Alt+Shift+S` / `Ctrl+Alt+Shift+F`
+(rectangle / whole screen). When started
 from a terminal it prints the hotkeys it actually registered. Started without a
 console, it shows a message box only if a hotkey could not be registered. Plain
 `PrtSc`, `Win+Shift+S` and the other Windows screenshot keys are left alone.

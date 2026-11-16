@@ -39,10 +39,12 @@ enum { HK_RECT = 1, HK_FULL = 2, HK_ESC = 3 };
 /* Hotkey candidates, tried in order; the first one that registers wins. */
 typedef struct { UINT mod, vk; const char *name; } Hotkey;
 static const Hotkey RECT_KEYS[] = {
+    { MOD_CONTROL | MOD_ALT,             'R',         "Ctrl+Alt+R" },
     { MOD_CONTROL,                       VK_SNAPSHOT, "Ctrl+PrtSc" },
     { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'S',         "Ctrl+Alt+Shift+S" },
 };
 static const Hotkey FULL_KEYS[] = {
+    { MOD_CONTROL | MOD_ALT,             'W',         "Ctrl+Alt+W" },
     { MOD_CONTROL | MOD_SHIFT,           VK_SNAPSHOT, "Ctrl+Shift+PrtSc" },
     { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'F',         "Ctrl+Alt+Shift+F" },
 };
@@ -559,8 +561,9 @@ static int run(void)
         "  snipsnap rect    select a rectangle once (Esc / right-click cancels)\n"
         "  snipsnap full    capture the whole screen once\n"
         "  snipsnap quit    stop the background instance\n\n"
-        "Hotkeys: Ctrl+PrtSc = rectangle, Ctrl+Shift+PrtSc = full screen\n"
-        "         (fallbacks: Ctrl+Alt+Shift+S / Ctrl+Alt+Shift+F)\n");
+        "Hotkeys: Ctrl+Alt+R = rectangle, Ctrl+Alt+W = whole screen\n"
+        "         (if taken: Ctrl+PrtSc / Ctrl+Shift+PrtSc, then\n"
+        "          Ctrl+Alt+Shift+S / Ctrl+Alt+Shift+F)\n");
     return (eq(arg, L"help") || eq(arg, L"h") || eq(arg, L"?")) ? RC_OK : RC_FAIL;
 }
 
