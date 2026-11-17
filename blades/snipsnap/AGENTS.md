@@ -10,7 +10,7 @@ what's specific to SnipSnap. Paths and commands here and in this blade's `docs/`
 
 ## Rules for SnipSnap
 
-- **Small and fast is the product.** Budget: an exe of about 16 KB, about 1–2 MB private working
+- **Small and fast is the product.** Budget: an exe of about 19 KB (16 KB before its settings), about 1–2 MB private working
   set in the background, hotkey to rectangle overlay visible in about 70 ms. A change that costs
   any of these is measured and shown before and after.
 - **No CRT, no extra DLLs.** Only `kernel32`, `user32`, `gdi32` and `dwmapi`, linked with

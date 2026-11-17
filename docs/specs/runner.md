@@ -26,7 +26,8 @@
   10 (Alt+key goes to the box, not to the window's access keys; the box can't take PrtSc or Win,
   and keeps a saved key it can't show). In Windows 11 the hotkey is a button: click it, press the
   keys, Esc cancels; Ctrl, Alt or Win is required. When a blade refuses a change (a hotkey taken
-  by another program), Settings shows the blade's reason and keeps the old value.
+  by another program), Settings shows the blade's reason and the blade keeps its old value; Windows
+  11 puts the control back, XP and Windows 10 leave the edit in place to fix or Cancel.
 - XP and Windows 10 save changes with OK or Apply, and apply pending changes before switching
   looks. Windows 11 applies each change at once.
 
