@@ -7,7 +7,7 @@ copy a **rectangle**, a **window** you pick, or the **screen** under the cursor 
 the clipboard. The captured area flashes briefly so you know it worked. There's
 no editor, no saved files, no tray icon, and no UI beyond the selection overlay.
 
-It's a single C file built into a ~16 KB native exe. It has no runtime or CRT and
+It's a single C file built into a ~19 KB native exe. It has no runtime or CRT and
 uses only system DLLs. The background instance uses about 1–2 MB of its own
 memory (private working set).
 
@@ -33,6 +33,9 @@ then `Ctrl+Alt+Shift+R` / `Ctrl+Alt+Shift+F`. When started from a terminal it
 prints the hotkeys it actually registered. Started without a console, it shows a
 message box only if it had to use a fallback or a hotkey could not be registered. Plain `PrtSc`,
 `Win+Shift+S` and the other Windows screenshot keys are left alone.
+
+The hotkeys and the flash can be changed in the PocketKnives Settings window. A hotkey chosen
+there is used exactly, with no fallbacks; Settings refuses one another program already owns.
 
 **Rectangle:** all monitors freeze and dim. Drag to select (a white border shows
 the selection); the image is copied when you release the mouse. `Esc` or

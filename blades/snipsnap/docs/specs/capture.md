@@ -63,3 +63,5 @@ are the `#define`s at the top of `snipsnap.c`. Keep it current in the same chang
 - Order: full screen reads, flashes, then copies; the overlay is cloaked, then flashes, then
   copies. The flash is never in an image: it comes after the read and is removed before the next.
 - A one-shot run stays alive until the flash has faded.
+- The `flash` setting ([settings](hotkeys-and-cli.md#settings)) turns it off: nothing is shown
+  and a one-shot run exits as soon as the image is on the clipboard.
