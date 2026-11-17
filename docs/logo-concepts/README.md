@@ -4,8 +4,10 @@ How the PocketKnives icon was chosen. Nothing in this folder is used by the app 
 
 ## The final icon
 
-**Noir Classic, in the Royale Noir colours.** It's a pixel icon in the Windows XP style, with separately drawn 16,
-32 and 48 px versions. The files are in [`assets/`](../../assets):
+**Noir Classic, in the Royale Noir colours, with closed pocket knives.** It's a pixel icon in the Windows XP style,
+with separately drawn 16, 32 and 48 px versions. The two knives in the pockets are folded shut: a titanium one and a
+gunmetal one, drawn like the blue knife's handle ([before and after](closed-knives-before-after.png)). The files are in
+[`assets/`](../../assets):
 
 - **`icon.svg`:** all three versions in one file. It shows the version that fits the size it's drawn at: the 16 px
   version below 32 px, the 32 px one below 48 px, and the 48 px one from 48 px up. T3 Code and the README use it.
@@ -22,4 +24,5 @@ It's pixel art. Scale it by whole numbers with nearest-neighbour, and don't redr
 - **`flap-case-in-context.html`:** that pick in Windows taskbars, windows and browser tabs.
 - **`styles.html`, `style-1.svg` to `style-5.svg`:** the Flap Case in XP and Windows 7 styles. Style 5 is Royale Noir.
 - **`pixel.html`, `pixel/`:** Royale Noir as five pixel XP icons. Design 1 (`d1-*`) is Noir Classic.
-- **`pixel-schemes/`:** Noir Classic in six XP colour schemes. `noir-*` is the final icon.
+- **`pixel-schemes/`:** Noir Classic in six XP colour schemes. The user picked `noir-*`; the final icon is that one
+  with its pocket knives redrawn closed (they showed blades).
