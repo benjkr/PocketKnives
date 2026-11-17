@@ -7,8 +7,8 @@ copy a **rectangle**, a **window** you pick, or the **screen** under the cursor 
 the clipboard. The captured area flashes briefly so you know it worked. There's
 no editor, no saved files, no tray icon, and no UI beyond the selection overlay.
 
-It's a single C file built into a ~19 KB native exe. It has no runtime or CRT and
-uses only system DLLs. The background instance uses about 1–2 MB of its own
+It's written in Rust without the standard library and built into a ~20 KB native
+exe. It has no runtime or CRT and uses only system DLLs. The background instance uses about 1–2 MB of its own
 memory (private working set).
 
 ## Usage
@@ -85,14 +85,17 @@ memory in the background process.
 
 ## Build
 
-Needs Visual Studio (or the Build Tools) with the C++ workload:
+Needs Rust ([rustup](https://rustup.rs); the toolchain is pinned in the repo's
+`rust-toolchain.toml`) and Visual Studio (or the Build Tools) with the C++
+workload, for its linker:
 
 ```
 build.bat
 ```
 
-The script finds VS itself if you're not in a developer prompt. It stops a
-running instance first so the exe isn't locked, then produces `snipsnap.exe`.
+It runs `cargo build --release -p snipsnap`, which finds the linker itself. It
+stops a running instance first so the exe isn't locked, then puts `snipsnap.exe`
+next to the script.
 
 Working on SnipSnap (people and coding agents alike): start with the suite's
 [`AGENTS.md`](../../AGENTS.md), then this blade's [`AGENTS.md`](AGENTS.md), which

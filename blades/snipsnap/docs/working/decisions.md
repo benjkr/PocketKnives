@@ -14,6 +14,9 @@ reintroduce these.
 - **Hiding the overlay** took ~6.7 ms after mouse-up; DWM cloaking takes ~0.2 ms (mouse-up to
   clipboard went from 10.6 ms to 1.7 ms).
 - **Tearing down before a one-shot run exits** delayed the exit by ~20 ms; Windows cleans up instead.
+- **A faster opt-level than `z`**: `"s"` made the exe 21.5 KB and 2 or 3 made it 25–26 KB, for
+  nothing: at `z` the dimming (SSE2) and the 24-bit rows (8+4-byte stores) were already as fast as
+  the C build's `/O1` loops or faster, and the paint is GDI either way.
 
 ## Behaviour and look
 
@@ -28,5 +31,13 @@ reintroduce these.
 
 ## Building
 
+- **The C build** (`snipsnap.c`, `cl /O1`, 19,456 bytes): replaced by Rust for memory safety, at
+  20,480 bytes. Its loops were benchmarked against the Rust ones and its output compared byte for
+  byte before it was removed.
+- **`pk::args` and `pk::out::Writer`**: not used. `pk::args` applies the C runtime's quote and
+  backslash rules, and `Writer` writes UTF-16 to a console; SnipSnap's parser and its byte output
+  (and the message boxes keyed on having no output) stay as they were.
+- **`core::fmt`** for SnipSnap's few formatted lines: on the `settings` line alone it added
+  4.5 KB. User32's `wsprintfA` formats them instead.
 - **`build.bat` without `start /wait`**: cmd didn't wait for the GUI exe's `quit`, so the running
-  copy could still lock the exe at link time (LNK1104).
+  copy could still lock the exe when the new one replaced it (LNK1104 in the C build).
