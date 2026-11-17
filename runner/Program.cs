@@ -212,7 +212,10 @@ internal sealed unsafe class Program
         if (choice == (int)settingsItem)
             OpenSettings();
         else if (choice == (int)exitItem)
+        {
+            Settings.StopBlades(Settings.Root);
             Stop();
+        }
     }
 
     private void Stop()

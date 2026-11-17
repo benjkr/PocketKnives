@@ -6,9 +6,12 @@
   recreates the taskbar.
 - One click, Enter, or Space on the icon opens PocketKnives Settings or restores its existing
   window. Right-click, Shift+F10 or the menu key on the icon shows **Settings** (the default
-  item) and **Exit**. The Start menu shortcut runs `pk settings` and opens the same window, and
-  starts the runner again after Exit. Closing Settings leaves the icon available. Exit and the
-  installer's `pk --exit` command close both.
+  item) and **Exit**. Exit closes Settings, the icon and the running blades, each through its own
+  stop command (`snipsnap quit`, `QuickTooth.exe --exit`). The installer's `pk --exit` closes
+  only Settings and the icon; Setup stops the blades itself. The Start menu shortcut runs
+  `pk settings` and opens the same window, and starts the runner again after Exit; each blade
+  starts again from its own Start menu entry or at the next sign-in. Closing Settings leaves the
+  icon available.
 - General offers **Look**. Choosing XP, Windows 10, or Windows 11 saves the look under
   `HKCU\Software\PocketKnives` and reopens Settings on General. XP uses classic Win32
   controls and Windows 10 enables visual styles. Windows 11 is a separate WinUI window with Mica
@@ -28,5 +31,5 @@ QuickTooth. The WinUI app carries its Windows App SDK runtime and starts only fo
 From a scratch copy of that stage, run `pk --preview`, then click the tray icon or run
 `pk --preview settings`. Preview instances use their own tray identity and save changes to
 `preview-settings.txt` next to the scratch executable. They never write the installed settings
-or change what starts with Windows. To close the preview and its tray icon, run
+or change what starts with Windows, and their Exit leaves the blades running. To close the preview and its tray icon, run
 `pk --preview --exit` from the same folder.

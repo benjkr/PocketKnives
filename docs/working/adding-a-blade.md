@@ -35,7 +35,7 @@ blades/<name>/              one lower-case word: the folder and exe name
   menu entry, how it starts with Windows and its stop command, listed in
   [live testing](live-testing.md).
 - **A row in Settings**: give the runner the blade's name, description, ICO version of the
-  blade icon and its existing sign-in setting.
+  blade icon, exe, stop command (the tray menu's Exit runs it) and its existing sign-in setting.
 
 ## Checklist
 

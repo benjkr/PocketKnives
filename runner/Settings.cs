@@ -20,11 +20,13 @@ internal static class Settings
     internal static readonly string[] LookNames = ["XP", "Windows 10", "Windows 11"];
     private static readonly string[] LookValues = ["xp", "win10", "win11"];
 
-    internal sealed record Blade(string Name, string Description, string Icon);
+    internal sealed record Blade(string Name, string Description, string Icon, string Exe, string StopCommand);
     internal static readonly Blade[] Blades =
     [
-        new("SnipSnap", "Copies a rectangle, a window or the screen to the clipboard.", "snipsnap.ico"),
-        new("QuickTooth", "Connects or disconnects your AirPods with one click.", "quicktooth.ico"),
+        new("SnipSnap", "Copies a rectangle, a window or the screen to the clipboard.", "snipsnap.ico",
+            "snipsnap.exe", "quit"),
+        new("QuickTooth", "Connects or disconnects your AirPods with one click.", "quicktooth.ico",
+            "QuickTooth.exe", "--exit"),
     ];
 
     internal static bool IsPreview => Environment.GetEnvironmentVariable(PreviewVariable) == "1";
@@ -112,7 +114,7 @@ internal static class Settings
 
         if (original[1] != selected[1])
         {
-            string exe = Path.Combine(root, Blades[1].Name + ".exe");
+            string exe = Path.Combine(root, Blades[1].Exe);
             using var child = Process.Start(new ProcessStartInfo(exe, selected[1] ? "--autostart on" : "--autostart off")
             {
                 UseShellExecute = false,
@@ -126,10 +128,36 @@ internal static class Settings
 
     private static void CreateSnipSnapShortcut(string root)
     {
-        string target = Path.Combine(root, Blades[0].Name + ".exe");
+        string target = Path.Combine(root, Blades[0].Exe);
         if (!File.Exists(target))
             throw new FileNotFoundException("SnipSnap is missing from the PocketKnives folder.", target);
         ShellLink.Save(target, StartupShortcut);
+    }
+
+    // Each blade's own stop command finds its running copy by window or mutex, not by path, so a
+    // preview never runs them: they would stop the user's installed blades.
+    internal static void StopBlades(string root)
+    {
+        if (IsPreview)
+            return;
+        foreach (Blade blade in Blades)
+        {
+            string exe = Path.Combine(root, blade.Exe);
+            if (!File.Exists(exe))
+                continue;
+            try
+            {
+                using var stop = Process.Start(new ProcessStartInfo(exe, blade.StopCommand)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+            }
+            catch (Win32Exception)
+            {
+                // A blade that can't be asked to stop keeps running; Exit still closes the runner.
+            }
+        }
     }
 
     internal static bool IsSettingsError(Exception error) =>
