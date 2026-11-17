@@ -112,10 +112,10 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
 ![The prototype, raw: the General, SnipSnap and QuickTooth pages](runner-design/settings-raw.png)
 
 - **Layout**: a list on the left, one row per page ("General", then each blade with its 16 px
-  icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is the blade's
-  name in bold, one line on what it does and the blade's 32 px logo at the top right, then plain
-  bold headings with the controls under them. General has no logo (the suite's can go there once
-  it exists). No tabs, no group boxes, no separators.
+  icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is its name in
+  bold, one line on what it does and a 32 px logo at the top right (the blade's; the PocketKnives
+  logo on General), then plain bold headings with the controls under them. No tabs, no group
+  boxes, no separators.
 - **Look**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which
   also gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`)
   and 1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
@@ -135,8 +135,11 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
   (a documented DWM setting), but whether plain controls look right on it is untested.
 - **Icons**: Win32 can't draw SVG, so each blade also keeps `blades/<name>/assets/icon.ico`
   (16–64 px, rendered from its `icon.svg`, so the 32 px logo stays sharp at 200% scaling;
-  SnipSnap's is 12 KB), and the runner builds them into its exe. QuickTooth already has one (`blades/quicktooth/assets/quicktooth.ico`, the same artwork
-  as its `icon.svg`).
+  SnipSnap's is 12 KB), and the runner builds them into its exe. QuickTooth already has one
+  (`blades/quicktooth/assets/quicktooth.ico`, the same artwork as its `icon.svg`). The suite's
+  logo is pixel art, only ever shown at its own sizes ([logo](../logo-concepts/README.md)): the
+  window uses the largest frame of `assets/pocketknives.ico` that fits the 32 px slot (32, 48 or
+  64 px), so it's never scaled.
 - **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
   working set while open; 56 ms from launch until it has painted and exited (median of 30).
   Closed, it costs nothing.
@@ -147,8 +150,9 @@ The user asked whether a modern, glassy look like the Windows 11 Settings app is
 WinUI 3 (the Windows App SDK) is Microsoft's native UI framework for that style. It has Mica, the
 navigation pane, setting cards, toggle switches and dark mode. A second throwaway prototype (WinUI 3
 from the Windows App SDK 1.6 already in the local NuGet cache, restored offline, self-contained,
-UI built in code, the same five placeholder settings and the same logo at the top right of a
-blade's page, here 40 px) renders like this. It's dark because this PC's apps are set to dark:
+UI built in code, the same five placeholder settings and the same logos at the top right, here
+48 px: the suite logo's drawn 48 px version, unscaled) renders like this. It's dark because this
+PC's apps are set to dark:
 
 ![The WinUI 3 prototype: General, SnipSnap and QuickTooth](runner-design/settings-winui.png)
 
@@ -170,7 +174,9 @@ blade's page, here 40 px) renders like this. It's dark because this PC's apps ar
   matching, newer SDK downloaded.
 - **Differences from the Win32 versions**: changes apply at once (no OK / Apply), as in Settings.
   There's no hotkey-capture control, so SnipSnap's hotkey boxes need custom key handling. On
-  Windows 10 there's no Mica, so the backdrop is a flat colour.
+  Windows 10 there's no Mica, so the backdrop is a flat colour. WinUI scales images smoothly, so
+  above 100% display scaling the pixel-art suite logo needs a version already doubled (the .ico's
+  64 and 96 px frames) picked in code; the prototype doesn't do that yet.
 - **The runner stays free of it**: in this option the window is its own exe, which `pk settings`
   starts, so signing in never loads WinUI.
 

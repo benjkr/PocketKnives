@@ -1,10 +1,10 @@
 <!-- ==================================================================================
-     SUITE LOGO: the PocketKnives logo goes here. It's being designed on the
-     t3/logo-concepts branch; until it lands, this shows T3's placeholder
-     (assets/icon.svg). Replace only what's between this comment and END SUITE LOGO.
+     SUITE LOGO: the PocketKnives logo (assets/icon.svg). It's pixel art: 96 px is its
+     48 px version doubled; keep any new size a whole-number multiple
+     (docs/logo-concepts/README.md). Replace only what's between this comment and END SUITE LOGO.
      ================================================================================== -->
 <p align="center">
-  <img src="assets/icon.svg" width="96" height="96" alt="PocketKnives logo (placeholder)">
+  <img src="assets/icon.svg" width="96" height="96" alt="PocketKnives logo">
 </p>
 <!-- END SUITE LOGO -->
 
