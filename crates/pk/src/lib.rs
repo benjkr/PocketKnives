@@ -20,6 +20,7 @@ pub mod env;
 pub mod heap;
 pub mod instance;
 pub mod out;
+pub mod panic;
 pub mod sync;
 pub mod thread;
 pub mod wide;
