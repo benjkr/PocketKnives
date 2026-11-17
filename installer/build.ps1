@@ -2,8 +2,9 @@
 # per-user installer (Inno Setup 6.7+).
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
-# Needs what each blade's build needs: Visual Studio (or Build Tools) with "Desktop development
-# with C++" (SnipSnap, and QuickTooth's native linker) and the .NET 10 SDK (QuickTooth).
+# Needs what each part's build needs: Visual Studio (or Build Tools) with "Desktop development
+# with C++" (SnipSnap, and the linker for QuickTooth and the runner), Rust through rustup
+# (QuickTooth; rust-toolchain.toml picks the version) and the .NET 10 SDK (the runner).
 # Nothing running is stopped and nothing is written to the blades' folders.
 $ErrorActionPreference = 'Stop'
 $root  = Split-Path $PSScriptRoot
@@ -24,12 +25,13 @@ New-Item -ItemType Directory $stage | Out-Null
 & cmd /c (Join-Path $root 'blades\snipsnap\build.bat') $stage
 if ($LASTEXITCODE -ne 0) { throw 'SnipSnap build failed' }
 
-# QuickTooth: one native exe (Native AOT), as its own installer builds it.
-$qt = Join-Path $root 'blades\quicktooth\src\QuickTooth\QuickTooth.csproj'
-$qtOut = Join-Path $PSScriptRoot 'obj\quicktooth'
-dotnet publish $qt -c Release -r win-x64 -nologo -o $qtOut
-if ($LASTEXITCODE -ne 0) { throw 'QuickTooth publish failed' }
-Copy-Item (Join-Path $qtOut 'QuickTooth.exe') $stage
+# QuickTooth: one exe (Rust), built from the repo root so cargo finds rust-toolchain.toml and
+# .cargo/config.toml, into installer\obj.
+$cargoOut = Join-Path $PSScriptRoot 'obj\cargo'
+Push-Location $root
+try { cargo build --release -p quicktooth --target-dir $cargoOut } finally { Pop-Location }
+if ($LASTEXITCODE -ne 0) { throw 'QuickTooth build failed' }
+Copy-Item (Join-Path $cargoOut 'release\QuickTooth.exe') $stage
 
 $runner = Join-Path $root 'runner\pk.csproj'
 dotnet publish $runner -c Release -nologo -o $stage
