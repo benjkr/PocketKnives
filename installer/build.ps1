@@ -3,7 +3,8 @@
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
 # Needs what each blade's build needs: Visual Studio (or Build Tools) with "Desktop development
-# with C++" (SnipSnap, and QuickTooth's native linker) and the .NET 10 SDK (QuickTooth).
+# with C++" (the linker for every part), Rust through rustup (SnipSnap; rust-toolchain.toml picks
+# the version) and the .NET 10 SDK (QuickTooth).
 # Nothing running is stopped and nothing is written to the blades' folders.
 $ErrorActionPreference = 'Stop'
 $root  = Split-Path $PSScriptRoot

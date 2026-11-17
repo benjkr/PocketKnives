@@ -14,7 +14,7 @@ in a blade's docs are from that blade's folder.
 
 | Blade | What it does | Built with | Start here |
 |---|---|---|---|
-| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | One C file, no CRT, MSVC | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
+| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | Rust, `no_std` on `crates/pk`, no CRT, four system DLLs | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
 | QuickTooth | Connects or disconnects AirPods with one click on a tray icon | C# / .NET 10, Native AOT; browser simulator | [`blades/quicktooth/AGENTS.md`](blades/quicktooth/AGENTS.md) |
 
 ## Rules every change follows
@@ -33,7 +33,7 @@ in a blade's docs are from that blade's folder.
 - **Only `master` is installed on the user's PC** (tagged releases once they exist). Never install
   a branch, an open PR or anything unmerged. Unmerged work is previewed, or checked read-only from
   a build in a scratch folder.
-- **Native and AOT builds stay clean**: zero compiler warnings (C builds with `/W4 /WX`), zero
+- **Native and AOT builds stay clean**: zero compiler warnings (`.cargo/config.toml` makes every Rust warning an error), zero
   AOT/trim warnings, no reflection in .NET, and each blade's size and memory budget holds. Security
   pins (such as QuickTooth's runtime patch pin) never go backwards.
 - **Log lines are behaviour.** A blade's log lines, console output and exit codes are compared

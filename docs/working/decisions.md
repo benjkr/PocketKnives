@@ -28,5 +28,9 @@ blade's own decisions are in its `docs/working/decisions.md`.
   code. The `blade.json` manifest proposed in the runner design was not built. The settings
   offered are the runner design's list: SnipSnap's three hotkeys and its flash, QuickTooth's
   headset and low-battery level.
+- **SnipSnap is Rust**, `no_std` on the shared `crates/pk`, ported from one C file for safety at the
+  same size and speed: 20,480 bytes against 19,456, the same four system DLLs and 115 imported
+  functions, its per-pixel loops (the dimming, the repaint, the clipboard rows) measured no slower
+  than the C on synthetic frames.
 - **How blades run together, shared code and the default language** for new blades: being decided
   ([runner design](runner-design.md)).
