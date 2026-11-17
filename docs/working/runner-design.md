@@ -120,19 +120,17 @@ with `PrintWindow`.
 
 - **Layout**: on the left, General alone, then a bold "Blades" heading and a list of the blades,
   each with its 16 px icon and a check box: ticked, it starts when you sign in ("Ticked: starts at
-  sign-in" under the list). The user picked this over three other designs (General indented with
-  no box, General renamed PocketKnives with its own box, the boxes on the right). Selecting a row
-  in either list shows its page on the right; OK / Cancel / Apply at the bottom. A page is its name in
-  bold, one line on what it does and a 32 px logo at the top right (the blade's; the PocketKnives
-  logo on General), then plain bold headings with the controls under them. No tabs, no group
-  boxes, no separators.
+  sign-in" under the list). Selecting a row in either list shows its page on the right; OK / Cancel
+  / Apply at the bottom. A page is its name in bold, one line on what it does and a 32 px logo at
+  the top right (the blade's; the PocketKnives logo on General), then plain bold headings with the
+  controls under them. No tabs, no group boxes, no separators.
 - **XP**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which also
-  gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`) and
-  1 px black borders (`WS_BORDER`) on the lists and text boxes. The list's own check boxes are
-  always themed, so XP gives it classic flat ones drawn by Windows (`DrawFrameControl`). The system font (Segoe UI 9),
-  square corners (a DWM setting), the suite's 16 px icon in the title bar. The drop-downs keep
-  their classic 3D button: Windows has no flat variant of it. XP's own Luna theme isn't one of
-  the looks (see below).
+  gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`) and 1
+  px black borders (`WS_BORDER`) on the lists and text boxes. The list's own check boxes are always
+  themed, so XP gives it classic flat ones drawn by Windows (`DrawFrameControl`). The system font
+  (Segoe UI 9), square corners (a DWM setting), the suite's 16 px icon in the title bar. The
+  drop-downs keep their classic 3D button: Windows has no flat variant of it. XP's own Luna theme
+  isn't one of the looks (see below).
 - **Windows 10**: the same layout with visual styles on, the controls' own themed borders and
   Explorer's list look. Windows draws it in its current style: Windows 11's here (rounded buttons,
   accent-coloured check boxes, its title bar and rounded window corners), Windows 10's on Windows
@@ -164,10 +162,10 @@ with `PrintWindow`.
   64 px), so it's never scaled. The same `.ico` is the `pk` exe's icon, and the settings window's
   in the taskbar and the Start menu.
 - **Measured** (this prototype, both looks, the icons, the look switch and the boxes in the list):
-  an 881 KB exe with zero AOT warnings (the switch added 17 KB, the boxes about 2 KB); 1.6 MB private
-  working set while open (measured before the boxes); 56 ms from launch until it has painted and
-  exited (median of 30, measured before the logos, the switch and the boxes).
-  Closed, it costs nothing.
+  an 881 KB exe with zero AOT warnings (the switch added 17 KB, the boxes about 2 KB); 1.6 MB
+  private working set while open (measured before the boxes); 56 ms from launch until it has painted
+  and exited (median of 30, measured before the logos, the switch and the boxes). Closed, it costs
+  nothing.
 
 ### Windows 11: the Settings style in WinUI 3
 
@@ -198,7 +196,7 @@ PC's apps are set to dark:
   corruption), and shutting down crashed until the prototype ended its process directly. Most
   likely the old SDK 1.6 on .NET 10; not investigated. A real build would use a current SDK.
 - **Every install carries it**, even for people who never pick Windows 11: the sizes above, on
-  top of the Win32 window's 879 KB. Smaller downloads would come from requiring the Windows App
+  top of the Win32 window's 881 KB. Smaller downloads would come from requiring the Windows App
   Runtime installed instead of bundling it (it's on this PC because other apps installed it). Not
   measured: that needs the matching, newer SDK downloaded.
 - **Differences from the Win32 versions**: changes apply at once (no OK / Apply), as in Settings.
