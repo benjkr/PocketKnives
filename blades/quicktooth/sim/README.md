@@ -106,10 +106,11 @@ Simulator options (any command that opens it): `--scale 1|1.25|1.5|1.75|2`, `--s
 | `waitFor` | JS expression over the state `s`; advances until true or `timeout` (fails the run). |
 | `expect` | Dot paths into the state → value, or `{"match": regex}`, `{"includes": x}`, `{"min","max"}`, `{"approx","tol"}`, `{"not": x}`. `"log"` / `"logNot"`: some / no line of quicktooth.log contains the text. |
 | `shot` | Screenshot (`region`, `zoom` per step or per scenario). |
-| `profile`, `theme`, `scale`, `tune`, `cli`, `bt`, `eval` | Change the world: `{"bt": ["externalDisconnect", "AirPods Pro"]}`, `{"cli": "--toggle"}`, `{"eval": "qt.restartExplorer()"}`. |
+| `profile`, `theme`, `scale`, `tune`, `cli`, `bt`, `eval` | Change the world: `{"bt": ["externalDisconnect", "AirPods Pro"]}`, `{"cli": "--toggle"}`, `{"cli": "--set lowBattery=30"}` (handed to the running app like the exe's `--set`; what it would print is the state's `cli`: `applied` or the refusal), `{"eval": "qt.restartExplorer()"}`. |
 
 State paths (see `final-state.json` of any run): `app.pending`, `app.anim`, `app.animT`, `app.tooltip`,
 `app.icon` (`{kind: static, state}`, plus `lowBattery: true` with the orange dot, or `{kind: anim, phase, t}`), `app.timers`, `app.battery`,
+`app.settings` (`targetName`, `lowBatteryWarning`), `cli`,
 `shell.tooltip`, `shell.menu[i].items/hot/rect`, `shell.iconInOverflow`, `shell.flyoutOpen`,
 `bt[i].a2dp/hfp/link`, `t`.
 
@@ -117,7 +118,7 @@ State paths (see `final-state.json` of any run): `app.pending`, `app.anim`, `app
 
 Everything the CLI does goes through `window.qt`, which you can also drive from your own Playwright code:
 `qt.state()`, `qt.log()`, `qt.timeline()`, `qt.advance(ms)`, `qt.waitFor(fn, timeoutMs)`,
-`qt.setMode('manual'|'realtime', speed)`, `qt.cli('--toggle')`, `qt.locate('icon')`,
+`qt.setMode('manual'|'realtime', speed)`, `qt.cli('--toggle')`, `qt.cli('--set lowBattery=30')`, `qt.locate('icon')`,
 `qt.profile('slow')` or `qt.profile({ hfpMs: [5000, 6000] })`, `qt.bt.externalConnect('AirPods Pro')`,
 `qt.bt.externalDisconnect(…)`, `qt.bt.setInRange(…, false)`, `qt.bt.setPresent(…, false)`, `qt.bt.setBattery(…, {left: 20})`,
 `qt.setTheme('light')`, `qt.setScale(1.5)`, `qt.restartExplorer()`, `qt.setPromoted(false)`,

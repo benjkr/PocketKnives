@@ -64,7 +64,7 @@ Replies, pull requests, this machine's quirks and the desktop rules are suite-wi
 | Clicks, connect/disconnect state machine, tooltip, menu, autostart, Explorer/theme/DPI | [tray](docs/specs/tray.md) |
 | Artwork, renderer, static icons, animation phases, the glow | [icon and animation](docs/specs/icon-and-animation.md) |
 | Finding the headset, one-shot connect/disconnect, link state, notifications, battery | [bluetooth](docs/specs/bluetooth.md) |
-| `settings.json`, the log, command-line options, single instance | [settings and CLI](docs/specs/settings-and-cli.md) |
+| `settings.json`, PocketKnives Settings (`--settings`, `--set`), the log, command-line options, single instance | [settings and CLI](docs/specs/settings-and-cli.md) |
 | The browser simulator: what's real, the bridge, mock Bluetooth, commands | [simulator](docs/specs/simulator.md) |
 | Native AOT build, runtime pin, installer, `publish.ps1`, what gets installed, releases | [build and install](docs/specs/build-and-install.md) |
 | What to run for which change and what each check proves | [testing](docs/specs/testing.md) |

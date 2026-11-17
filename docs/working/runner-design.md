@@ -2,7 +2,9 @@
 
 **Status: a proposal for blade coordination and shared code.** The
 [runner and settings window spec](../specs/runner.md) describes the implemented tray and
-settings window. The benchmark and prototype measurements below are for the architecture decision.
+settings window. Blade settings were built without the `blade.json` manifest proposed below: each
+blade prints its own ([blade settings](../specs/blade-settings.md), [decisions](decisions.md)).
+The benchmark and prototype measurements below are for the architecture decision.
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 

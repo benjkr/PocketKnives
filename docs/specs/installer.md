@@ -19,7 +19,7 @@ What it does now. Keep it current in the same change, and lean.
   still running after 10 s, and starts them again at the end, silent installs included.
 - **Uninstalling** stops the runner and blades and removes the installed files, Start menu entries,
   Startup shortcuts and QuickTooth's Run value (only if it points into the install). The saved
-  window look and QuickTooth's settings are kept.
+  window look and the blades' settings (`%APPDATA%\SnipSnap`, `%APPDATA%\QuickTooth`) are kept.
 - Unsigned, so Windows SmartScreen warns on download.
 - **What goes on the user's PC**: only builds of `master`, from a release tag once tags exist. Say
   which commit is installed. The blades' own stand-alone installs (QuickTooth's `publish.ps1` and

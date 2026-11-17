@@ -10,6 +10,8 @@
  *   snipsnap window     pick a window once, then exit
  *   snipsnap full       capture the monitor under the cursor once, then exit
  *   snipsnap quit       stop the background instance
+ *   snipsnap settings   print the settings (for PocketKnives Settings)
+ *   snipsnap set k=v..  change settings and apply them to the background instance
  *
  * Exit codes: 0 = copied / ok, 1 = cancelled, 2 = failed / bad usage.
  */
@@ -42,22 +44,41 @@ enum { HK_RECT = 1, HK_WINDOW = 2, HK_FULL = 3, HK_ESC = 4 };
 #define SS_ROP        (SRCCOPY | CAPTUREBLT)   /* CAPTUREBLT: include layered windows */
 #endif
 
-/* Hotkey candidates, tried in order; the first one that registers wins. */
-typedef struct { UINT mod, vk; const char *name; } Hotkey;
-static const Hotkey RECT_KEYS[] = {
-    { MOD_CONTROL | MOD_ALT,             'R',         "Ctrl+Alt+R" },
-    { MOD_CONTROL,                       VK_SNAPSHOT, "Ctrl+PrtSc" },
-    { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'R',         "Ctrl+Alt+Shift+R" },
+/* A hotkey as one number, modifiers * 256 + virtual key: the settings format. */
+#define HK(mod, vk)   ((UINT)(mod) << 8 | (UINT)(vk))
+#define HK_MAX        HK(MOD_ALT | MOD_CONTROL | MOD_SHIFT | MOD_WIN, 0xFF)
+
+/* Hotkey candidates for a capture with no saved hotkey, tried in order; the
+ * first one that registers wins. A capture's list ends where the next one's
+ * starts (SETTINGS below). */
+typedef struct { UINT v; const char *name; } Hotkey;
+static const Hotkey FALLBACKS[] = {
+    /* Rectangle */
+    { HK(MOD_CONTROL | MOD_ALT,             'R'),         "Ctrl+Alt+R" },
+    { HK(MOD_CONTROL,                       VK_SNAPSHOT), "Ctrl+PrtSc" },
+    { HK(MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'R'),         "Ctrl+Alt+Shift+R" },
+    /* Window */
+    { HK(MOD_CONTROL | MOD_ALT,             'W'),         "Ctrl+Alt+W" },
+    { HK(MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'W'),         "Ctrl+Alt+Shift+W" },
+    /* Full screen */
+    { HK(MOD_CONTROL | MOD_ALT,             'F'),         "Ctrl+Alt+F" },
+    { HK(MOD_CONTROL | MOD_SHIFT,           VK_SNAPSHOT), "Ctrl+Shift+PrtSc" },
+    { HK(MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'F'),         "Ctrl+Alt+Shift+F" },
 };
-static const Hotkey WINDOW_KEYS[] = {
-    { MOD_CONTROL | MOD_ALT,             'W',         "Ctrl+Alt+W" },
-    { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'W',         "Ctrl+Alt+Shift+W" },
+
+/* The settings, in the order PocketKnives Settings shows them. The first
+ * three are the hotkeys of captures HK_RECT, HK_WINDOW and HK_FULL. */
+enum { S_HOTKEYS = 3, S_FLASH = 3, S_COUNT = 4 };
+typedef struct { const wchar_t *key; const char *label; const Hotkey *keys; } Setting;
+static const Setting SETTINGS[S_COUNT] = {
+    { L"rect",   "Rectangle",               FALLBACKS },
+    { L"window", "Window",                  FALLBACKS + 3 },
+    { L"full",   "Full screen",             FALLBACKS + 5 },
+    { L"flash",  "Flash the captured area", FALLBACKS + 8 },   /* the end of the list */
 };
-static const Hotkey FULL_KEYS[] = {
-    { MOD_CONTROL | MOD_ALT,             'F',         "Ctrl+Alt+F" },
-    { MOD_CONTROL | MOD_SHIFT,           VK_SNAPSHOT, "Ctrl+Shift+PrtSc" },
-    { MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'F',         "Ctrl+Alt+Shift+F" },
-};
+#define INI_SECTION   L"SnipSnap"
+#define RELOAD_MSG    L"PocketKnives.Reload.v1"
+#define RELOAD_DONE   0x100     /* reload reply: handled; low bits = captures without a key */
 
 static BOOL g_daemon;   /* running as the background instance */
 
@@ -104,6 +125,101 @@ static void detach_output(void)
     FreeConsole();
 }
 
+/* -------------------------------------------------------------- settings
+ *
+ * An INI file read and written through kernel32: %APPDATA%\SnipSnap\snipsnap.ini,
+ * or snipsnap.ini next to the exe in a PocketKnives preview. A hotkey is saved
+ * as HK(mod, vk); a capture without one uses its fallback list. */
+
+static wchar_t g_ini[MAX_PATH + 32];   /* empty: no settings file */
+static DWORD g_ini_dir;                /* where its folder's name ends; 0 = don't create it */
+static BOOL g_preview;                 /* POCKETKNIVES_SETTINGS_PREVIEW=1 */
+static UINT g_set[S_COUNT];            /* hotkeys: saved value or 0; flash: 1 or 0 */
+
+static BOOL hotkey_ok(UINT v) { return v <= HK_MAX && (v & 0xFF); }
+
+/* A capture's hotkey: the saved one, or the first of its fallbacks. (Not
+ * inlining this, ini_get and refuse makes the code smaller.) */
+static __declspec(noinline) UINT hotkey_of(int i) { return g_set[i] ? g_set[i] : SETTINGS[i].keys[0].v; }
+
+/* The saved value, or (UINT)-1 when there's none. */
+static __declspec(noinline) UINT ini_get(int i)
+{
+    return g_ini[0] ? GetPrivateProfileIntW(INI_SECTION, SETTINGS[i].key, -1, g_ini) : (UINT)-1;
+}
+
+/* Save a value; (UINT)-1 removes it. */
+static BOOL ini_put(int i, UINT v)
+{
+    wchar_t num[12], *d = num + 11;
+    UINT k = v;
+    *d = 0;
+    do *--d = (wchar_t)(L'0' + k % 10); while (k /= 10);
+    return g_ini[0] && WritePrivateProfileStringW(INI_SECTION, SETTINGS[i].key,
+                                                  v == (UINT)-1 ? NULL : d, g_ini);
+}
+
+static void settings_load(void)
+{
+    static const wchar_t TAIL[] = L"\\SnipSnap\\snipsnap.ini";   /* a preview's: its end */
+    const wchar_t *tail = TAIL;
+    wchar_t e[2];
+    DWORD n;
+    g_preview = GetEnvironmentVariableW(L"POCKETKNIVES_SETTINGS_PREVIEW", e, 2) == 1 && e[0] == L'1';
+    if (g_preview) {
+        n = GetModuleFileNameW(NULL, g_ini, MAX_PATH);
+        while (n && g_ini[--n] != L'\\') ;                      /* the exe's folder */
+        tail += 9;
+    } else {
+        n = GetEnvironmentVariableW(L"APPDATA", g_ini, MAX_PATH);
+        if (n >= MAX_PATH) n = 0;
+    }
+    g_ini_dir = tail == TAIL ? n + 9 : 0;
+    for (DWORD k = 0; (g_ini[n + k] = tail[k]) != 0; k++) ;
+    if (!n) g_ini[0] = 0;
+    for (int i = 0; i < S_COUNT; i++) {
+        UINT v = ini_get(i);
+        g_set[i] = i < S_HOTKEYS ? (hotkey_ok(v) ? v : 0) : v != 0;
+    }
+}
+
+/* A hotkey's name for people, such as "Ctrl+Alt+A", in UTF-8. */
+static char *key_name(char out[96], UINT v)
+{
+    /* Each modifier's bit, then its name. */
+    const char *m = "\2Ctrl+\0\1Alt+\0\4Shift+\0\10Win+\0";
+    char *o = out;
+    wchar_t w[24];
+    UINT vk = v & 0xFF, sc = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC_EX);
+    while (*m) {
+        UINT bit = (BYTE)*m++;
+        for (; *m; m++)
+            if (v >> 8 & bit) *o++ = *m;
+        m++;
+    }
+    /* Windows quirk: MapVirtualKey doesn't mark the navigation keys and Num
+     * Lock as extended (so they'd be named as keypad keys), and gives Pause an
+     * E1 scan code (named "Right Ctrl"). */
+    if (vk == VK_PAUSE) sc = 0x45;
+    else if (vk - VK_PRIOR <= VK_DELETE - VK_PRIOR || vk == VK_NUMLOCK) sc |= 0xE000;
+    /* Scan code in bits 16-23, extended-key flag in bit 24. F13-F24 have no
+     * name; PrtSc is named as in FALLBACKS (Windows: "Prnt Scrn"). */
+    if (vk == VK_SNAPSHOT)
+        wsprintfA(o, "PrtSc");
+    else if (GetKeyNameTextW((LONG)((sc & 0xFF) << 16 | (sc > 0xFF) << 24), w, ARRAYSIZE(w)))
+        WideCharToMultiByte(CP_UTF8, 0, w, -1, o, 96 - (int)(o - out), NULL, NULL);
+    else if (vk - VK_F1 < 24)
+        wsprintfA(o, "F%u", vk - VK_F1 + 1);
+    else
+        wsprintfA(o, "Key %u", vk);
+    return out;
+}
+
+static BOOL try_key(HWND h, int id, UINT v)
+{
+    return RegisterHotKey(h, id, v >> 8 | MOD_NOREPEAT, v & 0xFF);
+}
+
 /* ----------------------------------------------------------------- flash */
 
 /* A white, click-through layer over the captured area that fades out in
@@ -144,6 +260,7 @@ static void flash(RECT r)
     static BOOL registered;
     BOOL on = TRUE;
     HWND h;
+    if (!g_set[S_FLASH]) return;
     if (!registered) {
         WNDCLASSW wc;
         ZeroMemory(&wc, sizeof wc);
@@ -658,9 +775,43 @@ static int snip_select(HWND owner, int mode)
 /* ----------------------------------------------------------------- daemon */
 
 static BOOL g_busy;
+static UINT g_reload;                   /* RELOAD_MSG */
+static const char *g_key[S_HOTKEYS];    /* each capture's key name, NULL = none */
+static char g_key_buf[S_HOTKEYS][96];
+
+/* (Re)register the capture hotkeys: a saved one exactly, otherwise the first
+ * of the fallbacks that registers. Returns bit i set for capture i without a
+ * key, bit i + 4 for one on a fallback. */
+static int register_keys(HWND h)
+{
+    int r = 0;
+    for (int i = 0; i < S_HOTKEYS; i++) UnregisterHotKey(h, HK_RECT + i);
+    for (int i = 0; i < S_HOTKEYS; i++) {
+        const Hotkey *k = SETTINGS[i].keys;
+        g_key[i] = NULL;
+        if (g_set[i]) {
+            if (try_key(h, HK_RECT + i, g_set[i])) g_key[i] = key_name(g_key_buf[i], g_set[i]);
+        } else {
+            for (; k < SETTINGS[i + 1].keys; k++)
+                if (try_key(h, HK_RECT + i, k->v)) { g_key[i] = k->name; break; }
+        }
+        if (!g_key[i]) r |= 1 << i;
+        else if (k != SETTINGS[i].keys) r |= 0x10 << i;
+    }
+    return r;
+}
+
+/* Re-read the settings and re-register the hotkeys: the reply to RELOAD_MSG,
+ * RELOAD_DONE plus a bit for each capture left without a key. */
+static int reload_keys(HWND h)
+{
+    settings_load();
+    return RELOAD_DONE | (register_keys(h) & 7);
+}
 
 static LRESULT CALLBACK daemon_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (msg == g_reload) return reload_keys(h);   /* `snipsnap set` saved new settings */
     switch (msg) {
     case WM_HOTKEY:
         if (!g_busy) {
@@ -681,27 +832,20 @@ static LRESULT CALLBACK daemon_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(h, msg, wp, lp);
 }
 
-static const Hotkey *register_one(HWND h, int id, const Hotkey *list, int n)
-{
-    for (int i = 0; i < n; i++)
-        if (RegisterHotKey(h, id, list[i].mod | MOD_NOREPEAT, list[i].vk))
-            return &list[i];
-    return NULL;
-}
-
 static int run_daemon(void)
 {
     HANDLE mtx = CreateMutexW(NULL, FALSE, MUTEX_NAME);
     WNDCLASSW wc;
     HWND h;
     MSG m;
-    const Hotkey *kr, *kw, *kf;
+    int r;
 
     if (!mtx || GetLastError() == ERROR_ALREADY_EXISTS) {
         say("SnipSnap is already running. Use 'snipsnap quit' to stop it.\n");
         return RC_OK;
     }
     g_daemon = TRUE;
+    g_reload = RegisterWindowMessageW(RELOAD_MSG);
 
     ZeroMemory(&wc, sizeof wc);
     wc.lpfnWndProc = daemon_proc;
@@ -712,11 +856,8 @@ static int run_daemon(void)
                         HWND_MESSAGE, NULL, wc.hInstance, NULL);
     if (!h) { say("SnipSnap: could not create window.\n"); return RC_FAIL; }
 
-    kr = register_one(h, HK_RECT, RECT_KEYS, ARRAYSIZE(RECT_KEYS));
-    kw = register_one(h, HK_WINDOW, WINDOW_KEYS, ARRAYSIZE(WINDOW_KEYS));
-    kf = register_one(h, HK_FULL, FULL_KEYS, ARRAYSIZE(FULL_KEYS));
-
-    if (!kr && !kw && !kf) {
+    r = register_keys(h);
+    if ((r & 7) == 7) {
         const char *msg = "SnipSnap: none of the hotkeys could be registered "
                           "(another program owns them).\n"
                           "Use 'snipsnap rect' / 'window' / 'full' from a launcher instead.\n";
@@ -726,21 +867,27 @@ static int run_daemon(void)
         return RC_FAIL;
     }
 
-    say("SnipSnap running in the background.\n  Rectangle:   ");
-    say(kr ? kr->name : "(unavailable - hotkeys taken)");
-    say("\n  Window:      ");
-    say(kw ? kw->name : "(unavailable - hotkeys taken)");
-    say("\n  Full screen: ");
-    say(kf ? kf->name : "(unavailable - hotkeys taken)");
-    say("\n  Stop with:   snipsnap quit\n");
-    /* No console to print to: speak up only if the hotkeys aren't the defaults. */
-    if (g_out == INVALID_HANDLE_VALUE &&
-        (kr != RECT_KEYS || kw != WINDOW_KEYS || kf != FULL_KEYS)) {
-        char msg[300];
+    say("SnipSnap running in the background.\n");
+    for (int i = 0; i < S_HOTKEYS; i++) {   /* "  Rectangle:   Ctrl+Alt+R" */
+        char line[32];
+        int n = wsprintfA(line, "  %s:", SETTINGS[i].label);
+        while (n < 15) line[n++] = ' ';
+        line[n] = 0;
+        say(line);
+        say(g_key[i] ? g_key[i] : "(unavailable - hotkeys taken)");
+        say("\n");
+    }
+    say("  Stop with:   snipsnap quit\n");
+    /* No console to print to: speak up only if a capture didn't get its first
+     * choice (its saved hotkey, or its first fallback). A saved key's name is
+     * UTF-8, so a non-ASCII one would show garbled here; converting it for
+     * MessageBoxW costs the exe a 512-byte section step. */
+    if (g_out == INVALID_HANDLE_VALUE && r) {
+        char msg[400];
         wsprintfA(msg, "Some default hotkeys are taken by another program.\n\n"
                        "Rectangle:\t%s\nWindow:\t\t%s\nFull screen:\t%s",
-                  kr ? kr->name : "(unavailable)", kw ? kw->name : "(unavailable)",
-                  kf ? kf->name : "(unavailable)");
+                  g_key[0] ? g_key[0] : "(unavailable)", g_key[1] ? g_key[1] : "(unavailable)",
+                  g_key[2] ? g_key[2] : "(unavailable)");
         MessageBoxA(NULL, msg, "SnipSnap", MB_ICONWARNING);
     }
     detach_output();
@@ -767,34 +914,153 @@ static int quit_daemon(void)
     return RC_OK;
 }
 
+/* --------------------------------------------- settings and set commands
+ *
+ * The PocketKnives blade settings contract (docs/specs/blade-settings.md at
+ * the repo root): `settings` prints one tab-separated line per setting; `set`
+ * checks every key=value, saves, and has the background instance apply it. */
+
+static int print_settings(void)
+{
+    char line[96];
+    for (int i = 0; i < S_COUNT; i++) {
+        wsprintfA(line, "%ls\t%s\t%u\t%s\n", SETTINGS[i].key, i < S_HOTKEYS ? "hotkey" : "toggle",
+                  i < S_HOTKEYS ? hotkey_of(i) : g_set[i], SETTINGS[i].label);
+        say(line);
+    }
+    return RC_OK;
+}
+
+/* Refuse with one line naming a hotkey; exit code 2. */
+static __declspec(noinline) int refuse(const char *fmt, UINT v)
+{
+    char name[96], msg[160];
+    wsprintfA(msg, fmt, key_name(name, v));
+    say(msg);
+    return RC_FAIL;
+}
+
+static const wchar_t *next_arg(const wchar_t *p, wchar_t *out, int cap);
+
+/* Ask the running copy to reload; its reply, or 0 if it didn't answer. */
+static DWORD_PTR reload(HWND d)
+{
+    DWORD_PTR r;
+    if (!SendMessageTimeoutW(d, RegisterWindowMessageW(RELOAD_MSG), 0, 0, SMTO_ABORTIFHUNG, 5000,
+                             &r))
+        r = 0;
+    return r;
+}
+
+static int set_settings(const wchar_t *p)
+{
+    UINT v[S_COUNT], old[S_COUNT], n;
+    wchar_t tok[32];
+    const wchar_t *q;
+    int mask = 0, bad = 0, i, j;
+    BOOL ok;
+    HWND d;
+
+    for (i = 0; i < S_COUNT; i++) v[i] = i < S_HOTKEYS ? hotkey_of(i) : g_set[i];
+    for (;;) {                          /* check every key=value first */
+        p = next_arg(p, tok, ARRAYSIZE(tok));
+        if (!tok[0]) break;
+        for (i = 0; i < S_COUNT; i++) {
+            const wchar_t *k = SETTINGS[i].key;
+            for (q = tok; *k && *k == *q; k++, q++) ;
+            if (!*k && *q == L'=') break;
+        }
+        n = 0;
+        ok = i < S_COUNT && *++q;
+        for (; ok && *q; q++) {
+            ok = *q >= L'0' && *q <= L'9' && n <= HK_MAX;
+            n = n * 10 + (UINT)(*q - L'0');
+        }
+        if (!ok || !(i < S_HOTKEYS ? hotkey_ok(n) : n <= 1)) {
+            char msg[80];
+            wsprintfA(msg, "Not a valid setting: %ls\n", tok);
+            say(msg);
+            return RC_FAIL;
+        }
+        v[i] = n;
+        mask |= 1 << i;
+    }
+    for (i = 0; i < S_HOTKEYS; i++)
+        for (j = i + 1; j < S_HOTKEYS; j++)
+            if (v[i] == v[j] && (mask >> i | mask >> j) & 1)
+                return refuse("%s is already used by SnipSnap.\n", v[i]);
+
+    /* Without a running copy (or in a preview, which never asks it), check the
+     * new hotkeys first by registering them for a moment, as it would. */
+    d = g_preview ? NULL : FindWindowExW(HWND_MESSAGE, NULL, DAEMON_CLASS, NULL);
+    if (!d) {
+        for (i = 0; i < S_HOTKEYS; i++)
+            if (mask >> i & 1) g_set[i] = v[i];
+        bad = register_keys(NULL) & mask & 7;
+    }
+    if (!bad) {
+        if (g_ini_dir) {                /* create the settings folder */
+            g_ini[g_ini_dir] = 0;
+            CreateDirectoryW(g_ini, NULL);
+            g_ini[g_ini_dir] = L'\\';
+        }
+        for (i = 0; i < S_COUNT; i++)
+            if (mask >> i & 1) {
+                old[i] = ini_get(i);
+                if (!ini_put(i, v[i])) bad = 8;
+            }
+    }
+    if (d && !bad) {                    /* the running copy applies them */
+        DWORD_PTR r = reload(d);
+        bad = r & RELOAD_DONE ? (int)r & mask : 8;
+        if (bad) {                      /* put the previous settings back */
+            for (i = 0; i < S_COUNT; i++)
+                if (mask >> i & 1) ini_put(i, old[i]);
+            if (bad < 8) reload(d);
+        }
+    }
+    if (bad == 8) {
+        say("Couldn't apply the settings.\n");
+        return RC_FAIL;
+    }
+    for (i = 0; i < S_HOTKEYS; i++)
+        if (bad >> i & 1) return refuse("%s is taken by another program.\n", v[i]);
+    return RC_OK;
+}
+
 /* ------------------------------------------------------------------- main */
 
-/* First command-line argument (after the program name), lowercased, no
- * leading '-' or '/'. Parsed by hand to avoid loading shell32. */
-static void first_arg(wchar_t *out, int cap)
+/* The next command-line argument from p, lowercased, without leading '-' or
+ * '/', into out; empty when there are no more. Parsed by hand to avoid loading
+ * shell32. A too-long argument ends in '#', so it matches nothing. Returns
+ * where it stopped. */
+static const wchar_t *next_arg(const wchar_t *p, wchar_t *out, int cap)
 {
-    const wchar_t *p = GetCommandLineW();
     int n = 0;
-    if (*p == L'"') { p++; while (*p && *p != L'"') p++; if (*p) p++; }
-    else while (*p > L' ') p++;
     while (*p == L' ' || *p == L'\t') p++;
     while (*p == L'-' || *p == L'/') p++;
-    while (*p > L' ' && n < cap - 1) {
+    while (*p > L' ') {
         wchar_t c = *p++;
+        if (n == cap - 1) { out[n - 1] = L'#'; continue; }
         out[n++] = (c >= L'A' && c <= L'Z') ? (wchar_t)(c + 32) : c;
     }
     out[n] = 0;
+    return p;
 }
 
 static int run(void)
 {
     wchar_t arg[16];
+    const wchar_t *p = GetCommandLineW();
 
     /* Must come first: everything below works in physical pixels. */
     if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
         SetProcessDPIAware();
 
-    first_arg(arg, ARRAYSIZE(arg));
+    if (*p == L'"') { p++; while (*p && *p != L'"') p++; if (*p) p++; }   /* the program */
+    else while (*p > L' ') p++;
+    p = next_arg(p, arg, ARRAYSIZE(arg));
+    settings_load();
     if (!arg[0]) return run_daemon();
     if (eq(arg, L"rect") || eq(arg, L"window") || eq(arg, L"full")) {
         /* A message-only window to own the clipboard data. */
@@ -807,6 +1073,8 @@ static int run(void)
         return rc;
     }
     if (eq(arg, L"quit") || eq(arg, L"stop")) return quit_daemon();
+    if (eq(arg, L"settings")) return print_settings();
+    if (eq(arg, L"set")) return set_settings(p);
 
     say("SnipSnap - copy a rectangle, a window or the screen to the clipboard.\n\n"
         "  snipsnap          run in the background (hotkeys below)\n"

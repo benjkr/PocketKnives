@@ -96,7 +96,8 @@ internal sealed unsafe class Program
         while ((result = GetMessageW(out Message message, 0, 0, 0)) > 0)
         {
             nint settings = NativeSettings.Handle;
-            if (settings != 0 && IsDialogMessageW(settings, ref message) != 0)
+            bool hotkeyBox = message.Id is >= 0x0104 and <= 0x0107 && NativeSettings.OwnsKeyboard(message.Window); // WM_SYSKEYDOWN..WM_SYSDEADCHAR
+            if (settings != 0 && !hotkeyBox && IsDialogMessageW(settings, ref message) != 0)
                 continue;
             TranslateMessage(ref message);
             DispatchMessageW(ref message);

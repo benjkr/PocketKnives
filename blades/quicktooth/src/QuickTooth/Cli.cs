@@ -12,6 +12,10 @@ internal static class Ipc
     public const string WindowClass = "QuickTooth.TrayWindow";
     public const string CommandMessageName = "QuickTooth.Command.v1";
     public const int IconId = 1;
+    /// <summary>WM_COPYDATA dwData of a --set handed to the tray ("QTS1"), and the most it reads.</summary>
+    public const nint SetSettingsData = 0x51545331;
+    public const int SetSettingsMaxBytes = 16 * 1024;
+    public const uint SetSettingsTimeoutMs = 5000;
 
     public static IntPtr FindTrayWindow() => Win32.FindWindow(WindowClass, null);
 }
@@ -31,6 +35,8 @@ internal static class Cli
             {
                 case "--list": return List(includeOthers: has("--all"));
                 case "--battery": return BatteryCmd();
+                case "--settings": return SettingsCmd();
+                case "--set": return SetCmd(args[1..]);
                 case "--toggle": return Action(null, !has("--no-wait"), has("--direct"), has("--a2dp-only"));
                 case "--connect": return Action(OneShot.Connect, !has("--no-wait"), has("--direct"), has("--a2dp-only"));
                 case "--disconnect": return Action(OneShot.Disconnect, !has("--no-wait"), has("--direct"), has("--a2dp-only"));
@@ -85,6 +91,8 @@ internal static class Cli
                                              (add --no-wait to return immediately)
               QuickTooth.exe --autostart on|off|status
               QuickTooth.exe --exit          close the running tray instance
+              QuickTooth.exe --settings      the settings, for the PocketKnives Settings window
+              QuickTooth.exe --set key=value [key=value...]
 
             When the tray is running, --toggle/--connect/--disconnect are handed to it, so they
             behave exactly like clicking the icon.
@@ -175,6 +183,83 @@ internal static class Cli
             Out.WriteLine("(Non-Bluetooth endpoints hidden; add --all to show them.)");
         }
         return 0;
+    }
+
+    // ------------------------------------------------------------------ --settings / --set (docs/specs/blade-settings.md)
+
+    /// <summary>
+    /// In a PocketKnives preview (POCKETKNIVES_SETTINGS_PREVIEW=1), settings.json and the log are the
+    /// ones next to this exe and the running tray is never messaged. Call before anything loads or logs.
+    /// </summary>
+    private static bool UsePreviewFolder()
+    {
+        if (Environment.GetEnvironmentVariable("POCKETKNIVES_SETTINGS_PREVIEW") != "1") return false;
+        Settings.Directory = AppContext.BaseDirectory;
+        return true;
+    }
+
+    private static IReadOnlyList<BtDevice> EnumerateDevices()
+    {
+        using var worker = new DeviceWorker();
+        var audio = new BluetoothAudio();
+        return worker.Run(() => audio.Enumerate()).GetAwaiter().GetResult().Devices; // what the tray's Refresh enumerates
+    }
+
+    /// <summary>Read-only: one line per setting, tab-separated, for the Settings window.</summary>
+    private static int SettingsCmd()
+    {
+        UsePreviewFolder();
+        Out.Write(BladeSettings.Describe(Settings.Load(), EnumerateDevices()));
+        return 0;
+    }
+
+    /// <summary>
+    /// Checks every pair, then hands the change to the running tray (which saves its whole settings
+    /// file, so it must be the one to apply it) or, with no tray, applies and saves it here.
+    /// Exit 0: saved and applied; 2: nothing changed, and one line says why.
+    /// </summary>
+    private static int SetCmd(string[] pairs)
+    {
+        bool preview = UsePreviewFolder();
+        if (BladeSettings.Parse(pairs, out string error) is not { } change)
+        {
+            Out.WriteLine(error);
+            return 2;
+        }
+        var hwnd = preview ? IntPtr.Zero : Ipc.FindTrayWindow();
+        var result = hwnd != IntPtr.Zero ? HandToTray(hwnd, pairs) : SetHere(change);
+        if (result == SetResult.Applied) return 0;
+        if (result == 0) // no answer in time, or an older tray that doesn't know the message: not known to be unchanged
+        {
+            Out.WriteLine("The running QuickTooth didn't answer. Restart it and try again.");
+            return 1;
+        }
+        Out.WriteLine(BladeSettings.Message(result));
+        return 2;
+    }
+
+    private static SetResult SetHere(SettingsChange change)
+    {
+        var settings = Settings.Load();
+        var result = BladeSettings.Check(change, settings, change.Device != null ? EnumerateDevices() : [], out var device);
+        return result == SetResult.Applied ? BladeSettings.Apply(change, settings, device) : result;
+    }
+
+    /// <summary>The tray's answer (a <see cref="SetResult"/>), or 0 if it didn't handle the message in time.</summary>
+    private static SetResult HandToTray(IntPtr hwnd, string[] pairs)
+    {
+        string text = string.Join('\n', pairs);
+        IntPtr data = Marshal.StringToHGlobalUni(text);
+        try
+        {
+            var cds = new Win32.COPYDATASTRUCT { dwData = Ipc.SetSettingsData, cbData = text.Length * 2, lpData = data };
+            return Win32.SendMessageTimeout(hwnd, Win32.WM_COPYDATA, IntPtr.Zero, ref cds, Win32.SMTO_ABORTIFHUNG,
+                Ipc.SetSettingsTimeoutMs, out IntPtr answer) != IntPtr.Zero ? (SetResult)(int)answer : 0;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(data);
+        }
     }
 
     // ------------------------------------------------------------------ --toggle / --connect / --disconnect

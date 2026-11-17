@@ -14,8 +14,12 @@ Every command acts on the user's session, whichever copy of the exe runs it:
 | `snipsnap rect` / `window` | Freezes and dims every monitor until a click, Esc or right-click |
 | `snipsnap full`, or any finished capture | Replaces the user's clipboard and flashes the screen |
 | `snipsnap help` | Prints usage; harmless |
+| `snipsnap settings` | Prints the settings from `%APPDATA%\SnipSnap\snipsnap.ini`; read-only, harmless |
+| `snipsnap set ...` | Writes `%APPDATA%\SnipSnap\snipsnap.ini` and makes the user's running copy re-register its hotkeys at once |
+| `settings` / `set` with `POCKETKNIVES_SETTINGS_PREVIEW=1` in that process's environment | Use `snipsnap.ini` next to that exe and never message a running copy; harmless from a scratch build. `set` registers hotkeys for a moment to check them |
 
-- So agents don't run it at all unless the user says so in that request. A change is shown as a
+- So agents don't run it at all unless the user says so in that request, except `help`, `settings`
+  and a scratch build's preview `settings` / `set` (set the variable in the same call). A change is shown as a
   scratch build the user runs themselves.
 - Before a run the user agreed to, check the user's copy is running (`Get-Process snipsnap`, its
   path under `%LOCALAPPDATA%\Programs\PocketKnives`) and that the `shell:startup` shortcut exists.

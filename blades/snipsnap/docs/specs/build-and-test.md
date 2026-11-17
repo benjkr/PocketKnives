@@ -13,7 +13,8 @@ current in the same change, and lean.
     CRT function the compiler emits calls to (`memset`, via `__stosb`). Without it the file builds
     as a normal `wWinMain` program with the CRT, for debugging.
   - `/GS-`, because security cookies need the CRT. No manifest: DPI awareness is set in code.
-- The exe is 16,384 bytes and imports only `KERNEL32`, `USER32`, `GDI32` and `dwmapi`.
+- The exe is 19,456 bytes and imports only `KERNEL32`, `USER32`, `GDI32` and `dwmapi`. Sections
+  are padded to 512 bytes, so growth comes in those steps.
 - `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window.
 - `build.bat` sets up Visual Studio through `vswhere` when needed and runs that line.
   - `build.bat` alone (for people) runs `snipsnap.exe quit` (with `start /wait`) if an exe is

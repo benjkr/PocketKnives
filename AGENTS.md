@@ -79,6 +79,7 @@ in a blade's docs are from that blade's folder.
 | Commits, branches, PRs, merges, releases, GitHub comments | [Pull requests and releases](docs/working/pull-requests.md) |
 | Adding a new blade | [Adding a blade](docs/working/adding-a-blade.md) |
 | The suite tray icon, settings window and runner preview | [Runner](docs/specs/runner.md) |
+| How a blade prints and changes its settings for the settings window | [Blade settings](docs/specs/blade-settings.md) |
 | Future blade coordination, shared code and the default language | [Runner design](docs/working/runner-design.md) |
 
 Each blade's `AGENTS.md` has its own tables for its working rules and specs.

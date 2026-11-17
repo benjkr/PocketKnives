@@ -34,7 +34,10 @@ internal static class Tunables
     public static int BatteryMaxAgeMin { get; set; } = 5;
     public static int BatteryShowAgeMin { get; set; } = 15;
     public static int MenuBatteryMaxAgeS { get; set; } = 60;
-    /// <summary>The connected icon gets the orange dot at or below this level (the emptier bud, not while charging).</summary>
+    /// <summary>
+    /// The default low-battery warning: the connected icon gets the orange dot at or below this level
+    /// (the emptier bud, not while charging). Settings can pick another (<see cref="Settings.LowBatteryPercent"/>).
+    /// </summary>
     public static int LowBatteryPercent { get; set; } = 20;
 
     // ---- icon and animation (IconRenderer)

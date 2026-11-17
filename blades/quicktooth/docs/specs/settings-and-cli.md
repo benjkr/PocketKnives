@@ -5,12 +5,35 @@ change, and lean.
 
 ## Settings: `%APPDATA%\QuickTooth\settings.json`
 
-- `targetContainerId` (primary), `targetMac` (fallback), `targetName` (display only) and
-  `trayPromotedOnce`. Read and written through a source-generated JSON context; saved through a
-  temp file and a move.
+- `targetContainerId` (primary), `targetMac` (fallback), `targetName` (display only),
+  `trayPromotedOnce` and, optionally, `lowBatteryPercent` (the low-battery warning; absent means
+  the default in `Tunables.cs`, and a file without it round-trips unchanged). Read and written
+  through a source-generated JSON context; saved through a temp file and a move.
 - A stored target is never swapped for another device: if it's missing, the tray says
   "Not available". With no target saved yet, the first paired device whose name contains
   "AirPods" (a connected one first) is chosen and saved.
+
+## Changing them from PocketKnives Settings
+
+QuickTooth's side of the suite's [blade settings contract](../../../../docs/specs/blade-settings.md),
+in `BladeSettings.cs` (core):
+
+- `--settings` prints two `choice` settings: `device` ("Headset": container IDs in `B` format,
+  labelled with the devices the tray's Device menu offers; the value is the stored target, empty
+  if none; a stored target that's missing is listed as `<name> (not available)`, as in the menu)
+  and `lowBattery` ("Low battery warning": 10, 15, 20, 25 or 30 %). It enumerates like the tray
+  and writes nothing; about as fast as `--list`.
+- `--set key=value...` checks every pair first (form, key, battery value); a bad one exits 2 with
+  one line and changes nothing. The headset already chosen is no change, even while missing.
+- With the tray running, the pairs go to it as `WM_COPYDATA` (`SendMessageTimeout`, 5 s): it saves
+  its whole file, so it applies the change itself ([tray](tray.md)) and answers with the result.
+  No answer (an older tray answers 0, or a timeout) exits 1 with one line, and the CLI never
+  writes the file itself then. With no tray, the
+  CLI checks the headset against a fresh enumeration, applies and saves. Exit 0: saved (nothing is
+  written when nothing changes).
+- Logged: `low battery warning set: N%` and the Device menu's `target set: …`.
+- `POCKETKNIVES_SETTINGS_PREVIEW=1`: both use `settings.json` and `quicktooth.log` next to the
+  exe and never message a running tray.
 
 ## Log: `%APPDATA%\QuickTooth\quicktooth.log`
 
@@ -24,6 +47,7 @@ change, and lean.
 - For people: `--toggle`, `--connect`, `--disconnect` (forwarded to the running tray, so they act
   exactly like a click; `--no-wait` returns at once), `--list [--all]`, `--battery`,
   `--autostart on|off|status`, `--exit`, `--version`, `--help`.
+- For PocketKnives Settings: `--settings` and `--set key=value...` (above).
 - Read-only checks for agents and tests: `--probe <endpoint id>`, `--render-icons <dir> [--zoom z]`,
   `--icon-rect`, `--show-menu` / `--close-menu`, `--settings-roundtrip <in> <out>`,
   `--stress-enumerate N`, `--watch-endpoints S`, `--selftest-icons [cycles]`

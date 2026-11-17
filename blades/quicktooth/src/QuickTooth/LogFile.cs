@@ -7,7 +7,7 @@ namespace QuickTooth;
 internal static class LogFile
 {
     private static readonly object Gate = new();
-    public static string FilePath { get; } = Path.Combine(Settings.Directory, "quicktooth.log");
+    public static string FilePath => Path.Combine(Settings.Directory, "quicktooth.log");
 
     /// <summary>Also echo log lines to the console (CLI mode).</summary>
     public static TextWriter? Echo { get; set; }

@@ -19,8 +19,17 @@
 - The left pane shows General and a Blades list with the name and icon of each blade. Each blade's
   check box or switch controls its existing sign-in entry. The window edits SnipSnap's Startup
   shortcut and uses QuickTooth's `--autostart` command for its Run entry. Windows launches
-  enabled blades at the next sign-in. XP and Windows 10 save changes with OK or Apply, and apply
-  pending changes before switching looks. Windows 11 switches apply immediately.
+  enabled blades at the next sign-in.
+- Each blade's page shows that blade's own settings, read from the blade when Settings opens and
+  changed through it ([blade settings](blade-settings.md)): SnipSnap's three hotkeys and the
+  flash, QuickTooth's headset and low-battery level. A hotkey is a hotkey box in XP and Windows
+  10 (Alt+key goes to the box, not to the window's access keys; the box can't take PrtSc or Win,
+  and keeps a saved key it can't show). In Windows 11 the hotkey is a button: click it, press the
+  keys, Esc cancels; Ctrl, Alt or Win is required. When a blade refuses a change (a hotkey taken
+  by another program), Settings shows the blade's reason and the blade keeps its old value; Windows
+  11 puts the control back, XP and Windows 10 leave the edit in place to fix or Cancel.
+- XP and Windows 10 save changes with OK or Apply, and apply pending changes before switching
+  looks. Windows 11 applies each change at once.
 
 ## Build and preview
 
@@ -30,6 +39,7 @@ QuickTooth. The WinUI app carries its Windows App SDK runtime and starts only fo
 
 From a scratch copy of that stage, run `pk --preview`, then click the tray icon or run
 `pk --preview settings`. Preview instances use their own tray identity and save changes to
-`preview-settings.txt` next to the scratch executable. They never write the installed settings
-or change what starts with Windows, and their Exit leaves the blades running. To close the preview and its tray icon, run
-`pk --preview --exit` from the same folder.
+`preview-settings.txt` next to the scratch executable, and the scratch blades keep their settings
+next to their own exes ([blade settings](blade-settings.md#preview)). They never write the
+installed settings or change what starts with Windows, and their Exit leaves the blades running.
+To close the preview and its tray icon, run `pk --preview --exit` from the same folder.

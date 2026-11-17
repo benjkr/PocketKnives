@@ -20,13 +20,15 @@ internal static class Settings
     internal static readonly string[] LookNames = ["XP", "Windows 10", "Windows 11"];
     private static readonly string[] LookValues = ["xp", "win10", "win11"];
 
-    internal sealed record Blade(string Name, string Description, string Icon, string Exe, string StopCommand);
+    // The commands follow docs/specs/blade-settings.md.
+    internal sealed record Blade(string Name, string Description, string Icon, string Exe, string StopCommand,
+        string SettingsCommand, string SetCommand);
     internal static readonly Blade[] Blades =
     [
         new("SnipSnap", "Copies a rectangle, a window or the screen to the clipboard.", "snipsnap.ico",
-            "snipsnap.exe", "quit"),
+            "snipsnap.exe", "quit", "settings", "set"),
         new("QuickTooth", "Connects or disconnects your AirPods with one click.", "quicktooth.ico",
-            "QuickTooth.exe", "--exit"),
+            "QuickTooth.exe", "--exit", "--settings", "--set"),
     ];
 
     internal static bool IsPreview => Environment.GetEnvironmentVariable(PreviewVariable) == "1";

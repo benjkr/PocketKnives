@@ -12,10 +12,12 @@ internal sealed partial class SettingsJsonContext : JsonSerializerContext;
 /// <summary>Persisted in %APPDATA%\QuickTooth\settings.json (or wherever <see cref="SaveHandler"/> says).</summary>
 internal sealed class Settings
 {
-    public static string Directory { get; } =
+    /// <summary>Where settings.json and the log live. A per-process hook: --settings and --set in a
+    /// PocketKnives preview point it next to the exe before anything loads or logs.</summary>
+    public static string Directory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "QuickTooth");
 
-    public static string FilePath { get; } = Path.Combine(Directory, "settings.json");
+    public static string FilePath => Path.Combine(Directory, "settings.json");
 
     /// <summary>Target device, by container ID (primary) and Bluetooth MAC (fallback).</summary>
     public string? TargetContainerId { get; set; }
@@ -25,6 +27,14 @@ internal sealed class Settings
 
     /// <summary>The tray icon was promoted out of the overflow once; never again (respect the user's choice).</summary>
     public bool TrayPromotedOnce { get; set; }
+
+    /// <summary>The low-battery warning picked in Settings; absent (null) means the default, <see cref="Tunables.LowBatteryPercent"/>.</summary>
+    public int? LowBatteryPercent { get; set; }
+
+    /// <summary>The connected icon gets the orange dot at or below this level: the picked one if it's one of the choices, else the default.</summary>
+    [JsonIgnore]
+    public int LowBatteryWarning =>
+        LowBatteryPercent is int p && BladeSettings.IsLowBatteryChoice(p) ? p : Tunables.LowBatteryPercent;
 
     [JsonIgnore]
     public Guid? TargetGuid => Guid.TryParse(TargetContainerId, out var g) && g != Guid.Empty ? g : null;
@@ -68,19 +78,22 @@ internal sealed class Settings
     /// </summary>
     public static Action<Settings>? SaveHandler { get; set; }
 
-    public void Save()
+    /// <summary>Saves through a temp file and a move; false if the file couldn't be written.</summary>
+    public bool Save()
     {
-        if (SaveHandler is { } handler) { handler(this); return; }
+        if (SaveHandler is { } handler) { handler(this); return true; }
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
             string tmp = FilePath + ".tmp";
             File.WriteAllText(tmp, ToJson());
             File.Move(tmp, FilePath, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error("save settings", ex);
+            return false;
         }
     }
 
@@ -89,6 +102,13 @@ internal sealed class Settings
         TargetContainerId = device.ContainerId.ToString("B");
         TargetMac = device.Mac;
         TargetName = device.Name;
+    }
+
+    /// <summary>The user picked <paramref name="device"/> (the tray's Device menu, or --set device=…); not saved yet.</summary>
+    public void ChooseTarget(BtDevice device)
+    {
+        SetTarget(device);
+        Log.Info($"target set: {device.Name} {device.ContainerId:B} MAC {device.Mac}");
     }
 
     /// <summary>
