@@ -171,8 +171,9 @@ fn write_file(path: &str, bytes: &[u8]) -> bool {
 
 fn save_png(files: &mut Vec<String>, dir: &str, name: &str, bgra: &[u8], w: usize, h: usize) {
     let path = combine(dir, name);
-    write_file(&path, &icon::png::encode(bgra, w, h));
-    files.push(path);
+    if write_file(&path, &icon::png::encode(bgra, w, h)) {
+        files.push(path);
+    }
 }
 
 fn fill(px: &mut [u8], bg: Bg) {
