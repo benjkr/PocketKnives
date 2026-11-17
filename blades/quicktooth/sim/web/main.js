@@ -132,7 +132,7 @@ async function boot() {
 
     /** QuickTooth.exe command line, forwarded to the running tray like the real IPC message. */
     cli(arg) {
-      if (arg.startsWith('--set')) {
+      if (/^--set(\s|$)/.test(arg)) {
         // Like the exe with the tray running: the pairs go to it, and its answer is what --set prints.
         if (!app.running) return (lastCli = 'no tray instance running');
         lastCli = app.setSettings(arg.slice(5).trim().split(/\s+/).filter(Boolean)) || 'applied';
