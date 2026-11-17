@@ -16,11 +16,11 @@ use crate::battery::{self, BatteryReading};
 use crate::blade_settings::{self, SetResult, SettingsChange};
 use crate::devices::{BtDevice, OneShot};
 use crate::exec::{self, Schedule};
-use crate::host::{DeviceBackend, IconImage, MenuItem, TrayHost, tray_commands};
+use crate::host::{DeviceBackend, Event, IconDesc, IconImage, MenuItem, TrayHost, tray_commands};
 use crate::icon::{self, AnimPhase, IconState};
 use crate::json;
 use crate::log;
-use crate::num::{fmt_r, round_away, trunc_i64, write_r};
+use crate::num::{round_away, trunc_i64, write_r};
 use crate::settings::Settings;
 use crate::tunables::{self, T};
 use alloc::format;
@@ -192,7 +192,7 @@ impl TrayController {
     }
 
     fn emit(&self, json: &str) {
-        self.host().emit(json);
+        self.host().emit(&Event::Json(json));
     }
 
     fn pending_ms(&self) -> f64 {
@@ -491,7 +491,7 @@ impl TrayController {
         {
             let ms = self.pending_ms();
             log::info(&format!("{op} confirmed after {} ms", trunc_i64(ms)));
-            self.emit(&format!("{{\"type\":\"confirmed\",\"op\":\"{op}\",\"ms\":{}}}", fmt_r(ms)));
+            self.host().emit(&Event::Confirmed { op, ms });
             self.end_pending(true);
         }
         self.update_icon(false);
@@ -821,12 +821,7 @@ impl TrayController {
             Some(phase) if icon_size > 0 => {
                 let t = self.anim_seconds();
                 let tracer_t = self.st().tracer_offset + t;
-                let desc = format!(
-                    "{{\"kind\":\"anim\",\"phase\":\"{}\",\"t\":{},\"tracerT\":{}}}",
-                    phase.name(),
-                    fmt_r(round_away(t, 4)),
-                    fmt_r(round_away(tracer_t, 4))
-                );
+                let desc = IconDesc::Anim { phase, t: round_away(t, 4), tracer_t: round_away(tracer_t, 4) };
                 let img = Rc::new(IconImage::new(icon::render_anim(phase, t, tracer_t, light, icon_size), icon_size, desc));
                 self.st_mut().anim_frames += 1;
                 icon = Some(img.clone());
@@ -943,10 +938,10 @@ impl TrayController {
     fn rebuild_icons(&self) {
         let size = self.host().icon_size();
         let light = self.st().light_taskbar;
-        let make = |state, desc: &str| Rc::new(IconImage::new(icon::render_bgra(state, light, size), size, desc.into()));
-        let on = make(IconState::Connected, "{\"kind\":\"static\",\"state\":\"connected\"}");
-        let off = make(IconState::Disconnected, "{\"kind\":\"static\",\"state\":\"disconnected\"}");
-        let low = make(IconState::LowBattery, "{\"kind\":\"static\",\"state\":\"connected\",\"lowBattery\":true}");
+        let make = |state, desc| Rc::new(IconImage::new(icon::render_bgra(state, light, size), size, desc));
+        let on = make(IconState::Connected, IconDesc::Connected);
+        let off = make(IconState::Disconnected, IconDesc::Disconnected);
+        let low = make(IconState::LowBattery, IconDesc::LowBattery);
         let old = {
             let mut st = self.st_mut();
             let old = [st.icon_on.replace(on), st.icon_off.replace(off), st.icon_low.replace(low)];
@@ -1161,7 +1156,7 @@ impl TrayController {
         json::write_str(&mut w, &st.shown_tip);
         w.push_str(",\"icon\":");
         match &st.shown_icon {
-            Some(i) => w.push_str(&i.desc_json),
+            Some(i) => w.push_str(&i.desc.to_json()),
             None => w.push_str("null"),
         }
         w.push_str(&format!(",\"iconSize\":{}", st.icon_size));

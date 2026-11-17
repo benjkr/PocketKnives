@@ -93,7 +93,7 @@ struct FakeHost {
 impl FakeHost {
     fn show(&self, icon: &IconImage) -> bool {
         icons::handle_for(icon);
-        if self.live.borrow_mut().insert(icon as *const IconImage as usize) && icon.desc_json.contains("\"anim\"") {
+        if self.live.borrow_mut().insert(icon as *const IconImage as usize) && icon.desc.is_anim() {
             self.frames.set(self.frames.get() + 1);
         }
         true
@@ -153,7 +153,7 @@ impl TrayHost for FakeHost {
     }
     fn set_autostart(&self, _: bool) {}
     fn exit(&self) {}
-    fn emit(&self, _: &str) {}
+    fn emit(&self, _: &quicktooth_core::host::Event<'_>) {}
 }
 
 struct FakeDevices {

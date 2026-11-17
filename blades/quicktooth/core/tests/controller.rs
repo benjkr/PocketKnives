@@ -7,7 +7,7 @@ use quicktooth_core::blade_settings::{SetResult, SettingsChange};
 use quicktooth_core::controller::*;
 use quicktooth_core::devices::{BtDevice, BtEndpoint, KS_NOT_ATTEMPTED, OneShot, SendResult, Snapshot, device_state};
 use quicktooth_core::exec::{self, Done, Inline, Op, Schedule};
-use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
+use quicktooth_core::host::{DeviceBackend, Event, IconImage, MenuItem, TrayHost};
 use quicktooth_core::settings::Settings;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -159,8 +159,8 @@ impl TrayHost for Mock {
         }
         self.call("exit");
     }
-    fn emit(&self, json: &str) {
-        self.call(format!("emit {json}"));
+    fn emit(&self, event: &Event<'_>) {
+        self.call(format!("emit {}", event.to_json()));
     }
 }
 

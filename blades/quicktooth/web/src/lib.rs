@@ -20,7 +20,7 @@ use quicktooth_core::blade_settings::{self, SetResult};
 use quicktooth_core::controller::{CMD_AUTOSTART, CMD_DEVICE_BASE, TrayController};
 use quicktooth_core::devices::{self, BtDevice, BtEndpoint, KS_NOT_ATTEMPTED, OneShot, SendResult, Snapshot};
 use quicktooth_core::exec::{self, Inline, Op, OpResult, Schedule};
-use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
+use quicktooth_core::host::{DeviceBackend, Event, IconImage, MenuItem, TrayHost};
 use quicktooth_core::icon::{self, AnimPhase, IconState};
 use quicktooth_core::json::{self, Value};
 use quicktooth_core::settings::{self, Settings};
@@ -479,9 +479,8 @@ impl WebHost {
         f: unsafe extern "C" fn(i32, *const u8, usize, i32, *const u8, usize, *const u8, usize) -> i32,
     ) -> bool {
         let rgba = to_rgba(&icon.bgra);
-        unsafe {
-            f(self.0, rgba.as_ptr(), rgba.len(), icon.size, tip.as_ptr(), tip.len(), icon.desc_json.as_ptr(), icon.desc_json.len()) != 0
-        }
+        let desc = icon.desc.to_json();
+        unsafe { f(self.0, rgba.as_ptr(), rgba.len(), icon.size, tip.as_ptr(), tip.len(), desc.as_ptr(), desc.len()) != 0 }
     }
 }
 
@@ -576,7 +575,8 @@ impl TrayHost for WebHost {
         unsafe { js_exit_app(self.0) };
     }
 
-    fn emit(&self, json: &str) {
+    fn emit(&self, event: &Event<'_>) {
+        let json = event.to_json();
         unsafe { js_emit(self.0, json.as_ptr(), json.len()) };
     }
 }

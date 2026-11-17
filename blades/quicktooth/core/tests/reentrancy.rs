@@ -14,7 +14,7 @@ use quicktooth_core::blade_settings::SettingsChange;
 use quicktooth_core::controller::*;
 use quicktooth_core::devices::{BtDevice, BtEndpoint, KS_NOT_ATTEMPTED, OneShot, SendResult, Snapshot, device_state};
 use quicktooth_core::exec::{self, Op, Schedule, Task};
-use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost, tray_commands};
+use quicktooth_core::host::{DeviceBackend, Event, IconImage, MenuItem, TrayHost, tray_commands};
 use quicktooth_core::settings::Settings;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -201,7 +201,7 @@ impl TrayHost for Win {
         self.exits.set(self.exits.get() + 1);
         self.c().exit();
     }
-    fn emit(&self, _json: &str) {}
+    fn emit(&self, _event: &Event<'_>) {}
 }
 
 impl Win {

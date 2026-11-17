@@ -8,6 +8,8 @@ use crate::Guid;
 use crate::battery::BatteryReading;
 use crate::devices::{OneShot, SendResult, Snapshot};
 use crate::exec::Op;
+use crate::icon::AnimPhase;
+use crate::num::fmt_r;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::Cell;
@@ -52,8 +54,8 @@ pub trait TrayHost {
     fn set_autostart(&self, on: bool);
     /// Ends the app (the exe destroys its window, which ends the message loop).
     fn exit(&self);
-    /// A structured event for the simulator's timeline (a JSON object); ignored by the exe.
-    fn emit(&self, json: &str);
+    /// A structured event for the simulator's timeline ([`Event::to_json`]); ignored by the exe.
+    fn emit(&self, event: &Event<'_>);
 }
 
 /// The Bluetooth side: Core Audio, KS and BLE on Windows; the mock stack in the simulator.
@@ -77,16 +79,65 @@ pub struct IconImage {
     /// Straight-alpha BGRA, top-down rows, `size * size * 4` bytes.
     pub bgra: Vec<u8>,
     pub size: i32,
-    /// e.g. `{"kind":"static","state":"connected"}` or
-    /// `{"kind":"anim","phase":"Landing","t":0.2,"tracerT":1.6}`.
-    pub desc_json: String,
+    pub desc: IconDesc,
     /// The host's native handle for these pixels (the exe's HICON), 0 until it makes one.
     pub host_handle: Cell<isize>,
 }
 
 impl IconImage {
-    pub fn new(bgra: Vec<u8>, size: i32, desc_json: String) -> Self {
-        IconImage { bgra, size, desc_json, host_handle: Cell::new(0) }
+    pub fn new(bgra: Vec<u8>, size: i32, desc: IconDesc) -> Self {
+        IconImage { bgra, size, desc, host_handle: Cell::new(0) }
+    }
+}
+
+/// What an icon shows, for the simulator. Only the simulator turns descriptions and events into
+/// JSON, so the exe carries no float formatting.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum IconDesc {
+    Connected,
+    Disconnected,
+    LowBattery,
+    /// An animation frame; `t` and `tracer_t` are already rounded to 4 places.
+    Anim {
+        phase: AnimPhase,
+        t: f64,
+        tracer_t: f64,
+    },
+}
+
+impl IconDesc {
+    pub fn is_anim(&self) -> bool {
+        matches!(self, IconDesc::Anim { .. })
+    }
+
+    /// e.g. `{"kind":"static","state":"connected"}` or
+    /// `{"kind":"anim","phase":"Landing","t":0.2,"tracerT":1.6}`.
+    pub fn to_json(&self) -> String {
+        match *self {
+            IconDesc::Connected => "{\"kind\":\"static\",\"state\":\"connected\"}".into(),
+            IconDesc::Disconnected => "{\"kind\":\"static\",\"state\":\"disconnected\"}".into(),
+            IconDesc::LowBattery => "{\"kind\":\"static\",\"state\":\"connected\",\"lowBattery\":true}".into(),
+            IconDesc::Anim { phase, t, tracer_t } => {
+                alloc::format!("{{\"kind\":\"anim\",\"phase\":\"{}\",\"t\":{},\"tracerT\":{}}}", phase.name(), fmt_r(t), fmt_r(tracer_t))
+            }
+        }
+    }
+}
+
+/// A timeline event for the simulator.
+pub enum Event<'a> {
+    /// A JSON object with no numbers that need .NET formatting.
+    Json(&'a str),
+    /// A pending action landed after `ms`.
+    Confirmed { op: OneShot, ms: f64 },
+}
+
+impl Event<'_> {
+    pub fn to_json(&self) -> String {
+        match self {
+            Event::Json(s) => String::from(*s),
+            Event::Confirmed { op, ms } => alloc::format!("{{\"type\":\"confirmed\",\"op\":\"{op}\",\"ms\":{}}}", fmt_r(*ms)),
+        }
     }
 }
 

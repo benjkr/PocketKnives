@@ -503,7 +503,7 @@ impl TrayHost for WinHost {
         }
     }
 
-    fn emit(&self, _json: &str) {} // the simulator's timeline only
+    fn emit(&self, _event: &quicktooth_core::host::Event<'_>) {} // the simulator's timeline only
 }
 
 fn append(menu: HMENU, items: &[MenuItem]) {
