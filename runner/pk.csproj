@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>pk</AssemblyName>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefaultItemExcludes>$(DefaultItemExcludes);WinUI/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="../blades/snipsnap/assets/snipsnap.ico" Link="icons/snipsnap.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../blades/quicktooth/assets/quicktooth.ico" Link="icons/quicktooth.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

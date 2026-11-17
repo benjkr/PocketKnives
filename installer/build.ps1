@@ -1,4 +1,4 @@
-# Builds dist\PocketKnives-Setup-<version>.exe: every blade, built from this checkout, in one
+# Builds dist\PocketKnives-Setup-<version>.exe: the runner and blades from this checkout, in one
 # per-user installer (Inno Setup 6.7+).
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
@@ -30,6 +30,14 @@ $qtOut = Join-Path $PSScriptRoot 'obj\quicktooth'
 dotnet publish $qt -c Release -r win-x64 -nologo -o $qtOut
 if ($LASTEXITCODE -ne 0) { throw 'QuickTooth publish failed' }
 Copy-Item (Join-Path $qtOut 'QuickTooth.exe') $stage
+
+$runner = Join-Path $root 'runner\pk.csproj'
+dotnet publish $runner -c Release -nologo -o $stage
+if ($LASTEXITCODE -ne 0) { throw 'PocketKnives runner publish failed' }
+
+$winUi = Join-Path $root 'runner\WinUI\PocketKnives.Settings.csproj'
+dotnet publish $winUi -c Release -nologo -o (Join-Path $stage 'winui')
+if ($LASTEXITCODE -ne 0) { throw 'PocketKnives Windows 11 settings publish failed' }
 
 & $iscc /Qp "/DAppSource=$stage" (Join-Path $PSScriptRoot 'PocketKnives.iss')
 if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }

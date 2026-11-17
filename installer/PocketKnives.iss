@@ -1,12 +1,9 @@
-; PocketKnives installer (Inno Setup 6.7+): every blade in one per-user install. Build it with
-; installer\build.ps1, which builds each blade into AppSource and passes it on the ISCC command line.
-;
-; Each blade stays its own program (the runner isn't built yet); this only installs them together
-; into %LOCALAPPDATA%\Programs\PocketKnives, with no admin rights.
+; PocketKnives installer (Inno Setup 6.7+): the runner and blades in one per-user install.
+; installer\build.ps1 builds them into AppSource and passes it on the ISCC command line.
 
 #define AppVersion "0.1.0"
 #ifndef AppSource
-  #error Pass /DAppSource=<folder with the blades' exes> (installer\build.ps1 does this).
+  #error Pass /DAppSource=<staged app folder> (installer\build.ps1 does this).
 #endif
 
 #define AppName "PocketKnives"
@@ -33,7 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; QuickTooth's minimum.
 MinVersion=10.0.19041
 
-; The [Code] section closes the blades itself: neither has a normal window to close.
+; The [Code] section closes the runner and blades through their commands.
 CloseApplications=no
 RestartApplications=no
 
@@ -58,14 +55,20 @@ Name: quicktooth; Description: "QuickTooth"; GroupDescription: "Start when I sig
 [Files]
 Source: "{#AppSource}\snipsnap.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\QuickTooth.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppSource}\pk.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppSource}\icons\*.ico"; DestDir: "{app}\icons"; Flags: ignoreversion
+Source: "{#AppSource}\winui\*"; DestDir: "{app}\winui"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
+Name: "{autoprograms}\{#AppName}\PocketKnives Settings"; Filename: "{app}\pk.exe"; Parameters: "settings"
 Name: "{autoprograms}\{#AppName}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Comment: "Copy a rectangle, a window or the screen to the clipboard"
 Name: "{autoprograms}\{#AppName}\QuickTooth"; Filename: "{app}\QuickTooth.exe"; Comment: "Connect or disconnect your AirPods with one click"
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\pk.exe"
 ; SnipSnap starts at sign-in through a Startup shortcut, as it always has.
 Name: "{userstartup}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Tasks: snipsnap
 
 [Run]
+Filename: "{app}\pk.exe"; Flags: nowait
 ; QuickTooth writes its own Run value (its tray menu turns it off again).
 Filename: "{app}\QuickTooth.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: quicktooth
 ; No skipifsilent: a silent update should leave the blades running, as they were before.
@@ -111,7 +114,7 @@ var
 begin
   Procs := RunningCopies(ExePath);
   if VarIsNull(Procs) then
-    Result := CheckForMutexes(Mutex)
+    Result := (Mutex <> '') and CheckForMutexes(Mutex)
   else
     Result := Procs.Count > 0;
 end;
@@ -140,9 +143,12 @@ begin
   Result := True;
   ExePath := ExpandConstant('{app}\') + Exe;
   if not FileExists(ExePath) or not IsRunning(ExePath, Mutex) then Exit;
-  Log('Asking the running ' + Exe + ' to stop');
-  Exec(ExePath, StopArgs, '', SW_HIDE, ewWaitUntilTerminated, Code);
-  if WaitUntilGone(ExePath, Mutex, 10000) then Exit;
+  if StopArgs <> '' then
+  begin
+    Log('Asking the running ' + Exe + ' to stop');
+    Exec(ExePath, StopArgs, '', SW_HIDE, ewWaitUntilTerminated, Code);
+    if WaitUntilGone(ExePath, Mutex, 10000) then Exit;
+  end;
   Log(Exe + ' did not stop in time; terminating it');
   Procs := RunningCopies(ExePath);
   if not VarIsNull(Procs) then
@@ -159,6 +165,15 @@ begin
   Result := CloseBlade('snipsnap.exe', 'quit', 'Local\SnipSnap.Daemon');
 end;
 
+function CloseRunner: Boolean;
+begin
+  Result := CloseBlade('pk.exe', '--exit', 'Local\PocketKnives.Runner');
+  { A hung Windows 11 settings window can outlive a terminated runner. Close only the
+    executable in this installation before Setup replaces its files. }
+  if Result then
+    Result := CloseBlade('winui\PocketKnives.Settings.exe', '', '');
+end;
+
 function CloseQuickTooth: Boolean;
 begin
   Result := CloseBlade('QuickTooth.exe', '--exit', 'Local\QuickTooth.Tray.6F0C2B1E');
@@ -167,7 +182,9 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not CloseSnipSnap then
+  if not CloseRunner then
+    Result := 'PocketKnives Settings is still running and could not be closed. Close it, then run Setup again.'
+  else if not CloseSnipSnap then
     Result := 'SnipSnap is still running and could not be closed. Run "snipsnap quit", then run Setup again.'
   else if not CloseQuickTooth then
     Result := 'QuickTooth is still running and could not be closed. Choose Exit in its tray menu, then run Setup again.';
@@ -179,6 +196,7 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
+    CloseRunner;
     CloseSnipSnap;
     CloseQuickTooth;
     { Remove QuickTooth's "start when I sign in", but only if it points at this install. Its
