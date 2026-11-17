@@ -139,11 +139,14 @@ with `PrintWindow`.
   ![The prototype, Windows 10: the same three pages](runner-design/settings-modern.png)
 
 - **Switching looks**: picking one under Look saves it (`look=xp|win10|win11` in the `[suite]`
-  section of the runner's INI file, through kernel32) and reopens the window in that look, at the
-  same place, on General; it applies at once, without Apply. `pk settings` opens the saved look;
-  XP is the default. The prototypes do this across both exes (`pksettings.exe show` opens the
-  saved look), and an off-screen test went through every switch (XP → Windows 10 → Windows 11 →
-  XP) through the drop-downs' own handlers.
+  section of the runner's INI file, through kernel32) and reopens the window in that look, on
+  General; it applies at once, without Apply. `pk settings` opens the saved look; XP is the
+  default. Changes not yet applied in XP or Windows 10 would be lost by a switch, so the real
+  window applies them first. The prototypes do this across both exes (`pksettings.exe show`
+  opens the saved look). An off-screen test went round once (XP → Windows 10 → Windows 11 → XP)
+  through the drop-downs' own handlers; the other three directions, a real click and the
+  on-screen path (opening where the old window was, coming to the front) haven't been run. A
+  WinUI crash at start (see below) loses the window after picking Windows 11.
 
 - **Not possible with Win32 controls**: XP's Luna, 7's Aero glass, a dark mode. Imitating them
   means drawing the controls ourselves. Win32 windows can also be given Windows 11's Mica backdrop
