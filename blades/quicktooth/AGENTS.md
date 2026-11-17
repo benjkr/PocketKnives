@@ -36,8 +36,8 @@ what's specific to QuickTooth. Paths and commands here and in this blade's `docs
 ## Running things
 
 - Use a top model and high effort for the rasterizer, COM/interop and timing races.
-- In the foreground: `cargo build --release -p quicktooth` (a few seconds; ~30 s from clean),
-  `bun qt-sim.mjs test` (~1 min, browser core rebuild included). In the background, with
+- In the foreground: `cargo build --release -p quicktooth` (about 5 s after a core change, 21 s
+  from clean), `bun qt-sim.mjs test` (~1 min; the browser core rebuilds in about 3 s). In the background, with
   `t3_background_wait`: real-time recordings and anything longer.
 
 ## Verification

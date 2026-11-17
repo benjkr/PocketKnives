@@ -19,10 +19,12 @@ unless they say the repo root. This machine's shell quirks and delegating are su
 Run cargo from the repo root, so it finds `rust-toolchain.toml` and `.cargo/config.toml` (every
 warning is an error).
 
-- `cargo build --release -p quicktooth`: `target\release\QuickTooth.exe`. Nothing is installed.
+- `cargo build --release -p quicktooth`: `target\release\QuickTooth.exe`, about 5 s after a change in
+  the core, 21 s from clean (the `windows` crate is most of it), 0.2 s when nothing changed.
+  Nothing is installed.
 - `cargo test -p quicktooth-core`: the core's unit tests.
 - `cd sim; bun qt-sim.mjs test`: about a minute; rebuilds the browser core first if its Rust
-  changed (`cargo build --release --target wasm32-unknown-unknown -p quicktooth-web`).
+  changed (`cargo build --release --target wasm32-unknown-unknown -p quicktooth-web`, about 3 s).
 - Real-time recordings (`run` of a recorded scenario, `examples/compare-profiles.mjs`) take as long
   as what they show: run them in the background and wait with `t3_background_wait`.
 - `installer/build.ps1` and `publish.ps1` only per [build and install](../specs/build-and-install.md);
