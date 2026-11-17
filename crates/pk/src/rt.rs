@@ -70,6 +70,14 @@ pub unsafe extern "C" fn bcmp(a: *const c_void, b: *const c_void, n: usize) -> i
     unsafe { memcmp(a, b, n) }
 }
 
+/// `alloc` calls `strlen` (C strings in its error paths); a byte scan with `repne scasb`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn strlen(s: *const core::ffi::c_char) -> usize {
+    let mut left: usize = usize::MAX;
+    unsafe { asm!("repne scasb", inout("rcx") left, inout("rdi") s => _, in("al") 0u8, options(nostack, readonly)) };
+    !left - 1
+}
+
 /// LLVM turns a scan for a zero `u16` into a `wcslen` call; `repne scasw` can't be turned back.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wcslen(s: *const u16) -> usize {
