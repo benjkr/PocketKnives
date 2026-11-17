@@ -118,14 +118,18 @@ with `PrintWindow`.
 
 ![The prototype, XP: the General, SnipSnap and QuickTooth pages](runner-design/settings-raw.png)
 
-- **Layout**: a list on the left, one row per page ("General", then each blade with its 16 px
-  icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is its name in
+- **Layout**: on the left, General alone, then a bold "Blades" heading and a list of the blades,
+  each with its 16 px icon and a check box: ticked, it starts when you sign in ("Ticked: starts at
+  sign-in" under the list). The user picked this over three other designs (General indented with
+  no box, General renamed PocketKnives with its own box, the boxes on the right). Selecting a row
+  in either list shows its page on the right; OK / Cancel / Apply at the bottom. A page is its name in
   bold, one line on what it does and a 32 px logo at the top right (the blade's; the PocketKnives
   logo on General), then plain bold headings with the controls under them. No tabs, no group
   boxes, no separators.
 - **XP**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which also
   gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`) and
-  1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
+  1 px black borders (`WS_BORDER`) on the lists and text boxes. The list's own check boxes are
+  always themed, so XP gives it classic flat ones drawn by Windows (`DrawFrameControl`). The system font (Segoe UI 9),
   square corners (a DWM setting), the suite's 16 px icon in the title bar. The drop-downs keep
   their classic 3D button: Windows has no flat variant of it. XP's own Luna theme isn't one of
   the looks (see below).
@@ -159,9 +163,10 @@ with `PrintWindow`.
   window uses the largest frame of `assets/pocketknives.ico` that fits the 32 px slot (32, 48 or
   64 px), so it's never scaled. The same `.ico` is the `pk` exe's icon, and the settings window's
   in the taskbar and the Start menu.
-- **Measured** (this prototype, both looks, the icons and the look switch): an 879 KB exe with
-  zero AOT warnings (the switch added 17 KB); 1.6 MB private working set while open; 56 ms from
-  launch until it has painted and exited (median of 30, measured before the logos and the switch).
+- **Measured** (this prototype, both looks, the icons, the look switch and the boxes in the list):
+  an 881 KB exe with zero AOT warnings (the switch added 17 KB, the boxes about 2 KB); 1.6 MB private
+  working set while open (measured before the boxes); 56 ms from launch until it has painted and
+  exited (median of 30, measured before the logos, the switch and the boxes).
   Closed, it costs nothing.
 
 ### Windows 11: the Settings style in WinUI 3
@@ -176,6 +181,9 @@ PC's apps are set to dark:
 
 ![The WinUI 3 prototype: General, SnipSnap and QuickTooth](runner-design/settings-winui.png)
 
+- **The pane** has the same layout as the list: General, a "Blades" heading, and each blade with
+  a switch on the right (on: it starts when you sign in; "On: starts when you sign in" at the
+  bottom of the pane).
 - **The glass isn't in these captures.** `PrintWindow` doesn't include the Mica backdrop, so it
   comes out flat grey. Nobody has seen the glass on screen yet; `pkwinui.exe show` opens it as a
   normal window to look at.
@@ -214,7 +222,8 @@ How it works with a process per blade:
   such as QuickTooth's paired devices, come from the blade too, in its `--settings` output. That's
   one process start per blade when the window opens and per Apply (9–17 ms each, measured).
 - **Which blades run** is the runner's own setting, in its own file under
-  `%APPDATA%\PocketKnives`. Ticking a blade starts it now and at every sign-in. Unticking stops it
+  `%APPDATA%\PocketKnives`, set with the blade's box in the list (its switch in Windows 11).
+  Ticking a blade starts it now and at every sign-in. Unticking stops it
   with its stop command and leaves it out at sign-in.
 - **A running blade picks up a change** when `--set` posts it `PocketKnives.Reload.v1`. It re-reads
   its file and applies it (SnipSnap re-registers its hotkeys). For SnipSnap, reading an INI file
