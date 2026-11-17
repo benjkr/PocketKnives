@@ -14,6 +14,7 @@ current in the same change, and lean.
     as a normal `wWinMain` program with the CRT, for debugging.
   - `/GS-`, because security cookies need the CRT. No manifest: DPI awareness is set in code.
 - The exe is 16,384 bytes and imports only `KERNEL32`, `USER32`, `GDI32` and `dwmapi`.
+- `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window.
 - `build.bat` sets up Visual Studio through `vswhere` when needed and runs that line.
   - `build.bat` alone (for people) runs `snipsnap.exe quit` (with `start /wait`) if an exe is
     already in the folder, and builds `snipsnap.exe` next to the source. That `quit` stops

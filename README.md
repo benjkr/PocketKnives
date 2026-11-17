@@ -39,6 +39,10 @@ It needs Visual Studio's C++ build tools, the .NET 10 SDK and Inno Setup 6.7+
 `%LOCALAPPDATA%\Programs\PocketKnives` and asks which should start when you sign in. The installer
 is unsigned, so SmartScreen warns about it.
 
+Open the taskbar's hidden icons arrow and click **PocketKnives** to open Settings. The same window
+is under **PocketKnives Settings** in the Start menu. Its Blades list controls which tools start
+when you sign in, and General lets you change the window's look.
+
 ## Working on PocketKnives
 
 People and coding agents alike: start with [`AGENTS.md`](AGENTS.md), then the `AGENTS.md` in the

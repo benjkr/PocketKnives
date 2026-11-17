@@ -1,8 +1,8 @@
 # AGENTS.md
 
 PocketKnives: a suite of small Windows quality-of-life tools. Each tool is a **blade**, in its own
-folder `blades/<name>/`. How the blades will run together isn't built yet
-([runner design](docs/working/runner-design.md)); today each blade is its own program.
+folder `blades/<name>/`. The [runner](docs/specs/runner.md) provides the suite tray icon and
+settings window. Each blade runs as its own program.
 
 **Read this whole file before changing anything.** Then read the `AGENTS.md` of the blade you
 touch, the spec for the area you touch and the working rules that apply (tables below and in the
@@ -78,7 +78,8 @@ in a blade's docs are from that blade's folder.
 | Final reply of a task; showing numbers | [Replies](docs/working/replies.md) |
 | Commits, branches, PRs, merges, releases, GitHub comments | [Pull requests and releases](docs/working/pull-requests.md) |
 | Adding a new blade | [Adding a blade](docs/working/adding-a-blade.md) |
-| How blades run together, the settings window, shared code, the default language (not decided yet) | [Runner design](docs/working/runner-design.md) |
+| The suite tray icon, settings window and runner preview | [Runner](docs/specs/runner.md) |
+| Future blade coordination, shared code and the default language | [Runner design](docs/working/runner-design.md) |
 
 Each blade's `AGENTS.md` has its own tables for its working rules and specs.
 

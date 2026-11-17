@@ -2,10 +2,8 @@
 
 Read before starting a new blade or importing an existing tool as one. How blades are launched
 together, what code they share and which language a new blade uses by default aren't decided yet
-([runner design](runner-design.md)). This page says what's true today; it gains the runner's part
-once the user picks one. Until then, ask the user which language a new blade is written in. A
-settings window is decided: every blade will get a page in it, with its icon and its settings
-(how they're declared is part of the runner design).
+([runner design](runner-design.md)). Until then, ask the user which language a new blade is
+written in. Every blade gets a page with its icon in the [settings window](../specs/runner.md).
 
 ## Folder layout
 
@@ -36,6 +34,8 @@ blades/<name>/              one lower-case word: the folder and exe name
 - **A place in the PocketKnives installer** ([installer](../specs/installer.md)): its exe, a Start
   menu entry, how it starts with Windows and its stop command, listed in
   [live testing](live-testing.md).
+- **A row in Settings**: give the runner the blade's name, description, ICO version of the
+  blade icon, exe, stop command (the tray menu's Exit runs it) and its existing sign-in setting.
 
 ## Checklist
 

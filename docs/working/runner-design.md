@@ -1,9 +1,8 @@
 # Runner design: how blades run together
 
-**Status: a proposal, not decided.** Nothing here is built. Decided by the user so far: there will
-be a settings window with every blade's icon in it and a list on the side, in three looks the
-user switches between with a setting: XP, Windows 10 and Windows 11 ([the settings
-window](#the-settings-window-decided-there-is-one-in-three-looks)).
+**Status: a proposal for blade coordination and shared code.** The
+[runner and settings window spec](../specs/runner.md) describes the implemented tray and
+settings window. The benchmark and prototype measurements below are for the architecture decision.
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 
@@ -56,13 +55,11 @@ Each blade stays its own exe, in whatever language suits it, and describes itsel
 manifest (`blades/<name>/blade.json`): its name, exe, whether it runs in the background, its
 one-shot commands, how to stop it, and how it starts with Windows. A small `pk` runner reads the
 manifests: it lists blades and starts, stops or checks them through their command lines. At
-sign-in it starts the enabled blades and exits, so it costs nothing while they run. PowerToys mostly
-works this way: its runner loads a small module DLL per tool, and most tools do their work in
-their own process.
+sign-in it would start the enabled blades, and it stays running to host the suite tray icon.
+PowerToys mostly works this way: its runner loads a small module DLL per tool, and most tools do
+their work in their own process.
 
 - Size, memory and latency: every blade keeps its numbers. SnipSnap stays 16 KB and about 0.5 MB.
-  The settings window is part of the runner and runs only while it's open (below), so nothing of
-  the runner stays resident.
 - Settings go through each blade's command line, so the window works the same for a C blade and a
   C# one.
 - Isolation: a crash or a stall in one blade (a slow Bluetooth call, say) never touches another.
@@ -102,7 +99,7 @@ their own process.
 - Settings would have to cross the ABI as well.
 - Everything B's merge would save, at a higher price than A.
 
-## The settings window (decided: there is one, in three looks)
+## The settings window prototypes
 
 One window changes each blade's behaviour, looks and settings. The user chose to keep three looks
 and switch between them with a setting, **Look** on the General page:
@@ -207,11 +204,8 @@ PC's apps are set to dark:
 - **The runner stays free of it**: this look is its own exe, which `pk settings` starts when the
   saved look is Windows 11, so signing in never loads WinUI.
 
-How it works with a process per blade:
+Proposed blade settings integration:
 
-- **Where it lives**: `pk settings [blade]` opens it; nothing stays running after it closes.
-- **Opening it**: a Start menu entry ("PocketKnives Settings"), "Settings…" in QuickTooth's tray
-  menu, and `snipsnap settings` (SnipSnap has no tray icon by design).
 - **Who reads and writes a blade's settings: only the blade.** `blade.json` lists the settings
   (key, kind, label, fixed choices, default), so the window builds each page by itself. It reads
   the values with `<blade> --settings` (`key=value` lines) and applies them with
@@ -275,8 +269,7 @@ and `PocketKnives.Windows`; C only when the budget is the product.
   all to save about 0.5 MB. The language mix is real, but the user never sees it, and agents meet
   it only through the same contract and docs.
 - **What it costs**:
-  - A small `pk` runner with the settings window (C# AOT, about 0.86 MB, nothing resident) and a
-    `blade.json` for each blade.
+  - A `blade.json` for each blade so the runner can handle it through the same contract.
   - `--settings`, `--set` and the reload message in each blade (reading and reloading measured at
     1 KB in SnipSnap; the rest not yet), plus an `icon.ico` for SnipSnap.
   - Extracting the shared projects from QuickTooth, checked with its "identical behaviour" rule:

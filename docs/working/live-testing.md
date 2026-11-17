@@ -9,13 +9,19 @@ the user's screen. Each blade's `docs/working/live-testing.md` adds what's speci
 |---|---|---|
 | SnipSnap | `%LOCALAPPDATA%\Programs\PocketKnives\snipsnap.exe` | a shortcut in `shell:startup` |
 | QuickTooth | `%LOCALAPPDATA%\Programs\PocketKnives\QuickTooth.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\QuickTooth` |
+| [Runner](../specs/runner.md) | `%LOCALAPPDATA%\Programs\PocketKnives\pk.exe` | a `PocketKnives` shortcut in `shell:startup` |
 
-- Both come from the PocketKnives installer ([installer](../specs/installer.md)), and only
+- All three come from the PocketKnives installer ([installer](../specs/installer.md)), and only
   `master`'s builds go there (`AGENTS.md`). Don't replace, stop or restart them to try a branch.
   Run checks from a build in a scratch folder instead.
 - A running blade is found by its window class or mutex, not its path. So a command run from
   **any** copy of a blade, such as `snipsnap quit` or `QuickTooth.exe --exit`, acts on the user's
   running copy. Each blade's live-testing doc lists the commands that are safe.
+- The runner's Settings window writes the blades' real sign-in entries and the look under
+  `HKCU\Software\PocketKnives`. A scratch `pk.exe` always runs with `--preview` first
+  (`pk --preview`, `pk --preview settings`, `pk --preview --exit`). Without it, `pk settings`
+  or `pk --exit` from any copy acts on the user's installed runner, and a scratch runner that
+  starts first takes its tray icon and points Startup entries at the scratch folder.
 - Before an install test, record the blade's autostart entry, its settings file's hash and its
   tray state (the blade's doc lists them). Afterwards check they're back, the blade is running,
   and say so.
