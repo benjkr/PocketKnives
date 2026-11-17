@@ -1,8 +1,8 @@
 //! One running copy per user session, and finding it from another copy.
-use windows_sys::core::PCWSTR;
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE, HWND};
+use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, RegisterWindowMessageW};
+use windows_sys::core::PCWSTR;
 
 /// A named mutex this process created. Closed (and the name released) when dropped.
 pub struct NamedMutex(HANDLE);

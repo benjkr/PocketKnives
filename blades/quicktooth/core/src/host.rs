@@ -4,10 +4,10 @@
 //!
 //! Add a member only for something the platform really provides, and implement it in both hosts
 //! in the same change.
+use crate::Guid;
 use crate::battery::BatteryReading;
 use crate::devices::{OneShot, SendResult, Snapshot};
 use crate::exec::Op;
-use crate::Guid;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::Cell;

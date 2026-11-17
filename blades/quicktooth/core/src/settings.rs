@@ -2,12 +2,12 @@
 //! System.Text.Json context did (camelCase names, nulls left out, indented, relaxed escaping), so
 //! an existing file round-trips byte for byte. Files are the host's business: the core only turns
 //! text into settings and back, and saves through the hook each host sets.
+use crate::Guid;
 use crate::blade_settings;
-use crate::devices::{contains_ignore_case, BtDevice};
+use crate::devices::{BtDevice, contains_ignore_case};
 use crate::json::{self, Value};
 use crate::log::SaveHook;
 use crate::tunables::{self, T};
-use crate::Guid;
 use alloc::string::String;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -100,11 +100,9 @@ impl Settings {
             out.push_str(name);
             out.push_str("\": ");
         };
-        for (name, value) in [
-            ("targetContainerId", &self.target_container_id),
-            ("targetMac", &self.target_mac),
-            ("targetName", &self.target_name),
-        ] {
+        for (name, value) in
+            [("targetContainerId", &self.target_container_id), ("targetMac", &self.target_mac), ("targetName", &self.target_name)]
+        {
             if let Some(v) = value {
                 member(&mut out, name);
                 json::write_str_relaxed(&mut out, v);

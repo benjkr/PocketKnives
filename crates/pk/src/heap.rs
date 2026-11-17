@@ -1,7 +1,7 @@
 //! The global allocator: the process heap (`HeapAlloc`), as the C runtime's `malloc` uses.
 use core::alloc::{GlobalAlloc, Layout};
 use core::ffi::c_void;
-use windows_sys::Win32::System::Memory::{GetProcessHeap, HeapAlloc, HeapFree, HeapReAlloc, HEAP_ZERO_MEMORY};
+use windows_sys::Win32::System::Memory::{GetProcessHeap, HEAP_ZERO_MEMORY, HeapAlloc, HeapFree, HeapReAlloc};
 
 /// The heap aligns every block to 16 bytes on x64 (`MEMORY_ALLOCATION_ALIGNMENT`).
 const HEAP_ALIGN: usize = 16;

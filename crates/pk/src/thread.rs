@@ -2,7 +2,7 @@
 use alloc::boxed::Box;
 use core::ffi::c_void;
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
-use windows_sys::Win32::System::Threading::{CreateThread, WaitForSingleObject, INFINITE};
+use windows_sys::Win32::System::Threading::{CreateThread, INFINITE, WaitForSingleObject};
 
 /// A started thread. Dropping it detaches the thread (it keeps running).
 pub struct Thread(HANDLE);

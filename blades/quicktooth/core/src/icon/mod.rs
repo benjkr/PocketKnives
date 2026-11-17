@@ -17,9 +17,7 @@ pub enum IconState {
 impl IconState {
     /// `Enum.Parse<IconState>(name, ignoreCase: true)`.
     pub fn parse(name: &str) -> Option<IconState> {
-        [IconState::Connected, IconState::Disconnected, IconState::LowBattery]
-            .into_iter()
-            .find(|s| s.name().eq_ignore_ascii_case(name))
+        [IconState::Connected, IconState::Disconnected, IconState::LowBattery].into_iter().find(|s| s.name().eq_ignore_ascii_case(name))
     }
 
     pub fn name(self) -> &'static str {

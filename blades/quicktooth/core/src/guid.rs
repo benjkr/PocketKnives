@@ -14,12 +14,7 @@ impl Guid {
     pub const EMPTY: Guid = Guid { data1: 0, data2: 0, data3: 0, data4: [0; 8] };
 
     pub const fn from_u128(v: u128) -> Guid {
-        Guid {
-            data1: (v >> 96) as u32,
-            data2: (v >> 80) as u16,
-            data3: (v >> 64) as u16,
-            data4: (v as u64).to_be_bytes(),
-        }
+        Guid { data1: (v >> 96) as u32, data2: (v >> 80) as u16, data3: (v >> 64) as u16, data4: (v as u64).to_be_bytes() }
     }
 
     pub fn is_empty(&self) -> bool {

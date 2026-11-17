@@ -65,12 +65,7 @@ pub fn resources(r: &Resources) {
     let rc_path = out.join("resources.rc");
     let res_path = out.join("resources.res");
     fs::write(&rc_path, rc).expect("write resources.rc");
-    let status = Command::new(rc_exe())
-        .args(["/nologo", "/fo"])
-        .arg(&res_path)
-        .arg(&rc_path)
-        .status()
-        .expect("run rc.exe");
+    let status = Command::new(rc_exe()).args(["/nologo", "/fo"]).arg(&res_path).arg(&rc_path).status().expect("run rc.exe");
     assert!(status.success(), "rc.exe failed");
     println!("cargo:rustc-link-arg-bins={}", res_path.display());
 }

@@ -105,7 +105,10 @@ mod tests {
 
     #[test]
     fn msvcrt_rules() {
-        assert_eq!(parse(r#""C:\a b\x.exe" --set device={1-2} lowBattery=15"#), ["C:\\a b\\x.exe", "--set", "device={1-2}", "lowBattery=15"]);
+        assert_eq!(
+            parse(r#""C:\a b\x.exe" --set device={1-2} lowBattery=15"#),
+            ["C:\\a b\\x.exe", "--set", "device={1-2}", "lowBattery=15"]
+        );
         assert_eq!(parse(r#"x "a b" c"#), ["x", "a b", "c"]);
         assert_eq!(parse(r#"x a\\\"b"#), ["x", "a\\\"b"]);
         assert_eq!(parse(r#"x "a\\" b"#), ["x", "a\\", "b"]);

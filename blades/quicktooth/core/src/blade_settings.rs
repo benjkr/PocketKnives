@@ -1,9 +1,9 @@
 //! QuickTooth's side of the PocketKnives Settings contract (docs/specs/blade-settings.md at the
 //! repo root): the lines `--settings` prints, the checks `--set` makes and the words for a
 //! refusal. Used by the CLI, by the running tray a `--set` is handed to, and by the simulator.
+use crate::Guid;
 use crate::devices::BtDevice;
 use crate::settings::Settings;
-use crate::Guid;
 use alloc::format;
 use alloc::string::String;
 
@@ -161,7 +161,13 @@ fn choice_list() -> String {
     let mut s = String::new();
     let n = LOW_BATTERY_CHOICES.len();
     for (i, c) in LOW_BATTERY_CHOICES.iter().enumerate() {
-        s.push_str(if i == 0 { "" } else if i == n - 1 { " or " } else { ", " });
+        s.push_str(if i == 0 {
+            ""
+        } else if i == n - 1 {
+            " or "
+        } else {
+            ", "
+        });
         s.push_str(&format!("{c}%"));
     }
     s
