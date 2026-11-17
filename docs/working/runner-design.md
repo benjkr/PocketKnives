@@ -1,8 +1,8 @@
 # Runner design: how blades run together
 
 **Status: a proposal, not decided.** Nothing here is built. Decided by the user so far: there will
-be a settings window (raw and minimal, native Windows controls, a list on the side, every blade's
-icon in it).
+be a settings window with every blade's icon in it and a list on the side. Its look is open: raw
+Win32, the Windows 10/11 look of the same controls, or the Windows 11 Settings look in WinUI 3.
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 
@@ -129,8 +129,9 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
 
   ![The prototype, Windows 10/11 look: the same three pages](runner-design/settings-modern.png)
 
-- **Not possible natively**: XP's Luna, 7's Aero glass, a dark mode. Imitating them means drawing
-  the controls ourselves; the user chose the raw look instead.
+- **Not possible with Win32 controls**: XP's Luna, 7's Aero glass, a dark mode. Imitating them
+  means drawing the controls ourselves. Win32 windows can also be given Windows 11's Mica backdrop
+  (a documented DWM setting), but whether plain controls look right on it is untested.
 - **Icons**: Win32 can't draw SVG, so each blade also keeps `blades/<name>/assets/icon.ico`
   (16–48 px, rendered from its `icon.svg`; SnipSnap's is 9 KB), and the runner builds them into
   its exe. QuickTooth already has one (`blades/quicktooth/assets/quicktooth.ico`, the same artwork
@@ -138,6 +139,39 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
 - **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
   working set while open; 56 ms from launch until it has painted and exited (median of 30).
   Closed, it costs nothing.
+
+### The Windows 11 Settings look: WinUI 3
+
+The user asked whether a modern, glassy look like the Windows 11 Settings app is possible. It is:
+WinUI 3 (the Windows App SDK) is Microsoft's native UI framework for that style. It has Mica, the
+navigation pane, setting cards, toggle switches and dark mode. A second throwaway prototype (WinUI 3
+from the Windows App SDK 1.6 already in the local NuGet cache, restored offline, self-contained,
+UI built in code, the same five placeholder settings) renders like this. It's dark because this PC's
+apps are set to dark:
+
+![The WinUI 3 prototype: General, SnipSnap and QuickTooth](runner-design/settings-winui.png)
+
+- **The glass isn't in these captures.** `PrintWindow` doesn't include the Mica backdrop, so it
+  comes out flat grey. Nobody has seen the glass on screen yet; `pkwinui.exe show` opens it as a
+  normal window to look at.
+- **Measured, self-contained** (it carries .NET and the Windows App Runtime, because the runtime
+  installed here is 1.8 and the cached SDK is 1.6): a 165 MB folder of 359 files, 0 warnings;
+  38 MB private working set (94 MB private bytes) while open; 0.63 s from launch to the first frame
+  (median of 15).
+- **Native AOT**: a 4.3 MB exe in an 82 MB folder (149 files); 26 MB private working set (81 MB
+  private bytes). It publishes with 2 AOT/trim warnings, both from the WebView2 part of SDK 1.6,
+  so it breaks the zero-warning rule as it is. Its start time wasn't measured: a run hung.
+- **Stability of the prototype**: about one run in three of the capture mode crashed (heap
+  corruption), and shutting down crashed until the prototype ended its process directly. Most
+  likely the old SDK 1.6 on .NET 10; not investigated. A real build would use a current SDK.
+- **Smaller downloads** would come from requiring the Windows App Runtime installed instead of
+  bundling it (it's on this PC because other apps installed it). Not measured: that needs the
+  matching, newer SDK downloaded.
+- **Differences from the Win32 versions**: changes apply at once (no OK / Apply), as in Settings.
+  There's no hotkey-capture control, so SnipSnap's hotkey boxes need custom key handling. On
+  Windows 10 there's no Mica, so the backdrop is a flat colour.
+- **The runner stays free of it**: in this option the window is its own exe, which `pk settings`
+  starts, so signing in never loads WinUI.
 
 How it works with a process per blade:
 
