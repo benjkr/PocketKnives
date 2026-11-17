@@ -29,6 +29,7 @@ mod worker;
 pk::entry!(main);
 
 fn main() -> u32 {
+    pk::panic::set_hook(files::log_panic);
     quicktooth_core::log::set_sink(files::log_sink);
     quicktooth_core::settings::set_save_handler(files::save_settings);
     let args = pk::args::args();

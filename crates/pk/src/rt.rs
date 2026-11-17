@@ -5,7 +5,9 @@ use core::ffi::c_void;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
-    // panic = "abort" in every profile: nothing unwinds. A panic is a bug; end at once.
+    // panic = "abort" in every profile: nothing unwinds. A panic is a bug: tell the blade's hook
+    // (its log) once, then end at once.
+    crate::panic::report();
     crate::exit(0xC000_0409) // STATUS_STACK_BUFFER_OVERRUN's code, what __fastfail reports
 }
 

@@ -72,7 +72,7 @@ fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
         "--disconnect" => action(out, Some(OneShot::Disconnect), !has("--no-wait"), has("--direct"), has("--a2dp-only")),
         "--exit" => Ok(exit_tray(out)),
         "--autostart" => Ok(autostart(out, args.get(1).map_or("status", String::as_str))),
-        "--render-icons" => Ok(render_icons(out, args)),
+        "--render-icons" => render_icons(out, args),
         "--icon-rect" => Ok(icon_rect(out)),
         "--probe" => probe(out, arg(args, 1)?),
         // test hooks: open or close the tray menu without touching the mouse
@@ -361,7 +361,11 @@ fn hand_to_tray(hwnd: windows_sys::Win32::Foundation::HWND, pairs: &[String]) ->
             &mut answer,
         )
     };
-    if sent == 0 { None } else { SetResult::from_i32(answer as i32) }
+    match (sent, answer) {
+        (0, _) | (_, 0) => None,
+        // A code this build doesn't know: refused (C# printed the generic refusal).
+        _ => Some(SetResult::from_i32(answer as i32).unwrap_or(SetResult::Invalid)),
+    }
 }
 
 // ---------------------------------------------------------------------------- --toggle / --connect / --disconnect
@@ -573,10 +577,13 @@ fn icon_rect(out: &mut Writer) -> u32 {
     }
 }
 
-fn render_icons(out: &mut Writer, args: &[String]) -> u32 {
+fn render_icons(out: &mut Writer, args: &[String]) -> Outcome {
     if let Some(i) = args.iter().position(|a| a.eq_ignore_ascii_case("--zoom")) {
-        if let Some(z) = args.get(i + 1).and_then(|z| quicktooth_core::num::parse_f64(z)) {
-            quicktooth_core::tunables::set_value(quicktooth_core::tunables::T::Zoom, z);
+        if let Some(z) = args.get(i + 1) {
+            let Some(zoom) = quicktooth_core::num::parse_f64(z.trim()) else {
+                return Err(format!("System.FormatException: The input string '{z}' was not in a correct format."));
+            };
+            quicktooth_core::tunables::set_value(quicktooth_core::tunables::T::Zoom, zoom);
         }
     }
     let dir = match args.get(1) {
@@ -586,5 +593,5 @@ fn render_icons(out: &mut Writer, args: &[String]) -> u32 {
     for file in icons::write_check_images(&dir) {
         wl!(out, "{file}");
     }
-    0
+    Ok(0)
 }

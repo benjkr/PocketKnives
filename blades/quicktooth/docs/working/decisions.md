@@ -43,6 +43,8 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
 - **Hand-written COM and WinRT vtables**: measured within a few KB of the `windows` crate's
   generated bindings, which cost about 18 s more on a clean build only. The generated bindings
   were kept: a wrong vtable order silently calls the wrong method.
+- **Where a panic happened, in the log**: 14 KB (every panic site's file and line kept), its
+  message 28 KB more. A panic logs `ERROR panic: QuickTooth stopped on a bug` and ends the process.
 - **Rust's general float parser**: 14 KB of tables for numbers that are short decimals; replaced by
   an exact parser for up to 15 digits (`num::parse_f64`).
 

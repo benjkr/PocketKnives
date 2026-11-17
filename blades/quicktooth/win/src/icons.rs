@@ -21,6 +21,9 @@ pub fn handle_for(icon: &IconImage) -> HICON {
         return h as HICON;
     }
     let h = from_bgra(&icon.bgra, icon.size);
+    if h.is_null() {
+        quicktooth_core::log::error("icon", "CreateIconFromResourceEx failed");
+    }
     icon.host_handle.set(h as isize);
     h
 }

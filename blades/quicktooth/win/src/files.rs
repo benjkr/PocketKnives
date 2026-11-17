@@ -83,6 +83,30 @@ pub fn log_sink(message: &str) {
         unsafe { GetCurrentProcessId() }
     );
     let _gate = LOG_GATE.lock();
+    append_log(&line);
+}
+
+/// The panic hook: one `ERROR panic` line before the process ends (where it happened would cost
+/// 14 KB of exe; see `pk::panic`). It doesn't wait for the log's lock: the panic may have happened
+/// while this thread held it.
+pub fn log_panic() {
+    let t = local_time();
+    let line = format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03} [{}] ERROR panic: QuickTooth stopped on a bug\r\n",
+        t.wYear,
+        t.wMonth,
+        t.wDay,
+        t.wHour,
+        t.wMinute,
+        t.wSecond,
+        t.wMilliseconds,
+        unsafe { GetCurrentProcessId() }
+    );
+    let _gate = LOG_GATE.try_lock();
+    append_log(&line);
+}
+
+fn append_log(line: &str) {
     let dir = dir();
     create_dir_all(&dir);
     let path = log_path();

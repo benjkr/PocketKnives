@@ -93,10 +93,19 @@ pub fn set_autostart(on: bool) {
     if on {
         let exe = pk::env::exe_path();
         let value = to_wide(&format!("\"{exe}\""));
-        unsafe { RegSetKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr(), REG_SZ, value.as_ptr().cast(), (value.len() * 2) as u32) };
+        let err = unsafe {
+            RegSetKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr(), REG_SZ, value.as_ptr().cast(), (value.len() * 2) as u32)
+        };
+        if err != 0 {
+            return quicktooth_core::log::error("autostart", &format!("RegSetKeyValue error {err}"));
+        }
         quicktooth_core::log!("autostart on: \"{exe}\"");
     } else {
-        unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr()) };
+        let err = unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr()) };
+        // A value that isn't there is already off (C#'s DeleteValue(name, throwOnMissingValue: false)).
+        if err != 0 && err != windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND {
+            return quicktooth_core::log::error("autostart", &format!("RegDeleteKeyValue error {err}"));
+        }
         quicktooth_core::log!("autostart off");
     }
 }

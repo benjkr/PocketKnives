@@ -5,12 +5,14 @@
 //!
 //! Threads: everything here runs on the UI thread, which owns the window, the controller and
 //! every core `Op`/`Done` (they're `Rc`). Device work runs on the [`Worker`]; BLE scans on their
-//! own thread. Both send results back with `PostMessage(WM_APP_RESULT, id, boxed result)`; the UI
-//! thread looks the id up in its table of pending `Done`s and completes it. Endpoint
+//! own thread. Both queue their result (with the id of its pending `Done`) in [`RESULTS`] and post
+//! `WM_APP_INVOKE`; no message carries a pointer, so a stray or forged one does nothing. Endpoint
 //! notifications arrive on audio-service threads and post `WM_APP_DEVCHANGE`.
 //!
-//! Scheduling: a woken controller task is queued and a `WM_APP_INVOKE` posted; each such message
-//! runs one task (C#'s `SynchronizationContext.Post`), so continuations also run inside
+//! Scheduling, as C#'s `SynchronizationContext` did: a woken task is queued and a `WM_APP_INVOKE`
+//! posted, and each `WM_APP_INVOKE` runs everything queued, results and tasks in the order they
+//! arrived, including what's queued meanwhile. A result completes its `Done` and runs the task it
+//! wakes right there (C# queued the continuation itself). Continuations also run inside
 //! `TrackPopupMenuEx`'s modal loop. `delay` is a window timer with an id above the controller's.
 use crate::audio::Audio;
 use crate::worker::Worker;
@@ -24,7 +26,7 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::cell::{Cell, OnceCell, RefCell};
 use core::ptr::{null, null_mut};
-use core::sync::atomic::{AtomicPtr, Ordering};
+use core::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
 use pk::wide::to_wide;
 use quicktooth_core::Guid;
 use quicktooth_core::battery::BatteryReading;
@@ -55,8 +57,6 @@ const WM_TRAY: u32 = WM_APP + 1;
 const NIN_KEYSELECT: u32 = NIN_SELECT | NINF_KEY;
 const WM_APP_INVOKE: u32 = WM_APP + 2;
 const WM_APP_DEVCHANGE: u32 = WM_APP + 3;
-/// A worker or scan result: wParam = its id in [`Ui::pending`], lParam = `Box<Box<dyn Any + Send>>`.
-const WM_APP_RESULT: u32 = WM_APP + 4;
 /// `delay` timers use ids from here up; the controller's own timers are 1–10.
 const DELAY_TIMER_BASE: usize = 0x1000;
 
@@ -68,7 +68,10 @@ struct Ui {
     hwnd: Cell<HWND>,
     clock: clock::Stopwatch,
     controller: OnceCell<TrayController>,
-    tasks: RefCell<VecDeque<Task>>,
+    /// Woken tasks, with their arrival number (shared with [`RESULTS`], so both run in order).
+    tasks: RefCell<VecDeque<(u64, Task)>>,
+    /// The next task woken runs at once (the one a result being delivered wakes).
+    run_woken_now: Cell<bool>,
     pending: RefCell<BTreeMap<usize, Deliver>>,
     delays: RefCell<BTreeMap<usize, Done<()>>>,
     next_id: Cell<usize>,
@@ -107,12 +110,47 @@ impl Ui {
     }
 }
 
-/// Sends a result to the UI thread (from any thread). If the window is gone, it's dropped.
+/// Results from the worker and scan threads for the UI thread: (arrival number, the id of the
+/// pending `Done`, the value).
+static RESULTS: pk::sync::Mutex<VecDeque<(u64, usize, Box<dyn Any + Send>)>> = pk::sync::Mutex::new(VecDeque::new());
+/// Arrival numbers for results and woken tasks.
+static ARRIVAL: AtomicU64 = AtomicU64::new(0);
+
+/// Sends a result to the UI thread (from any thread). If the window is gone, it's never read.
 fn post_result<T: Send + 'static>(hwnd: isize, id: usize, value: OpResult<T>) {
     let boxed: Box<dyn Any + Send> = Box::new(value);
-    let raw = Box::into_raw(Box::new(boxed));
-    if unsafe { PostMessageW(hwnd as HWND, WM_APP_RESULT, id, raw as LPARAM) } == 0 {
-        drop(unsafe { Box::from_raw(raw) });
+    {
+        let mut q = RESULTS.lock();
+        q.push_back((ARRIVAL.fetch_add(1, Ordering::Relaxed), id, boxed));
+    }
+    unsafe { PostMessageW(hwnd as HWND, WM_APP_INVOKE, 0, 0) };
+}
+
+/// Runs everything queued for the UI thread, oldest first (C#'s `UiContext.Drain`). Nested calls
+/// (a modal loop inside a task) carry on with the same queues.
+fn drain(ui: &Ui) {
+    loop {
+        let task_at = ui.tasks.borrow().front().map(|t| t.0);
+        let result_at = RESULTS.lock().front().map(|r| r.0);
+        match (task_at, result_at) {
+            (None, None) => return,
+            (Some(t), r) if r.is_none_or(|r| t < r) => {
+                let next = ui.tasks.borrow_mut().pop_front();
+                if let Some((_, task)) = next {
+                    task.run();
+                }
+            }
+            _ => {
+                let next = RESULTS.lock().pop_front();
+                let Some((_, id, value)) = next else { continue };
+                let deliver = ui.pending.borrow_mut().remove(&id);
+                if let Some(deliver) = deliver {
+                    ui.run_woken_now.set(true);
+                    deliver(value);
+                    ui.run_woken_now.set(false);
+                }
+            }
+        }
     }
 }
 
@@ -129,6 +167,7 @@ pub fn run() -> u32 {
         clock: clock::Stopwatch::start(),
         controller: OnceCell::new(),
         tasks: RefCell::new(VecDeque::new()),
+        run_woken_now: Cell::new(false),
         pending: RefCell::new(BTreeMap::new()),
         delays: RefCell::new(BTreeMap::new()),
         next_id: Cell::new(1),
@@ -226,18 +265,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             return 0;
         }
         WM_APP_INVOKE => {
-            let task = ui.tasks.borrow_mut().pop_front();
-            if let Some(t) = task {
-                t.run();
-            }
-            return 0;
-        }
-        WM_APP_RESULT => {
-            let value = *unsafe { Box::from_raw(lparam as *mut Box<dyn Any + Send>) };
-            let deliver = ui.pending.borrow_mut().remove(&wparam);
-            if let Some(deliver) = deliver {
-                deliver(value);
-            }
+            drain(ui);
             return 0;
         }
         WM_APP_DEVCHANGE => {
@@ -331,7 +359,11 @@ struct UiSchedule(&'static Ui);
 
 impl Schedule for UiSchedule {
     fn schedule(&self, task: Task) {
-        self.0.tasks.borrow_mut().push_back(task);
+        if self.0.run_woken_now.replace(false) {
+            task.run();
+            return;
+        }
+        self.0.tasks.borrow_mut().push_back((ARRIVAL.fetch_add(1, Ordering::Relaxed), task));
         unsafe { PostMessageW(self.0.hwnd(), WM_APP_INVOKE, 0, 0) };
     }
 }
@@ -380,8 +412,12 @@ impl TrayHost for WinHost {
         }
         let (op, done) = exec::op();
         let id = DELAY_TIMER_BASE + (self.0.next() % (usize::MAX - DELAY_TIMER_BASE));
+        if unsafe { SetTimer(self.0.hwnd(), id, ms as u32, None) } == 0 {
+            // C#'s Task.Delay couldn't fail; finish now rather than never.
+            quicktooth_core::log::error("delay", "SetTimer failed");
+            return Op::ok(());
+        }
         self.0.delays.borrow_mut().insert(id, done);
-        unsafe { SetTimer(self.0.hwnd(), id, ms as u32, None) };
         op
     }
 

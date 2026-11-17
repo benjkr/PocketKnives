@@ -54,8 +54,9 @@ impl Worker {
         let shared =
             Arc::new(Shared { jobs: Mutex::new(VecDeque::new()), ready: Handle(unsafe { CreateSemaphoreW(null(), 0, i32::MAX, null()) }) });
         let s = shared.clone();
-        // Detached: it lives as long as the process, like C#'s background thread.
-        let _ = pk::thread::spawn(move || {
+        // Detached: it lives as long as the process, like C#'s background thread. If Windows
+        // can't start it the process can't do anything useful (C#'s Thread.Start threw).
+        let started = pk::thread::spawn(move || {
             unsafe { CoInitializeEx(null(), COINIT_MULTITHREADED as u32) };
             let mut audio = Audio::new();
             loop {
@@ -66,6 +67,10 @@ impl Worker {
                 }
             }
         });
+        if started.is_none() {
+            quicktooth_core::log::error("device worker", "the thread could not be started");
+            pk::exit(1);
+        }
         Worker(shared)
     }
 

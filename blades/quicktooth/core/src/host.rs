@@ -4,6 +4,15 @@
 //!
 //! Add a member only for something the platform really provides, and implement it in both hosts
 //! in the same change.
+//!
+//! Host calls can run the controller again before they return (the exe; `core/tests/reentrancy.rs`
+//! checks the controller copes):
+//! - `exit` destroys the window, whose `WM_DESTROY` calls `exit` again;
+//! - `track_popup_menu` runs the menu's modal loop, which delivers timers, commands, tray
+//!   events, `--set`, theme changes and woken tasks;
+//! - `add_icon`, `modify_icon`, `remove_icon` and `icon_anchor` wait on Explorer, and Windows
+//!   delivers messages sent to the window meanwhile (`WM_COPYDATA`, `WM_SETTINGCHANGE`, display
+//!   changes).
 use crate::Guid;
 use crate::battery::BatteryReading;
 use crate::devices::{OneShot, SendResult, Snapshot};

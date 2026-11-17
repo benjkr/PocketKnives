@@ -1,7 +1,9 @@
 //! A mutex (an SRW lock, what std's `Mutex` uses on Windows) for state shared between threads.
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
-use windows_sys::Win32::System::Threading::{AcquireSRWLockExclusive, ReleaseSRWLockExclusive, SRWLOCK, SRWLOCK_INIT};
+use windows_sys::Win32::System::Threading::{
+    AcquireSRWLockExclusive, ReleaseSRWLockExclusive, SRWLOCK, SRWLOCK_INIT, TryAcquireSRWLockExclusive,
+};
 
 pub struct Mutex<T> {
     lock: UnsafeCell<SRWLOCK>,
@@ -20,6 +22,11 @@ impl<T> Mutex<T> {
     pub fn lock(&self) -> Guard<'_, T> {
         unsafe { AcquireSRWLockExclusive(self.lock.get()) };
         Guard { m: self }
+    }
+
+    /// The lock if it's free now, else `None` (never waits).
+    pub fn try_lock(&self) -> Option<Guard<'_, T>> {
+        unsafe { TryAcquireSRWLockExclusive(self.lock.get()) }.then_some(Guard { m: self })
     }
 }
 

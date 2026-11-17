@@ -41,10 +41,24 @@ struct State {
 
 /// Scans on a thread of its own and hands the result to `done` there.
 pub fn scan_async(model: u16, window_ms: u32, done: impl FnOnce(Scan) + Send + 'static) {
-    let _ = pk::thread::spawn(move || {
+    // `done` goes to the thread; if it can't start, it comes back and gets an empty scan.
+    let slot = Arc::new(Mutex::new(Some(done)));
+    let s = slot.clone();
+    let started = pk::thread::spawn(move || {
         unsafe { CoInitializeEx(null(), COINIT_MULTITHREADED as u32) };
-        done(scan(model, window_ms));
+        let scan = scan(model, window_ms);
+        let done = s.lock().take();
+        if let Some(done) = done {
+            done(scan);
+        }
     });
+    if started.is_none() {
+        quicktooth_core::log::error("battery scan", "the thread could not be started");
+        let done = slot.lock().take();
+        if let Some(done) = done {
+            done(Scan { reading: None, adverts: 0, apple: 0, errors: 0 });
+        }
+    }
 }
 
 /// Scans and waits for the result (the command line).
