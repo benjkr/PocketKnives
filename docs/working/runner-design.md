@@ -134,8 +134,8 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
   means drawing the controls ourselves. Win32 windows can also be given Windows 11's Mica backdrop
   (a documented DWM setting), but whether plain controls look right on it is untested.
 - **Icons**: Win32 can't draw SVG, so each blade also keeps `blades/<name>/assets/icon.ico`
-  (16–48 px, rendered from its `icon.svg`; SnipSnap's is 9 KB), and the runner builds them into
-  its exe. QuickTooth already has one (`blades/quicktooth/assets/quicktooth.ico`, the same artwork
+  (16–64 px, rendered from its `icon.svg`, so the 32 px logo stays sharp at 200% scaling;
+  SnipSnap's is 12 KB), and the runner builds them into its exe. QuickTooth already has one (`blades/quicktooth/assets/quicktooth.ico`, the same artwork
   as its `icon.svg`).
 - **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
   working set while open; 56 ms from launch until it has painted and exited (median of 30).
