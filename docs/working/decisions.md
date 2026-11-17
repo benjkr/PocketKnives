@@ -10,10 +10,11 @@ blade's own decisions are in its `docs/working/decisions.md`.
   (`git filter-repo --to-subdirectory-filter`), so nothing is lost if they're never touched again.
 - **A settings window** that changes the behaviour, looks and settings of each blade, with each
   blade's icon in the list and its logo at the top right of its page (the PocketKnives logo on
-  General). In the user's words: a raw look, minimal, nothing fancy, brutalist; simple,
-  maybe lists on the side; native Windows stuff. (This replaced asking for an XP/7 look, and a
-  Windows 7 look drawn by hand was dropped.) The user then asked about a Windows 11 Settings-style
-  look (glassy, modern), so which look it has is open again, as are how it's built and which
-  settings it offers ([runner design](runner-design.md)).
+  General). It has **three looks, switched with a setting** (General > Look): **XP**, the raw
+  look (in the user's words: minimal, nothing fancy, brutalist, lists on the side, native Windows
+  stuff); **Windows 10**, the same native controls with visual styles on; **Windows 11**, the
+  Windows 11 Settings style (glassy, modern) in WinUI 3. A Windows 7 look drawn by hand was
+  dropped. How it's built and which settings it offers are still open
+  ([runner design](runner-design.md)).
 - **How blades run together, shared code and the default language** for new blades: being decided
   ([runner design](runner-design.md)).

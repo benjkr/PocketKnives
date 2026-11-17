@@ -1,8 +1,9 @@
 # Runner design: how blades run together
 
 **Status: a proposal, not decided.** Nothing here is built. Decided by the user so far: there will
-be a settings window with every blade's icon in it and a list on the side. Its look is open: raw
-Win32, the Windows 10/11 look of the same controls, or the Windows 11 Settings look in WinUI 3.
+be a settings window with every blade's icon in it and a list on the side, in three looks the
+user switches between with a setting: XP, Windows 10 and Windows 11 ([the settings
+window](#the-settings-window-decided-there-is-one-in-three-looks)).
 Once the user picks the rest, this page shrinks to the decision (in [decisions](decisions.md)) and
 specs for the runner and the window; the measurements stay in the commits' history.
 
@@ -101,34 +102,48 @@ their own process.
 - Settings would have to cross the ABI as well.
 - Everything B's merge would save, at a higher price than A.
 
-## The settings window (decided: there is one)
+## The settings window (decided: there is one, in three looks)
 
-One window changes each blade's behaviour, looks and settings. The user wants it raw: minimal,
-nothing fancy, brutalist, native Windows controls, a list on the side. Proposed: plain Win32
-controls in the `pk` runner, with no UI framework and no custom drawing. A throwaway prototype
-(C# Native AOT, placeholder values, wired to nothing) looks like this, rendered off-screen at 100%
-with `PrintWindow`. Nobody has seen it on a screen yet.
+One window changes each blade's behaviour, looks and settings. The user chose to keep three looks
+and switch between them with a setting, **Look** on the General page:
 
-![The prototype, raw: the General, SnipSnap and QuickTooth pages](runner-design/settings-raw.png)
+- **XP**: the raw look below (minimal, brutalist, native controls, a list on the side);
+- **Windows 10**: the same controls with visual styles on;
+- **Windows 11**: the Windows 11 Settings style, in WinUI 3.
+
+Proposed: XP and Windows 10 are plain Win32 controls in the `pk` runner, with no UI framework and
+no custom drawing; Windows 11 is its own exe. Throwaway prototypes (C# Native AOT for Win32,
+placeholder values, wired to nothing but the look) look like this, rendered off-screen at 100%
+with `PrintWindow`.
+
+![The prototype, XP: the General, SnipSnap and QuickTooth pages](runner-design/settings-raw.png)
 
 - **Layout**: a list on the left, one row per page ("General", then each blade with its 16 px
   icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is its name in
   bold, one line on what it does and a 32 px logo at the top right (the blade's; the PocketKnives
   logo on General), then plain bold headings with the controls under them. No tabs, no group
   boxes, no separators.
-- **Look**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which
-  also gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`)
-  and 1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
-  square corners (a DWM setting), no caption icon. The drop-down keeps its classic 3D button:
-  Windows has no flat variant of it.
-- **The Windows 10/11 look** is the other native option: the same layout with visual styles on,
-  the controls' own themed borders and Explorer's list look. Windows draws it in its current
-  style: Windows 11's here (rounded buttons, accent-coloured check boxes, its title bar and rounded
-  window corners), Windows 10's on Windows 10 (not captured; no Windows 10 PC here). In these
-  captures the window is inactive, so the list's selection is grey instead of light blue, and the
-  corners Windows 11 rounds on screen come out square.
+- **XP**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which also
+  gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`) and
+  1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
+  square corners (a DWM setting), the suite's 16 px icon in the title bar. The drop-downs keep
+  their classic 3D button: Windows has no flat variant of it. XP's own Luna theme isn't one of
+  the looks (see below).
+- **Windows 10**: the same layout with visual styles on, the controls' own themed borders and
+  Explorer's list look. Windows draws it in its current style: Windows 11's here (rounded buttons,
+  accent-coloured check boxes, its title bar and rounded window corners), Windows 10's on Windows
+  10 (not captured; no Windows 10 PC here). In these captures the window is inactive, so the
+  list's selection is grey instead of light blue, and the corners Windows 11 rounds on screen come
+  out square.
 
-  ![The prototype, Windows 10/11 look: the same three pages](runner-design/settings-modern.png)
+  ![The prototype, Windows 10: the same three pages](runner-design/settings-modern.png)
+
+- **Switching looks**: picking one under Look saves it (`look=xp|win10|win11` in the `[suite]`
+  section of the runner's INI file, through kernel32) and reopens the window in that look, at the
+  same place, on General; it applies at once, without Apply. `pk settings` opens the saved look;
+  XP is the default. The prototypes do this across both exes (`pksettings.exe show` opens the
+  saved look), and an off-screen test went through every switch (XP → Windows 10 → Windows 11 →
+  XP) through the drop-downs' own handlers.
 
 - **Not possible with Win32 controls**: XP's Luna, 7's Aero glass, a dark mode. Imitating them
   means drawing the controls ourselves. Win32 windows can also be given Windows 11's Mica backdrop
@@ -141,14 +156,15 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
   window uses the largest frame of `assets/pocketknives.ico` that fits the 32 px slot (32, 48 or
   64 px), so it's never scaled. The same `.ico` is the `pk` exe's icon, and the settings window's
   in the taskbar and the Start menu.
-- **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
-  working set while open; 56 ms from launch until it has painted and exited (median of 30).
+- **Measured** (this prototype, both looks, the icons and the look switch): an 879 KB exe with
+  zero AOT warnings (the switch added 17 KB); 1.6 MB private working set while open; 56 ms from
+  launch until it has painted and exited (median of 30, measured before the logos and the switch).
   Closed, it costs nothing.
 
-### The Windows 11 Settings look: WinUI 3
+### Windows 11: the Settings style in WinUI 3
 
-The user asked whether a modern, glassy look like the Windows 11 Settings app is possible. It is:
-WinUI 3 (the Windows App SDK) is Microsoft's native UI framework for that style. It has Mica, the
+WinUI 3 (the Windows App SDK) is Microsoft's native UI framework for the Windows 11 Settings app's
+modern, glassy style. It has Mica, the
 navigation pane, setting cards, toggle switches and dark mode. A second throwaway prototype (WinUI 3
 from the Windows App SDK 1.6 already in the local NuGet cache, restored offline, self-contained,
 UI built in code, the same five placeholder settings and the same logos at the top right, here
@@ -170,16 +186,17 @@ PC's apps are set to dark:
 - **Stability of the prototype**: about one run in three of the capture mode crashed (heap
   corruption), and shutting down crashed until the prototype ended its process directly. Most
   likely the old SDK 1.6 on .NET 10; not investigated. A real build would use a current SDK.
-- **Smaller downloads** would come from requiring the Windows App Runtime installed instead of
-  bundling it (it's on this PC because other apps installed it). Not measured: that needs the
-  matching, newer SDK downloaded.
+- **Every install carries it**, even for people who never pick Windows 11: the sizes above, on
+  top of the Win32 window's 879 KB. Smaller downloads would come from requiring the Windows App
+  Runtime installed instead of bundling it (it's on this PC because other apps installed it). Not
+  measured: that needs the matching, newer SDK downloaded.
 - **Differences from the Win32 versions**: changes apply at once (no OK / Apply), as in Settings.
   There's no hotkey-capture control, so SnipSnap's hotkey boxes need custom key handling. On
   Windows 10 there's no Mica, so the backdrop is a flat colour. WinUI scales images smoothly, so
   above 100% display scaling the pixel-art suite logo needs a version already doubled (the .ico's
   64 and 96 px frames) picked in code; the prototype doesn't do that yet.
-- **The runner stays free of it**: in this option the window is its own exe, which `pk settings`
-  starts, so signing in never loads WinUI.
+- **The runner stays free of it**: this look is its own exe, which `pk settings` starts when the
+  saved look is Windows 11, so signing in never loads WinUI.
 
 How it works with a process per blade:
 
@@ -206,6 +223,7 @@ How it works with a process per blade:
   | Setting | Today |
   |---|---|
   | Each blade on or off (on: it starts at sign-in) | Exists per blade (SnipSnap's Startup shortcut, QuickTooth's Run value) |
+  | The settings window's look (XP, Windows 10, Windows 11) | New: chosen by the user |
   | SnipSnap's three hotkeys | Fixed in code (with fallbacks): new as a setting |
   | SnipSnap: flash the captured area | Always on: new as a setting |
   | QuickTooth's device | Exists (its tray menu's Device ▸) |
