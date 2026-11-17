@@ -38,6 +38,8 @@ public partial class App : Application
     private InfoBar status = null!;
     private Window window = null!;
     private bool[] startup = [];
+    private BladeSettings.Setting[][] bladeSettings = [];
+    private string[][] saved = [];
     private bool updating;
 
     public App() => InitializeComponent();
@@ -45,6 +47,8 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         startup = Settings.ReadStartup(root);
+        bladeSettings = [.. Settings.Blades.Select(blade => BladeSettings.Read(root, blade))];
+        saved = [.. bladeSettings.Select(page => page.Select(setting => setting.Value).ToArray())];
         window = new Window { Title = Settings.Title, SystemBackdrop = new MicaBackdrop() };
         page = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch };
         status = new InfoBar { Severity = InfoBarSeverity.Error, IsClosable = true };
@@ -169,19 +173,147 @@ public partial class App : Application
         content.Children.Add(header);
         if (blade is null)
             content.Children.Add(LookCard());
+        else if (bladeSettings[index - 1].Length == 0)
+            content.Children.Add(new TextBlock { Text = $"{blade.Name} has no settings to show." });
+        else
+            for (int i = 0; i < bladeSettings[index - 1].Length; i++)
+                content.Children.Add(SettingCard(index - 1, i));
         page.Content = content;
+    }
+
+    private Border SettingCard(int blade, int index)
+    {
+        BladeSettings.Setting setting = bladeSettings[blade][index];
+        FrameworkElement control = setting.Kind switch
+        {
+            BladeSettings.Kind.Toggle => ToggleControl(blade, index),
+            BladeSettings.Kind.Choice => ChoiceControl(blade, index),
+            _ => HotkeyControl(blade, index),
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, setting.Label);
+        return Card(setting.Label, control);
+    }
+
+    // Changes apply at once, as in Windows Settings. Returns false, with the blade's reason shown, when refused.
+    private bool Change(int blade, int index, string value)
+    {
+        if (value == saved[blade][index])
+            return true;
+        try
+        {
+            BladeSettings.Apply(root, Settings.Blades[blade], [(bladeSettings[blade][index].Key, value)]);
+            saved[blade][index] = value;
+            status.IsOpen = false;
+            return true;
+        }
+        catch (Exception error) when (Settings.IsSettingsError(error))
+        {
+            ShowError(error.Message);
+            return false;
+        }
+    }
+
+    private ToggleSwitch ToggleControl(int blade, int index)
+    {
+        var toggle = new ToggleSwitch { IsOn = saved[blade][index] == "1", OnContent = "On", OffContent = "Off", MinWidth = 0 };
+        toggle.Toggled += (_, _) =>
+        {
+            if (updating || Change(blade, index, toggle.IsOn ? "1" : "0"))
+                return;
+            updating = true;
+            toggle.IsOn = !toggle.IsOn;
+            updating = false;
+        };
+        return toggle;
+    }
+
+    private ComboBox ChoiceControl(int blade, int index)
+    {
+        BladeSettings.Choice[] choices = bladeSettings[blade][index].Choices;
+        var combo = new ComboBox
+        {
+            ItemsSource = choices.Select(choice => choice.Label).ToList(),
+            SelectedIndex = Array.FindIndex(choices, choice => choice.Value == saved[blade][index]),
+            MinWidth = 200,
+        };
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (updating || combo.SelectedIndex < 0 || Change(blade, index, choices[combo.SelectedIndex].Value))
+                return;
+            updating = true;
+            combo.SelectedIndex = Array.FindIndex(choices, choice => choice.Value == saved[blade][index]);
+            updating = false;
+        };
+        return combo;
+    }
+
+    // WinUI has no hotkey box: click, then press the keys. Esc cancels.
+    private Button HotkeyControl(int blade, int index)
+    {
+        var button = new Button { Content = BladeSettings.HotkeyName(saved[blade][index]), MinWidth = 200 };
+        bool listening = false;
+        void Stop()
+        {
+            listening = false;
+            button.Content = BladeSettings.HotkeyName(saved[blade][index]);
+        }
+        button.Click += (_, _) =>
+        {
+            if (listening)
+                return;
+            listening = true;
+            button.Content = "Press the new keys";
+        };
+        button.LostFocus += (_, _) => { if (listening) Stop(); };
+        button.AddHandler(UIElement.KeyDownEvent, new Microsoft.UI.Xaml.Input.KeyEventHandler((_, key) =>
+        {
+            if (!listening)
+                return;
+            key.Handled = true;
+            int code = (int)key.Key;
+            if (code == 0x1b) // Esc
+            {
+                Stop();
+                return;
+            }
+            if (code is 0x10 or 0x11 or 0x12 or >= 0xa0 and <= 0xa5 or 0x5b or 0x5c) // modifier keys alone
+                return;
+            int modifiers = (Down(0x11) ? BladeSettings.Ctrl : 0) | (Down(0x12) ? BladeSettings.Alt : 0) |
+                            (Down(0x10) ? BladeSettings.Shift : 0) | (Down(0x5b) || Down(0x5c) ? BladeSettings.Win : 0);
+            if ((modifiers & ~BladeSettings.Shift) == 0)
+            {
+                button.Content = "Add Ctrl, Alt or Win";
+                return;
+            }
+            Change(blade, index, BladeSettings.JoinHotkey(modifiers, code));
+            Stop();
+        }), handledEventsToo: true);
+        return button;
+    }
+
+    private static bool Down(int key) => (GetKeyState(key) & 0x8000) != 0;
+
+    private static Border Card(string label, FrameworkElement control)
+    {
+        var row = new Grid { Padding = new Thickness(16), ColumnSpacing = 12 };
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
+        control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(control, 1);
+        row.Children.Add(control);
+        return new Border
+        {
+            Child = row,
+            CornerRadius = new CornerRadius(6),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Gray) { Opacity = 0.12 },
+        };
     }
 
     private Border LookCard()
     {
         var choices = new ComboBox { ItemsSource = Settings.LookNames, SelectedIndex = (int)Settings.Look.Windows11 };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(choices, Settings.LookLabel);
-        var row = new Grid { Padding = new Thickness(16) };
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(new TextBlock { Text = Settings.LookLabel, VerticalAlignment = VerticalAlignment.Center });
-        Grid.SetColumn(choices, 1);
-        row.Children.Add(choices);
         choices.SelectionChanged += (_, _) =>
         {
             if (choices.SelectedIndex is not (0 or 1))
@@ -203,12 +335,7 @@ public partial class App : Application
                 ShowError(error.Message);
             }
         };
-        return new Border
-        {
-            Child = row,
-            CornerRadius = new CornerRadius(6),
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Gray) { Opacity = 0.12 },
-        };
+        return Card(Settings.LookLabel, choices);
     }
 
     private void ShowError(string message)
@@ -223,4 +350,5 @@ public partial class App : Application
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out int processId);
     [DllImport("user32.dll")] private static extern int AllowSetForegroundWindow(int processId);
+    [DllImport("user32.dll")] private static extern short GetKeyState(int key);
 }

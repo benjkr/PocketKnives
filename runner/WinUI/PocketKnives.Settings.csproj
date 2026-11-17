@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.6.5" />
     <Compile Include="../Settings.cs" Link="Settings.cs" />
     <Compile Include="../RunnerLink.cs" Link="RunnerLink.cs" />
+    <Compile Include="../BladeSettings.cs" Link="BladeSettings.cs" />
     <Content Include="../../assets/pocketknives.ico" Link="pocketknives.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

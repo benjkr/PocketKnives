@@ -22,5 +22,11 @@ blade's own decisions are in its `docs/working/decisions.md`.
   blade into `%LOCALAPPDATA%\Programs\PocketKnives`, each still its own program, with one entry in
   installed apps ([installer](../specs/installer.md)). The blades' separate installs were removed
   from the user's PC.
+- **Blade settings come from the blade, with no manifest**: each blade prints its settings (key,
+  kind, value, label, choices) and changes them itself
+  ([blade settings](../specs/blade-settings.md)), so a setting is defined once, in the blade's
+  code. The `blade.json` manifest proposed in the runner design was not built. The settings
+  offered are the runner design's list: SnipSnap's three hotkeys and its flash, QuickTooth's
+  headset and low-battery level.
 - **How blades run together, shared code and the default language** for new blades: being decided
   ([runner design](runner-design.md)).

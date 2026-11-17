@@ -3,12 +3,14 @@ using static PocketKnives.Windows;
 
 namespace PocketKnives;
 
-internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
+internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original, BladeSettings.Setting[][] pages)
 {
     private const string ClassName = "PocketKnives.Settings.Win32";
     private const uint SetImageList = 0x1003, SetItemState = 0x102b, GetItemState = 0x102c;
     private const uint StateImageMask = 0xf000, Selected = 2, Focused = 1;
-    private const int OkId = 1, CancelId = 2, ApplyId = 3, LookId = 100;
+    private const int OkId = 1, CancelId = 2, ApplyId = 3, LookId = 100, FirstSettingId = 200;
+    private const uint HotkeySet = 0x0401, HotkeyGet = 0x0402, HotkeyRules = 0x0403;
+    private const uint CheckGet = 0x00f0, CheckSet = 0x00f1, ComboAdd = 0x0143, ComboGet = 0x0147, ComboSet = 0x014e;
     private static NativeSettings? current;
 
     private readonly uint dpi = GetDpiForSystem();
@@ -17,14 +19,26 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
     private nint pageTitle, description, pageIcon, lookLabel, lookChoice;
     private readonly List<nint> icons = [];
     private readonly nint[] pageIcons = new nint[Settings.Blades.Length + 1];
+    // Every page's own controls, General's first; ShowPage shows one page's and hides the rest.
+    private readonly List<nint>[] pageControls = [.. Enumerable.Range(0, Settings.Blades.Length + 1).Select(_ => new List<nint>())];
+    // One entry per blade setting, in control ID order from FirstSettingId.
+    private readonly List<(int Blade, int Index, nint Control)> settingControls = [];
+    private readonly BladeSettings.Setting[][] bladeSettings = pages;
+    private readonly string[][] saved = [.. pages.Select(page => page.Select(setting => setting.Value).ToArray())];
 
     internal static nint Handle => current?.window ?? 0;
+
+    // Alt+key belongs to a focused hotkey box, not to the dialog's access keys (&Apply).
+    internal static bool OwnsKeyboard(nint control) =>
+        current is { } settings && settings.settingControls.Exists(entry => entry.Control == control &&
+            settings.bladeSettings[entry.Blade][entry.Index].Kind == BladeSettings.Kind.Hotkey);
 
     internal static void Initialize() => Register(ClassName, &WindowProcedure, 15); // COLOR_BTNFACE
 
     internal static void Open(Settings.Look look)
     {
-        current = new NativeSettings(look, Settings.ReadStartup(Settings.Root));
+        BladeSettings.Setting[][] bladeSettings = [.. Settings.Blades.Select(blade => BladeSettings.Read(Settings.Root, blade))];
+        current = new NativeSettings(look, Settings.ReadStartup(Settings.Root), bladeSettings);
         try
         {
             current.Build();
@@ -103,9 +117,11 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
         lookLabel = Control("STATIC", "&" + Settings.LookLabel, 0, 178, 70, 120, 18, useBold: true);
         lookChoice = Control("COMBOBOX", "", TabStop | 0x200000 | 3, 178, 90, 200, 160, LookId);
         foreach (string name in Settings.LookNames)
-            fixed (char* text = name)
-                SendMessageW(lookChoice, 0x0143, 0, (nint)text); // CB_ADDSTRING
-        SendMessageW(lookChoice, 0x014e, (nuint)look, 0); // CB_SETCURSEL
+            AddChoice(lookChoice, name);
+        SendMessageW(lookChoice, ComboSet, (nuint)look, 0);
+        pageControls[0].AddRange([lookLabel, lookChoice]);
+        for (int i = 0; i < Settings.Blades.Length; i++)
+            BuildBladePage(i);
 
         uint buttonStyle = TabStop | (Classic ? 0x8000u : 0); // BS_FLAT
         Control("BUTTON", "OK", buttonStyle | 1, 322, 230, 75, 24, OkId);
@@ -114,6 +130,100 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
         EnableWindow(applyButton, 0);
         SetState(generalList, 0, Selected | Focused, Selected | Focused);
         ShowPage(0);
+    }
+
+    private void BuildBladePage(int blade)
+    {
+        List<nint> controls = pageControls[blade + 1];
+        BladeSettings.Setting[] settings = bladeSettings[blade];
+        if (settings.Length == 0)
+            controls.Add(Control("STATIC", $"{Settings.Blades[blade].Name} has no settings to show.", 0, 178, 74, 330, 18));
+        int y = 72;
+        for (int i = 0; i < settings.Length; i++, y += 30)
+        {
+            BladeSettings.Setting setting = settings[i];
+            int id = FirstSettingId + settingControls.Count;
+            nint control;
+            if (setting.Kind == BladeSettings.Kind.Toggle)
+            {
+                control = Control("BUTTON", setting.Label, TabStop | 3 | (Classic ? 0x8000u : 0), 178, y, 330, 22, id); // BS_AUTOCHECKBOX, BS_FLAT
+                SendMessageW(control, CheckSet, setting.Value == "1" ? 1u : 0, 0);
+            }
+            else
+            {
+                controls.Add(Control("STATIC", setting.Label, 0, 178, y + 3, 116, 18));
+                if (setting.Kind == BladeSettings.Kind.Hotkey)
+                {
+                    control = Control("msctls_hotkey32", "", TabStop | (Classic ? Border : 0), 298, y, 210, 22, id,
+                        extendedStyle: Classic ? 0u : 0x200); // WS_EX_CLIENTEDGE
+                    // A key with no modifier, or Shift alone, would take that key from every program.
+                    SendMessageW(control, HotkeyRules, 0x01 | 0x02, 0x02 | 0x04); // HKCOMB_NONE | HKCOMB_S become Ctrl+Alt
+                    SetHotkey(control, setting.Value);
+                }
+                else
+                {
+                    control = Control("COMBOBOX", "", TabStop | 0x200000 | 3, 298, y, 210, 200, id); // WS_VSCROLL, CBS_DROPDOWNLIST
+                    foreach (BladeSettings.Choice choice in setting.Choices)
+                        AddChoice(control, choice.Label);
+                    SendMessageW(control, ComboSet, (nuint)Array.FindIndex(setting.Choices, c => c.Value == setting.Value), 0);
+                }
+            }
+            controls.Add(control);
+            settingControls.Add((blade, i, control));
+        }
+    }
+
+    private static void AddChoice(nint combo, string text)
+    {
+        fixed (char* value = text)
+            SendMessageW(combo, ComboAdd, 0, (nint)value);
+    }
+
+    // The hotkey box uses HOTKEYF flags (Shift 1, Ctrl 2, Alt 4, Ext 8); blades use RegisterHotKey's.
+    private static void SetHotkey(nint control, string value)
+    {
+        (int modifiers, int key) = BladeSettings.SplitHotkey(value);
+        uint flags = ((modifiers & BladeSettings.Shift) != 0 ? 1u : 0) | ((modifiers & BladeSettings.Ctrl) != 0 ? 2u : 0) |
+                     ((modifiers & BladeSettings.Alt) != 0 ? 4u : 0) | (BladeSettings.IsExtended(key) ? 8u : 0);
+        SendMessageW(control, HotkeySet, (uint)key | flags << 8, 0);
+    }
+
+    private string ReadSetting(int blade, int index, nint control)
+    {
+        BladeSettings.Setting setting = bladeSettings[blade][index];
+        string before = saved[blade][index];
+        switch (setting.Kind)
+        {
+            case BladeSettings.Kind.Toggle:
+                return SendMessageW(control, CheckGet, 0, 0) == 1 ? "1" : "0";
+            case BladeSettings.Kind.Choice:
+                int selected = (int)SendMessageW(control, ComboGet, 0, 0);
+                return selected >= 0 && selected < setting.Choices.Length ? setting.Choices[selected].Value : before;
+            default:
+                int value = (int)SendMessageW(control, HotkeyGet, 0, 0);
+                int key = value & 0xff, flags = value >> 8 & 0xff;
+                if (key == 0)
+                    return before; // An emptied box keeps the saved key.
+                int modifiers = ((flags & 1) != 0 ? BladeSettings.Shift : 0) | ((flags & 2) != 0 ? BladeSettings.Ctrl : 0) |
+                                ((flags & 4) != 0 ? BladeSettings.Alt : 0);
+                // The box can't show Win, so an unchanged key keeps it.
+                (int savedModifiers, int savedKey) = BladeSettings.SplitHotkey(before);
+                if (savedKey == key && (savedModifiers & ~BladeSettings.Win) == modifiers)
+                    return before;
+                return BladeSettings.JoinHotkey(modifiers, key);
+        }
+    }
+
+    private List<(string Key, string Value)>[] ReadChanges()
+    {
+        List<(string Key, string Value)>[] changes = [.. Settings.Blades.Select(_ => new List<(string, string)>())];
+        foreach ((int blade, int index, nint control) in settingControls)
+        {
+            string value = ReadSetting(blade, index, control);
+            if (value != saved[blade][index])
+                changes[blade].Add((bladeSettings[blade][index].Key, value));
+        }
+        return changes;
     }
 
     private void CreateFonts()
@@ -228,8 +338,9 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
         if (pageIcons[page] == 0)
             pageIcons[page] = Own(blade is null ? SuiteIcon(size) : FileIcon(Settings.BladeIcon(Settings.Root, blade), fit));
         SendMessageW(pageIcon, 0x0170, (nuint)pageIcons[page], 0); // STM_SETICON
-        ShowWindow(lookLabel, general ? 5 : 0);
-        ShowWindow(lookChoice, general ? 5 : 0);
+        for (int i = 0; i < pageControls.Length; i++)
+            foreach (nint control in pageControls[i])
+                ShowWindow(control, i == page ? 5 : 0);
     }
 
     private bool[] ReadSelection()
@@ -240,13 +351,26 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
         return checkedRows;
     }
 
-    private void UpdateApply() =>
-        EnableWindow(applyButton, ReadSelection().AsSpan().SequenceEqual(original) ? 0 : 1);
+    private void UpdateApply() => EnableWindow(applyButton,
+        ReadSelection().AsSpan().SequenceEqual(original) && ReadChanges().All(blade => blade.Count == 0) ? 0 : 1);
 
     private void Apply()
     {
-        Settings.ApplyStartup(Settings.Root, original, ReadSelection());
-        UpdateApply();
+        try
+        {
+            Settings.ApplyStartup(Settings.Root, original, ReadSelection());
+            List<(string Key, string Value)>[] changes = ReadChanges();
+            for (int blade = 0; blade < changes.Length; blade++)
+            {
+                BladeSettings.Apply(Settings.Root, Settings.Blades[blade], changes[blade]);
+                foreach ((string key, string value) in changes[blade])
+                    saved[blade][Array.FindIndex(bladeSettings[blade], setting => setting.Key == key)] = value;
+            }
+        }
+        finally
+        {
+            UpdateApply();
+        }
     }
 
     private void Execute(int id, int notification)
@@ -264,6 +388,10 @@ internal sealed unsafe class NativeSettings(Settings.Look look, bool[] original)
                     break;
                 case ApplyId:
                     Apply();
+                    break;
+                case >= FirstSettingId when id - FirstSettingId < settingControls.Count &&
+                                            notification is 0 or 1 or 0x300: // BN_CLICKED, CBN_SELCHANGE, EN_CHANGE
+                    UpdateApply();
                     break;
                 case LookId when notification == 1: // CBN_SELCHANGE
                     var selected = (Settings.Look)SendMessageW(lookChoice, 0x0147, 0, 0); // CB_GETCURSEL
