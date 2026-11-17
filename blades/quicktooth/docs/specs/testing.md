@@ -17,7 +17,9 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). Keep it cu
 
 ## Windows side and devices (the simulator doesn't run these)
 
-All read-only, from a build in a scratch folder (not installed):
+All read-only, from a build in a scratch folder (not installed), with `APPDATA`, `LOCALAPPDATA`
+and `USERPROFILE` pointed at a scratch profile: `--battery`, `--watch-endpoints` and a
+`--settings-roundtrip` of a broken file append to `quicktooth.log` in the settings folder.
 
 - `--list --all` and `--probe <endpoint id>` diffed against the previous build's output: device
   discovery and grouping unchanged.

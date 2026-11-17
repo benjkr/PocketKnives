@@ -7,8 +7,9 @@ change, and lean.
 
 - `targetContainerId` (primary), `targetMac` (fallback), `targetName` (display only),
   `trayPromotedOnce` and, optionally, `lowBatteryPercent` (the low-battery warning; absent means
-  the default in `Tunables.cs`, and a file without it round-trips unchanged). Read and written
-  through a source-generated JSON context; saved through a temp file and a move.
+  the default in `core/src/tunables.rs`, and a file without it round-trips unchanged). Read and written
+  exactly as System.Text.Json did (`core/src/settings.rs`: camelCase, nulls left out, indented,
+  relaxed escaping, CRLF in the exe); saved through a temp file and a move.
 - A stored target is never swapped for another device: if it's missing, the tray says
   "Not available". With no target saved yet, the first paired device whose name contains
   "AirPods" (a connected one first) is chosen and saved.
@@ -16,7 +17,7 @@ change, and lean.
 ## Changing them from PocketKnives Settings
 
 QuickTooth's side of the suite's [blade settings contract](../../../../docs/specs/blade-settings.md),
-in `BladeSettings.cs` (core):
+in `core/src/blade_settings.rs`:
 
 - `--settings` prints two `choice` settings: `device` ("Headset": container IDs in `B` format,
   labelled with the devices the tray's Device menu offers; the value is the stored target, empty

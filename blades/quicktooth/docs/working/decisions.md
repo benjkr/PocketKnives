@@ -33,11 +33,18 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
 
 - **WPF to draw the icons**: pulled in the UI framework and ruled out Native AOT. Replaced by the
   shared rasterizer, which is also closer to the exact shape at the edges.
-- **A self-contained bundle** (165 MB installed, 48 MB download), **compressed single file**
-  (69 MB of RAM instead of 30 MB) and **trimming** (switches off the COM and JSON the app uses, so
-  it finds no devices): all replaced by Native AOT.
-- **Needing the .NET Desktop Runtime installed**: replaced; the exe needs nothing.
-- **The SDK's default .NET 10.0.5 runtime** (CVE-2026-111497): pinned to at least 10.0.15.
+- **C# / .NET 10 Native AOT** (a 5.4 MB exe, 15–18 MB private working set in the tray; 1.5 MB
+  of it the CsWinRT projection for the battery scan): replaced by Rust, `no_std`, one exe with no
+  runtime. Before that, a self-contained .NET bundle (165 MB installed), a compressed single file
+  (69 MB of RAM) and trimming (it switched off the COM and JSON the app used) were tried and
+  replaced.
+- **Rust with std**: about 100 KB more per exe (measured 108 KB for an empty program against 7 KB
+  `no_std`); `crates/pk` supplies what QuickTooth needs instead.
+- **Hand-written COM and WinRT vtables**: measured within a few KB of the `windows` crate's
+  generated bindings, which cost about 18 s more on a clean build only. The generated bindings
+  were kept: a wrong vtable order silently calls the wrong method.
+- **Rust's general float parser**: 14 KB of tables for numbers that are short decimals; replaced by
+  an exact parser for up to 15 digits (`num::parse_f64`).
 
 ## Simulator
 
@@ -47,7 +54,9 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
   isn't needed.
 
 - **JavaScript copies of the renderer and tray logic**, kept in step by parity checks: replaced by
-  the shared C# core compiled to WebAssembly. JavaScript `--variant` sketches went with them;
-  `--tune` stays.
-- **`Task.Delay` / `Stopwatch` in shared code** broke the virtual clock's determinism. All time
-  comes from the host.
+  the shared core compiled to WebAssembly (first C#, now Rust). JavaScript `--variant` sketches
+  went with them; `--tune` stays.
+- **wasm-bindgen** for the browser bridge: it needs its own CLI tool matched to the crate version;
+  plain exports and imports with a small JS glue (`sim/web/core.js`) need nothing extra.
+- **Wall-clock or host-independent timers in shared code** broke the virtual clock's determinism.
+  All time comes from the host.

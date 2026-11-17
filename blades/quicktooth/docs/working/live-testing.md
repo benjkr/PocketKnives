@@ -11,7 +11,8 @@ QuickTooth. The suite-wide rules (the installed blades, the desktop) are in
   `KsProperty` line names one of the target's two IDs.
 - Always fine, because they send nothing: `--list`, `--probe`, `--battery`, `--watch-endpoints`,
   `--stress-enumerate` (it activates KS controls but sends no property), `--render-icons` and
-  `--selftest-icons`.
+  `--selftest-icons`. Some still write to the user's `quicktooth.log` (`--battery`,
+  `--watch-endpoints`): run them with a scratch profile ([testing](../specs/testing.md)).
 - **A live connect or disconnect needs the user's go in the current request.** First:
   1. Warn them (`send_to_user`) that the AirPods will connect and disconnect and must be out of the
      case.

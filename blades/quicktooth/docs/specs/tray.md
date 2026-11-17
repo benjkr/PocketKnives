@@ -1,10 +1,10 @@
 # Tray icon
 
 Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the app does now; defaults are in
-`src/QuickTooth.Core/Tunables.cs`. Keep it current in the same change as the code, and lean:
+`core/src/tunables.rs`. Keep it current in the same change as the code, and lean:
 rewrite a bullet when something changes; history goes in commits and PRs.
 
-The behaviour is `TrayController` (shared); `TrayApp` is its Windows host.
+The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Windows host.
 
 ## The icon and its text
 

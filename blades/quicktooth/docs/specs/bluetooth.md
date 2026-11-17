@@ -1,8 +1,8 @@
 # Bluetooth: finding the headset, connecting, battery
 
 Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the app does now. Keep it current in the same
-change, and lean. Windows side: `BluetoothAudio`, `Native/CoreAudio.cs`, `Native/PnpEndpoints.cs`,
-`Battery.cs`, behind `IDeviceBackend` (`WindowsDevices`).
+change, and lean. Windows side: `win/src/audio.rs` (Core Audio, KS), `pnp.rs` (cfgmgr32), `ble.rs` (the
+battery scan), on the device thread (`worker.rs`), behind the core's `DeviceBackend` (`tray.rs`).
 
 ## Finding devices
 
@@ -17,7 +17,7 @@ change, and lean. Windows side: `BluetoothAudio`, `Native/CoreAudio.cs`, `Native
 
 ## Connect and disconnect
 
-- `BluetoothAudio.SendOneShot` is the only code that sends anything to a device. It takes one
+- `Audio::send_one_shot` is the only code that sends anything to a device. It takes one
   container ID and sends `KSPROPSETID_BtAudio` {7FA06C40-B8F6-4C7E-8556-E8C33A12E54D} through
   `IKsControl::KsProperty` (Id 0 = reconnect, 1 = disconnect, flags GET, 24-byte `KSPROPERTY`) to
   every KS control of that container: A2DP first, then HFP. Each result is logged.
@@ -25,9 +25,8 @@ change, and lean. Windows side: `BluetoothAudio`, `Native/CoreAudio.cs`, `Native
   ([decisions](../working/decisions.md)).
 - The link flag (PnP property {83DA6326-97A6-4088-9453-A1923F573B29} 15 on `BTHENUM\DEV_<MAC>`)
   says whether the Bluetooth link is up; the connect's teardown wait reads it.
-- COM goes through source-generated wrappers. Every interface received is a unique instance, and
-  each enumeration or send releases them with `FinalRelease`, so KS filter handles never wait for
-  a garbage collection.
+- COM goes through the `windows` crate's generated bindings. Every interface is released when it
+  goes out of scope at the end of each enumeration or send, so KS filter handles close at once.
 - Endpoint notifications (`IMMNotificationClient`: state, added, removed) trigger a refresh.
   Hidden endpoints may not notify, hence the fast polling while an action is pending.
 
