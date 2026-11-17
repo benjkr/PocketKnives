@@ -113,8 +113,9 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
 
 - **Layout**: a list on the left, one row per page ("General", then each blade with its 16 px
   icon); the selected page on the right; OK / Cancel / Apply at the bottom. A page is the blade's
-  name in bold, one line on what it does, then plain bold headings with the controls under them.
-  No tabs, no group boxes, no separators.
+  name in bold, one line on what it does and the blade's 32 px logo at the top right, then plain
+  bold headings with the controls under them. General has no logo (the suite's can go there once
+  it exists). No tabs, no group boxes, no separators.
 - **Look**: Windows' classic controls (visual styles switched off with `SetWindowTheme`, which
   also gives the classic title bar), with the flat variant of buttons and check boxes (`BS_FLAT`)
   and 1 px black borders (`WS_BORDER`) on the list and text boxes. The system font (Segoe UI 9),
@@ -146,8 +147,8 @@ The user asked whether a modern, glassy look like the Windows 11 Settings app is
 WinUI 3 (the Windows App SDK) is Microsoft's native UI framework for that style. It has Mica, the
 navigation pane, setting cards, toggle switches and dark mode. A second throwaway prototype (WinUI 3
 from the Windows App SDK 1.6 already in the local NuGet cache, restored offline, self-contained,
-UI built in code, the same five placeholder settings) renders like this. It's dark because this PC's
-apps are set to dark:
+UI built in code, the same five placeholder settings and the same logo at the top right of a
+blade's page, here 40 px) renders like this. It's dark because this PC's apps are set to dark:
 
 ![The WinUI 3 prototype: General, SnipSnap and QuickTooth](runner-design/settings-winui.png)
 
