@@ -68,10 +68,15 @@ export class SimSettings {
     this.targetMac = init.targetMac ?? null;
     this.targetName = init.targetName ?? null;
     this.trayPromotedOnce = init.trayPromotedOnce ?? false;
+    this.lowBatteryPercent = init.lowBatteryPercent ?? null; // optional: absent = the default
     this.saves = 0;
   }
   get hasTarget() { return !!this.targetContainerId || !!this.targetMac; }
-  toJSON() { return { targetContainerId: this.targetContainerId, targetMac: this.targetMac, targetName: this.targetName, trayPromotedOnce: this.trayPromotedOnce }; }
+  toJSON() {
+    const o = { targetContainerId: this.targetContainerId, targetMac: this.targetMac, targetName: this.targetName, trayPromotedOnce: this.trayPromotedOnce };
+    if (this.lowBatteryPercent != null) o.lowBatteryPercent = this.lowBatteryPercent;
+    return o;
+  }
   save() { this.saves++; }
 }
 
@@ -123,6 +128,9 @@ export class TrayAppModel {
 
   /** The registered QuickTooth.Command.v1 message, as sent by QuickTooth.exe --toggle etc. */
   onCommand(cmd) { if (this.running) this.core.AppCommand(this.id, cmd); }
+
+  /** QuickTooth.exe --set key=value…, handed to the running tray (WM_COPYDATA): '' when applied, else the line it prints. */
+  setSettings(pairs) { return this.core.AppSet(this.id, pairs.join('\n')); }
 
   /** WM_SETTINGCHANGE ("ImmersiveColorSet" = the taskbar theme flipped). */
   onSettingChange(area) { if (this.running) this.core.AppSettingChange(this.id, area ?? null); }
@@ -178,7 +186,7 @@ export class TrayAppModel {
     const o = JSON.parse(json);
     Object.assign(this.settings, {
       targetContainerId: o.targetContainerId ?? null, targetMac: o.targetMac ?? null,
-      targetName: o.targetName ?? null, trayPromotedOnce: !!o.trayPromotedOnce,
+      targetName: o.targetName ?? null, trayPromotedOnce: !!o.trayPromotedOnce, lowBatteryPercent: o.lowBatteryPercent ?? null,
     });
     this.settings.save();
   }

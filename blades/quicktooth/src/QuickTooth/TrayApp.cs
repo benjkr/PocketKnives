@@ -65,6 +65,7 @@ internal sealed class TrayApp : ITrayHost
         // If we ever run elevated, let Explorer's broadcast and non-elevated CLI commands through UIPI.
         ChangeWindowMessageFilterEx(_hwnd, _msgTaskbarCreated, MSGFLT_ALLOW, IntPtr.Zero);
         ChangeWindowMessageFilterEx(_hwnd, _msgCommand, MSGFLT_ALLOW, IntPtr.Zero);
+        ChangeWindowMessageFilterEx(_hwnd, WM_COPYDATA, MSGFLT_ALLOW, IntPtr.Zero);
 
         _ui = new UiContext(_hwnd);
         SynchronizationContext.SetSynchronizationContext(_ui);
@@ -115,6 +116,8 @@ internal sealed class TrayApp : ITrayHost
                 case WM_TIMER:
                     c?.OnTimer((int)wParam);
                     return IntPtr.Zero;
+                case WM_COPYDATA:
+                    return c != null ? (IntPtr)(int)OnSettingsRequest(c, lParam) : IntPtr.Zero;
                 case WM_SETTINGCHANGE:
                     c?.OnSettingChange(lParam != IntPtr.Zero ? Marshal.PtrToStringUni(lParam) : null);
                     break;
@@ -146,6 +149,20 @@ internal sealed class TrayApp : ITrayHost
             Log.Error($"wndproc msg=0x{msg:X}", ex);
         }
         return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+
+    /// <summary>
+    /// QuickTooth.exe --set, sent with SendMessageTimeout(WM_COPYDATA): the key=value pairs, one per
+    /// line, in UTF-16. Returns the <see cref="SetResult"/>; 0 (not ours, or unreadable) means not handled.
+    /// </summary>
+    private static unsafe SetResult OnSettingsRequest(TrayController c, IntPtr lParam)
+    {
+        var cds = *(COPYDATASTRUCT*)lParam;
+        if (cds.dwData != Ipc.SetSettingsData || cds.cbData <= 0 || cds.cbData % 2 != 0 || cds.cbData > Ipc.SetSettingsMaxBytes || cds.lpData == IntPtr.Zero)
+            return 0;
+        string text = new((char*)cds.lpData, 0, cds.cbData / 2);
+        var change = BladeSettings.Parse(text.Split('\n'), out _);
+        return change == null ? SetResult.Invalid : c.ApplySettings(change);
     }
 
     // ------------------------------------------------------------------ ITrayHost: time

@@ -11,8 +11,8 @@ The behaviour is `TrayController` (shared); `TrayApp` is its Windows host.
 - Connected: the solid glyph with dimmed ear tips. Not connected, not available or no device: the
   hollow outline with solid ear tips. White on a dark taskbar, `#1A1A1A` on a light one (Windows
   mode, `SystemUsesLightTheme`). Low battery: the connected glyph with an orange dot in the
-  bottom-right corner while the tooltip shows a reading of 20% or less for the emptier bud, not
-  while charging; it ripples when it appears and every 3 s ([icon](icon-and-animation.md)). Rebuilt when the theme flips (`WM_SETTINGCHANGE`
+  bottom-right corner while the tooltip shows a reading at or below the low-battery warning
+  (a setting, [settings and CLI](settings-and-cli.md)) for the emptier bud, not while charging; it ripples when it appears and every 3 s ([icon](icon-and-animation.md)). Rebuilt when the theme flips (`WM_SETTINGCHANGE`
   "ImmersiveColorSet") and when the small-icon size changes (DPI or display change, checked again
   on every idle poll).
 - Tooltip and menu header: `<device> — <status>`, plus ` · <battery>` while connected and the
@@ -27,6 +27,10 @@ The behaviour is `TrayController` (shared); `TrayApp` is its Windows host.
 - Another `QuickTooth.exe` sends commands through the registered message `QuickTooth.Command.v1`
   to the window class `QuickTooth.TrayWindow`: toggle, connect, disconnect, exit, show-menu
   (anchored at the icon's top centre) and close-menu.
+- `--set` (the PocketKnives Settings window) reaches the tray as `WM_COPYDATA` and gets an answer
+  back: refused while an action is pending (logged); a headset change is applied like a Device menu
+  pick (only a device the menu offers; the same `target set:` line); a new low-battery warning
+  shows or hides the dot at once. Then the tray saves.
 
 ## Connect and disconnect
 

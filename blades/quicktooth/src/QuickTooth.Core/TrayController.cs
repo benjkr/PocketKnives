@@ -446,7 +446,7 @@ internal sealed class TrayController
 
     /// <summary>The tooltip shows a battery reading, the buds are at or below the low mark and not charging.</summary>
     private bool LowBattery() =>
-        BatteryText() != null && !_battery!.BudsCharging && _battery.Buds is int level && level <= Tunables.LowBatteryPercent;
+        BatteryText() != null && !_battery!.BudsCharging && _battery.Buds is int level && level <= _settings.LowBatteryWarning;
 
     /// <summary>Tooltip and menu header, e.g. "AirPods Pro — Connected · 30%".</summary>
     public string StatusLine() =>
@@ -658,13 +658,40 @@ internal sealed class TrayController
         if (index >= 0 && index < _menuDevices.Count && _pending == null)
         {
             var d = _menuDevices[index];
-            _settings.SetTarget(d);
+            _settings.ChooseTarget(d);
             _settings.Save();
-            Log.Info($"target set: {d.Name} {d.ContainerId:B} MAC {d.Mac}");
-            _target = d;
-            UpdateIcon();
-            RequestRefresh();
+            TargetChosen(d);
         }
+    }
+
+    private void TargetChosen(BtDevice d)
+    {
+        _target = d;
+        UpdateIcon();
+        RequestRefresh();
+    }
+
+    // ------------------------------------------------------------------ the PocketKnives Settings window
+
+    /// <summary>
+    /// QuickTooth.exe --set, handed to the running tray: refused while a connect or disconnect is
+    /// pending, a device checked against the list the Device menu offers, then applied like a menu
+    /// pick and saved.
+    /// </summary>
+    public SetResult ApplySettings(SettingsChange change)
+    {
+        if (!_running) return SetResult.Busy;
+        if (_pending != null)
+        {
+            Log.Info($"settings: ignored, {_pending} still pending");
+            return SetResult.Busy;
+        }
+        var result = BladeSettings.Check(change, _settings, _deviceList, out var device);
+        if (result != SetResult.Applied) return result;
+        result = BladeSettings.Apply(change, _settings, device);
+        if (device != null) TargetChosen(device);
+        else UpdateIcon(); // a new low-battery warning shows or hides the dot at once
+        return result;
     }
 
     // ------------------------------------------------------------------ overflow promotion
@@ -738,6 +765,7 @@ internal sealed class TrayController
             w.WriteStartObject("settings");
             if (_settings.TargetName is string tn) w.WriteString("targetName", tn); else w.WriteNull("targetName");
             w.WriteBoolean("trayPromotedOnce", _settings.TrayPromotedOnce);
+            w.WriteNumber("lowBatteryWarning", _settings.LowBatteryWarning);
             w.WriteEndObject();
             w.WriteNumber("animFrames", _animFrames);
             w.WriteEndObject();

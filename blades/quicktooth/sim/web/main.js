@@ -76,6 +76,7 @@ async function boot() {
   }
 
   let app = null;
+  let lastCli = null; // what the last qt.cli('--set …') printed
   function startApp({ firstRun = false, keepSettings = true } = {}) {
     if (app?.running) app.exit();
     if (!keepSettings || !settings) settings = makeSettings(firstRun);
@@ -105,7 +106,7 @@ async function boot() {
     get now() { return clock.now; },
 
     state() {
-      return { t: clock.now, clock: shell.clockText().time, mode: clock.mode, profile: bt.profileName, app: app.snapshot(), shell: shell.snapshot(), bt: bt.snapshot() };
+      return { t: clock.now, clock: shell.clockText().time, mode: clock.mode, profile: bt.profileName, cli: lastCli, app: app.snapshot(), shell: shell.snapshot(), bt: bt.snapshot() };
     },
     log(sinceT = 0) { return logLines.filter((l) => l.t >= sinceT).map((l) => l.line); },
     timeline(sinceT = 0) {
@@ -131,7 +132,13 @@ async function boot() {
 
     /** QuickTooth.exe command line, forwarded to the running tray like the real IPC message. */
     cli(arg) {
-      const map = { '--toggle': IPC.Toggle, '--connect': IPC.Connect, '--disconnect': IPC.Disconnect, '--exit': IPC.Exit, '--show-menu': IPC.ShowMenu, '--close-menu': IPC.CloseMenu };
+      if (arg.startsWith('--set')) {
+        // Like the exe with the tray running: the pairs go to it, and its answer is what --set prints.
+        if (!app.running) return (lastCli = 'no tray instance running');
+        lastCli = app.setSettings(arg.slice(5).trim().split(/\s+/).filter(Boolean)) || 'applied';
+        return lastCli;
+      }
+      const map ={ '--toggle': IPC.Toggle, '--connect': IPC.Connect, '--disconnect': IPC.Disconnect, '--exit': IPC.Exit, '--show-menu': IPC.ShowMenu, '--close-menu': IPC.CloseMenu };
       if (!(arg in map)) throw new Error(`unsupported: ${arg}`);
       if (!app.running) return 'no tray instance running';
       app.onCommand(map[arg]);

@@ -118,6 +118,14 @@ public static partial class Bridge
     [JSExport] internal static void AppRebuildIcons(int id) => App(id).RebuildIconsNow();
     [JSExport] internal static string AppSnapshot(int id) => App(id).SnapshotJson();
     [JSExport] internal static string AppStatusLine(int id) => App(id).StatusLine();
+
+    /// <summary>QuickTooth.exe --set handed to the running app (key=value lines): "" when applied, else the line the CLI prints.</summary>
+    [JSExport] internal static string AppSet(int id, string pairs)
+    {
+        if (BladeSettings.Parse(pairs.Split('\n'), out string error) is not { } change) return error;
+        var result = App(id).ApplySettings(change);
+        return result == SetResult.Applied ? "" : BladeSettings.Message(result);
+    }
 }
 
 /// <summary><see cref="ITrayHost"/> on the simulator page.</summary>

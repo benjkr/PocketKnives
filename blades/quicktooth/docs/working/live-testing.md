@@ -27,6 +27,10 @@ QuickTooth. The suite-wide rules (the installed blades, the desktop) are in
 - A tray CLI command (`--exit`, `--toggle`, `--connect`, `--disconnect`, `--show-menu`) acts on the
   running tray exactly like a click, from any copy of the exe. `--autostart on|off` writes the Run
   value.
+- `--settings` sends nothing and writes nothing: safe from any copy, but a scratch copy runs it with
+  `POCKETKNIVES_SETTINGS_PREVIEW=1` so it reads its own `settings.json`. `--set` changes the user's
+  settings (through the running tray, from any copy): from a scratch copy only with
+  `POCKETKNIVES_SETTINGS_PREVIEW=1`, after checking that `--settings` reads the planted file.
 - Before an install test, record three things:
   - the Run value `HKCU\…\Run\QuickTooth`;
   - the hash of `%APPDATA%\QuickTooth\settings.json`;

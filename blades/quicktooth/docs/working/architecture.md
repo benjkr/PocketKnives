@@ -37,7 +37,8 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
 - `src/QuickTooth.Core` (net10.0, no Windows APIs):
   - `TrayController.cs`: the state machine. `TrayHost.cs`: host interfaces, `IconImage`,
     `MenuItem`, `TrayCommands`.
-  - `IconRenderer.cs` (rasterizer, glyphs, animation, PNG writer), `Tunables.cs`, `Settings.cs`.
+  - `IconRenderer.cs` (rasterizer, glyphs, animation, PNG writer), `Tunables.cs`, `Settings.cs`,
+    `BladeSettings.cs` (the PocketKnives Settings contract: `--settings` lines, `--set` checks).
   - `Devices.cs` (device records, `DeviceState`, `SendLog`), `Battery.cs` (reading, Apple advert
     parser), `Log.cs`.
 - `src/QuickTooth` (Windows, Native AOT): `Program.cs`, `TrayApp.cs` (the Win32 host),

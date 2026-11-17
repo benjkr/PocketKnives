@@ -42,5 +42,8 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it do
 - `shot`, `run <scenario>` (scripted flows with assertions and optional MP4/GIF), `frames`
   (an animation contact sheet; `--compare --tune Name=value` sets numbers side by side), `parity`,
   `menu-check`, `test` (all fidelity checks and scenarios), `open` (a window with a control panel).
+- The `cli` step and `qt.cli` hand `--toggle`, `--connect`, … and `--set key=value…` to the running
+  app as the exe does (`--set` through `Bridge.AppSet`, the same core path the tray's `WM_COPYDATA`
+  takes); the page's settings keep `lowBatteryPercent` across restarts.
 - `--tune` overrides any `Tunables.cs` value by name. JavaScript animation sketches (`--variant`)
   are gone: looks are changed in `IconRenderer.cs`.

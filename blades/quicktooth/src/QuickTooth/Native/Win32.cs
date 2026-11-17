@@ -9,6 +9,7 @@ internal static class Win32
     public const int WM_DESTROY = 0x0002;
     public const int WM_CLOSE = 0x0010;
     public const int WM_SETTINGCHANGE = 0x001A;
+    public const int WM_COPYDATA = 0x004A;
     public const int WM_CONTEXTMENU = 0x007B;
     public const int WM_DISPLAYCHANGE = 0x007E;
     public const int WM_TIMER = 0x0113;
@@ -51,6 +52,7 @@ internal static class Win32
     // ---- misc ----
     public const int SM_CXSMICON = 49;
     public const uint MSGFLT_ALLOW = 1;
+    public const uint SMTO_ABORTIFHUNG = 0x2;
     public const int ATTACH_PARENT_PROCESS = -1;
     public const int STD_OUTPUT_HANDLE = -11;
     public const uint FILE_TYPE_DISK = 1;
@@ -154,6 +156,13 @@ internal static class Win32
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct COPYDATASTRUCT { public IntPtr dwData; public int cbData; public IntPtr lpData; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, int msg, IntPtr wParam, ref COPYDATASTRUCT lParam,
+        uint flags, uint timeoutMs, out IntPtr result);
 
     // menus
     [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();

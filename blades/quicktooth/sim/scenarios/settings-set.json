@@ -1,0 +1,47 @@
+{
+  "name": "settings-set",
+  "description": "QuickTooth.exe --set from the PocketKnives Settings window, handed to the running tray: a higher low-battery warning shows the dot at once and survives a restart; bad values, unknown keys and unknown headsets change nothing; a headset change waits for a pending action, then acts like a Device menu pick",
+  "options": { "profile": "fast" },
+  "region": "icon",
+  "zoom": 8,
+  "steps": [
+    { "bt": ["setBattery", "AirPods Pro", { "left": 25, "right": 30 }] },
+    { "click": "icon" },
+    { "waitFor": "s.app.pending === null", "timeout": 5000 },
+    { "waitFor": "s.app.tooltip === 'AirPods Pro — Connected · 25%' && s.app.anim === null", "timeout": 15000 },
+    { "move": "200,200" },
+    { "expect": { "app.icon": { "kind": "static", "state": "connected" }, "app.settings.lowBatteryWarning": 20 }, "label": "25% is above the default warning" },
+    { "shot": "warning-20" },
+
+    { "cli": "--set lowBattery=30" },
+    { "expect": { "cli": "applied", "log": "low battery warning set: 30%", "app.settings.lowBatteryWarning": 30, "app.anim": "LowBattery" }, "label": "the dot appears with its ripple" },
+    { "waitFor": "s.app.anim === null", "timeout": 1000 },
+    { "expect": { "app.icon": { "kind": "static", "state": "connected", "lowBattery": true } } },
+    { "shot": "warning-30" },
+
+    { "cli": "--set lowBattery=12" },
+    { "expect": { "cli": "Low battery warning can be 10%, 15%, 20%, 25% or 30%.", "app.settings.lowBatteryWarning": 30 } },
+    { "cli": "--set lowBattery=20 color=red" },
+    { "expect": { "cli": "QuickTooth has no setting called \"color\".", "app.settings.lowBatteryWarning": 30 }, "label": "one bad pair changes nothing" },
+    { "cli": "--set device={00000000-0000-4000-8000-000000000099} lowBattery=20" },
+    { "expect": { "cli": "That headset isn't available right now.", "app.settings.lowBatteryWarning": 30, "app.settings.targetName": "AirPods Pro" } },
+
+    { "cli": "--set lowBattery=20" },
+    { "expect": { "cli": "applied", "app.icon": { "kind": "static", "state": "connected" } }, "label": "back to 20: the dot goes" },
+    { "waitFor": "!s.app.timers.some((t) => t.name === 'TIMER_LOWBATTERY')", "timeout": 100, "label": "no more ripples" },
+
+    { "click": "icon" },
+    { "expect": { "app.pending": "Disconnect" } },
+    { "eval": "qt.cli('--set device=' + qt.bt.device('Studio Headset').containerId)" },
+    { "expect": { "cli": "QuickTooth is connecting or disconnecting. Try again in a moment.", "log": "settings: ignored, Disconnect still pending", "app.settings.targetName": "AirPods Pro" } },
+    { "waitFor": "s.app.pending === null", "timeout": 10000 },
+    { "eval": "qt.cli('--set device=' + qt.bt.device('Studio Headset').containerId + ' lowBattery=30')" },
+    { "expect": { "cli": "applied", "log": "target set: Studio Headset", "app.settings.targetName": "Studio Headset", "app.settings.lowBatteryWarning": 30, "app.tooltip": "Studio Headset — Not connected" } },
+    { "eval": "qt.cli('--set device=' + qt.bt.device('Studio Headset').containerId)" },
+    { "expect": { "cli": "applied", "app.settings.targetName": "Studio Headset" }, "label": "the headset already chosen is no change" },
+
+    { "eval": "qt.restartApp()" },
+    { "waitFor": "s.app.haveSnapshot", "timeout": 2000 },
+    { "expect": { "app.settings.lowBatteryWarning": 30, "app.settings.targetName": "Studio Headset" }, "label": "both were saved" }
+  ]
+}
