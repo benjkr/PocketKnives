@@ -74,13 +74,14 @@ loaded.
 | anything else | Usage; exit 2 |
 
 - Exit codes: `0` copied (or ok), `1` cancelled, `2` failed or bad usage.
-- `set` applying: with the background instance running (and not a preview) it writes the file and
-  sends the reload message (`SendMessageTimeoutW`, 5 s). Otherwise it registers the hotkeys itself
-  for a moment, the same way. If a capture being set got no key, the previous values go back in
-  the file (a value that wasn't there is removed), the instance reloads again, and `set` prints
+- `set` applying: without a running background instance (or in a preview) it first registers the
+  new hotkeys itself for a moment, the way the instance would, and writes nothing if one fails.
+  With one running, it writes the file and sends the reload message (`SendMessageTimeoutW`, 5 s);
+  if a capture being set got no key, the previous values go back in the file (a value that wasn't
+  there is removed) and the instance reloads again. Either way it then prints
   `<key> is taken by another program.` If the instance doesn't answer (an older build, or hung):
-  the file is put back and it prints `Couldn't apply the settings.` Its other lines:
-  `Not a valid setting: <pair>` and `<key> is already used by SnipSnap.`
+  the file is put back and it prints `Couldn't apply the settings.` (also when the file can't be
+  written). Its other lines: `Not a valid setting: <pair>` and `<key> is already used by SnipSnap.`
 - One-shot runs need no background instance and work alongside it. They exit about 150 ms after
   the image is on the clipboard, once the flash has faded.
 - It's a GUI program: PowerShell doesn't wait for it unless it's piped (`snipsnap full | Out-Null`)

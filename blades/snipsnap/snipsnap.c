@@ -198,12 +198,15 @@ static char *key_name(char out[96], UINT v)
         m++;
     }
     /* Windows quirk: MapVirtualKey doesn't mark the navigation keys and Num
-     * Lock as extended (so they'd be named as keypad keys), and gives PrtSc
-     * the scan code of Alt+PrtSc ("Sys Req"). */
-    if (vk == VK_SNAPSHOT) sc = 0xE037;
+     * Lock as extended (so they'd be named as keypad keys), and gives Pause an
+     * E1 scan code (named "Right Ctrl"). */
+    if (vk == VK_PAUSE) sc = 0x45;
     else if (vk - VK_PRIOR <= VK_DELETE - VK_PRIOR || vk == VK_NUMLOCK) sc |= 0xE000;
-    /* Scan code in bits 16-23, extended-key flag in bit 24. F13-F24 have no name. */
-    if (GetKeyNameTextW((LONG)((sc & 0xFF) << 16 | (sc > 0xFF) << 24), w, ARRAYSIZE(w)))
+    /* Scan code in bits 16-23, extended-key flag in bit 24. F13-F24 have no
+     * name; PrtSc is named as in FALLBACKS (Windows: "Prnt Scrn"). */
+    if (vk == VK_SNAPSHOT)
+        wsprintfA(o, "PrtSc");
+    else if (GetKeyNameTextW((LONG)((sc & 0xFF) << 16 | (sc > 0xFF) << 24), w, ARRAYSIZE(w)))
         WideCharToMultiByte(CP_UTF8, 0, w, -1, o, 96 - (int)(o - out), NULL, NULL);
     else if (vk - VK_F1 < 24)
         wsprintfA(o, "F%u", vk - VK_F1 + 1);
@@ -987,27 +990,33 @@ static int set_settings(const wchar_t *p)
             if (v[i] == v[j] && (mask >> i | mask >> j) & 1)
                 return refuse("%s is already used by SnipSnap.\n", v[i]);
 
-    if (g_ini_dir) {                    /* create the settings folder */
-        g_ini[g_ini_dir] = 0;
-        CreateDirectoryW(g_ini, NULL);
-        g_ini[g_ini_dir] = L'\\';
-    }
-    for (i = 0; i < S_COUNT; i++)
-        if (mask >> i & 1) {
-            old[i] = ini_get(i);
-            if (!ini_put(i, v[i])) bad = 8;
-        }
-    /* A running copy applies the new settings, saying which captures got no
-     * key; without one (or in a preview, which never asks it) this process
-     * registers them for a moment the same way. */
+    /* Without a running copy (or in a preview, which never asks it), check the
+     * new hotkeys first by registering them for a moment, as it would. */
     d = g_preview ? NULL : FindWindowExW(HWND_MESSAGE, NULL, DAEMON_CLASS, NULL);
+    if (!d) {
+        for (i = 0; i < S_HOTKEYS; i++)
+            if (mask >> i & 1) g_set[i] = v[i];
+        bad = register_keys(NULL) & mask & 7;
+    }
     if (!bad) {
-        DWORD_PTR r = d ? reload(d) : (DWORD_PTR)reload_keys(NULL);
+        if (g_ini_dir) {                /* create the settings folder */
+            g_ini[g_ini_dir] = 0;
+            CreateDirectoryW(g_ini, NULL);
+            g_ini[g_ini_dir] = L'\\';
+        }
+        for (i = 0; i < S_COUNT; i++)
+            if (mask >> i & 1) {
+                old[i] = ini_get(i);
+                if (!ini_put(i, v[i])) bad = 8;
+            }
+    }
+    if (d && !bad) {                    /* the running copy applies them */
+        DWORD_PTR r = reload(d);
         bad = r & RELOAD_DONE ? (int)r & mask : 8;
         if (bad) {                      /* put the previous settings back */
             for (i = 0; i < S_COUNT; i++)
                 if (mask >> i & 1) ini_put(i, old[i]);
-            if (d && bad < 8) reload(d);
+            if (bad < 8) reload(d);
         }
     }
     if (bad == 8) {
