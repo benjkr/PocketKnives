@@ -24,7 +24,7 @@ blades/<name>/              one lower-case word: the folder and exe name
 
 - **One program and one build command** with zero warnings, which an agent can point at a scratch
   folder without touching the user's installed copy (QuickTooth: `dotnet publish … -o <dir>`;
-  SnipSnap: its `cl` line with `/Fo` and `/OUT:`).
+  SnipSnap: `build.bat <dir>`).
 - **One instance per user session**, found by its window class or mutex, so a second start exits
   and a command reaches the running copy.
 - **A command line**: its one-shot actions, a way to stop the running copy, help text, and exit
@@ -33,8 +33,9 @@ blades/<name>/              one lower-case word: the folder and exe name
   and how to measure each one.
 - **Its checks**: what to run for which change, and what each check proves.
 - **A preview**: how a change is shown to the user before it ships.
-- **An install location** (`%LOCALAPPDATA%\Programs\<Name>`) and how it starts with Windows,
-  listed in [live testing](live-testing.md).
+- **A place in the PocketKnives installer** ([installer](../specs/installer.md)): its exe, a Start
+  menu entry, how it starts with Windows and its stop command, listed in
+  [live testing](live-testing.md).
 
 ## Checklist
 

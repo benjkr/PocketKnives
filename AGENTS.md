@@ -73,6 +73,7 @@ in a blade's docs are from that blade's folder.
 |---|---|
 | Building, tools, this machine's shell quirks, delegating | [Development](docs/working/development.md) |
 | Real devices, the installed blades, the user's desktop and clipboard | [Live testing](docs/working/live-testing.md) |
+| The PocketKnives installer, what goes on the user's PC | [Installer](docs/specs/installer.md) |
 | Changing something decided for the whole suite | [Decisions](docs/working/decisions.md) |
 | Final reply of a task; showing numbers | [Replies](docs/working/replies.md) |
 | Commits, branches, PRs, merges, releases, GitHub comments | [Pull requests and releases](docs/working/pull-requests.md) |

@@ -8,10 +8,11 @@ Read before committing, branching, opening or updating a PR, merging, tagging, o
   Never push to `master` unless the user asks in that request; an earlier yes doesn't carry over.
 - Commit finished work, with a message that says what changed and why, plus the harness's
   attribution trailer.
-- This repo has no remote yet. Don't add one or push unless the user asks. The original repos
-  (`quicksnip`, benjkr/quicktooth) are left as they are: never push to them from here.
+- The remote is `origin`, benjkr/PocketKnives on GitHub (public). Push only when the user asks.
+  The original repos (`quicksnip`, benjkr/quicktooth) are left as they are: never push to them
+  from here.
 
-## Pull requests (once there's a remote)
+## Pull requests
 
 - "Make PR" means: push the branch, open the PR from `.github/pull_request_template.md`, and link it
   in T3 (`link_pull_request`).

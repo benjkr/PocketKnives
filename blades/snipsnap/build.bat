@@ -1,6 +1,9 @@
 @echo off
 rem Build snipsnap.exe with MSVC. Works from any prompt; sets up VS if needed.
+rem   build.bat         builds snipsnap.exe here, stopping a running SnipSnap first
+rem   build.bat <dir>   builds <dir>\snipsnap.exe (an absolute path); stops nothing
 setlocal
+set "OUT=%~1"
 cd /d "%~dp0"
 
 if defined INCLUDE goto build
@@ -13,12 +16,16 @@ if not defined VSDIR (
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 
 :build
-rem Stop a running instance, otherwise the exe is locked and linking fails.
+if defined OUT goto compile
+set "OUT=%CD%"
+rem Stop a running instance, otherwise the exe is locked and linking fails. Any running SnipSnap
+rem is found by its window class, so this stops the user's installed copy too.
 if exist snipsnap.exe start "" /wait snipsnap.exe quit
 
-cl /nologo /W4 /WX /O1 /GS- /DSS_NOCRT snipsnap.c ^
+:compile
+cl /nologo /W4 /WX /O1 /GS- /DSS_NOCRT snipsnap.c /Fo"%OUT%\snipsnap.obj" ^
    /link /NODEFAULTLIB /ENTRY:WinMainCRTStartup /SUBSYSTEM:WINDOWS ^
-   /OPT:REF /OPT:ICF /MANIFEST:NO /OUT:snipsnap.exe ^
+   /OPT:REF /OPT:ICF /MANIFEST:NO /OUT:"%OUT%\snipsnap.exe" ^
    kernel32.lib user32.lib gdi32.lib dwmapi.lib || exit /b 1
-del /q snipsnap.obj 2>nul
-echo Built %CD%\snipsnap.exe
+del /q "%OUT%\snipsnap.obj" 2>nul
+echo Built %OUT%\snipsnap.exe

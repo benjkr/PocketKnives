@@ -22,8 +22,9 @@ what's specific to QuickTooth. Paths and commands here and in this blade's `docs
   only (container ID, then MAC), never "the first headset". Other paired devices must never receive
   a one-shot. A live test needs the user's go in that request and a warning first
   ([live testing](docs/working/live-testing.md)).
-- **Installing**: `publish.ps1` and the installer only ever install `master`'s build
-  ([build and install](docs/specs/build-and-install.md)).
+- **Installing**: on the user's PC QuickTooth comes from the PocketKnives installer, from
+  `master` ([installer](../../docs/specs/installer.md)); its own `publish.ps1` and installer
+  aren't used there ([build and install](docs/specs/build-and-install.md)).
 - **Native AOT**: JSON and COM are source-generated (no reflection), and the runtime patch pin in
   `src/Directory.Build.targets` never goes backwards. Budget: one exe of about 5.3 MB that needs no
   .NET runtime.
