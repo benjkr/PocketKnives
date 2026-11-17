@@ -51,6 +51,9 @@ internal sealed unsafe class TrayIcon(nint window, Guid identity) : IDisposable
         fixed (char* tooltip = data.Tooltip)
             Settings.Title.AsSpan().CopyTo(new Span<char>(tooltip, 128));
 
+        // A runner that was terminated (Setup force-closes one after 10 s) leaves its GUID icon
+        // registered, and NIM_ADD with that GUID then fails. Deleting a missing icon is harmless.
+        Shell_NotifyIconW(Delete, ref data);
         registered = Shell_NotifyIconW(Add, ref data) != 0;
         if (registered && Shell_NotifyIconW(SetVersion, ref data) != 0)
             return true;

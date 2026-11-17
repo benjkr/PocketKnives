@@ -55,10 +55,9 @@ Each blade stays its own exe, in whatever language suits it, and describes itsel
 manifest (`blades/<name>/blade.json`): its name, exe, whether it runs in the background, its
 one-shot commands, how to stop it, and how it starts with Windows. A small `pk` runner reads the
 manifests: it lists blades and starts, stops or checks them through their command lines. At
-sign-in the launcher would start the enabled blades. The tray icon needs a resident window host.
-PowerToys mostly
-works this way: its runner loads a small module DLL per tool, and most tools do their work in
-their own process.
+sign-in it would start the enabled blades, and it stays running to host the suite tray icon.
+PowerToys mostly works this way: its runner loads a small module DLL per tool, and most tools do
+their work in their own process.
 
 - Size, memory and latency: every blade keeps its numbers. SnipSnap stays 16 KB and about 0.5 MB.
 - Settings go through each blade's command line, so the window works the same for a C blade and a

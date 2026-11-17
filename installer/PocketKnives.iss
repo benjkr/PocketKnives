@@ -76,6 +76,8 @@ Filename: "{app}\snipsnap.exe"; Description: "Start SnipSnap now"; Flags: nowait
 Filename: "{app}\QuickTooth.exe"; Description: "Start QuickTooth now"; Flags: nowait postinstall
 
 [UninstallDelete]
+; Settings can create SnipSnap's Startup shortcut after Setup, so Setup never recorded it.
+Type: files; Name: "{userstartup}\SnipSnap.lnk"
 Type: dirifempty; Name: "{app}"
 
 [Code]
@@ -201,7 +203,7 @@ begin
     CloseQuickTooth;
     { Remove QuickTooth's "start when I sign in", but only if it points at this install. Its
       settings in %APPDATA%\QuickTooth are kept, so a reinstall remembers the chosen headset.
-      SnipSnap's Startup shortcut is one of the [Icons], so it goes by itself. }
+      SnipSnap's Startup shortcut is removed by [UninstallDelete]. }
     if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth', Value) and
        (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
       RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth');
