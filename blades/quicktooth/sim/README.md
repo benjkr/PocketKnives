@@ -171,4 +171,4 @@ There is nothing to keep in sync: the simulator runs `core/`, the same Rust as t
 
 - **Looks, animation, behaviour, menu contents, tooltip text, timings**: change `core/`. The next `qt-sim` run rebuilds the browser build; run `bun qt-sim.mjs test`.
 - **Numbers only**: `--tune` (or `qt.tune({...})`) overrides any `core/src/tunables.rs` value in the page without touching the code.
-- **The Windows side** (`src/QuickTooth/TrayApp.cs`: window, Shell_NotifyIcon, menus, HICONs; `WindowsDevices.cs`: real Bluetooth) isn't run here. Its page-side counterparts are `web/tray.js` (TrayAppModel's host methods) and `web/bluetooth.js`.
+- **The Windows side** (`win/src/tray.rs`: window, Shell_NotifyIcon, menus, HICONs; `audio.rs`, `ble.rs`: real Bluetooth) isn't run here. Its page-side counterparts are `web/tray.js` (TrayAppModel's host methods) and `web/bluetooth.js`.

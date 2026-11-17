@@ -1,7 +1,7 @@
 // The tray app in the simulator. Its behaviour is NOT reimplemented here: TrayAppModel runs the
-// app's own C# TrayController (src/QuickTooth.Core, compiled to WebAssembly, see core.js) — the
+// app's own Rust controller (core/src/controller.rs, compiled to WebAssembly, see core.js) — the
 // same code as QuickTooth.exe. This file is the simulator's stand-in for the Windows side
-// (src/QuickTooth/TrayApp.cs + WindowsDevices.cs): Win32 timers on the virtual clock, the device
+// (win/src/tray.rs and the device layer): Win32 timers on the virtual clock, the device
 // worker, the mock shell and the mock Bluetooth stack.
 //
 // Win32 timer quirk modelled here: USER timers tick on the 15.625 ms system timer, so SetTimer(83)
@@ -61,7 +61,7 @@ class DeviceWorker {
   }
 }
 
-/** The settings file (Settings.cs), kept in the page. The C# loads it at start and saves through saveSettings(). */
+/** The settings file (core/src/settings.rs), kept in the page. The core loads it at start and saves through saveSettings(). */
 export class SimSettings {
   constructor(init = {}) {
     this.targetContainerId = init.targetContainerId ?? null;
@@ -81,7 +81,7 @@ export class SimSettings {
 }
 
 /**
- * One QuickTooth tray process: the C# TrayController plus this page-side host for it. Same API the
+ * One QuickTooth tray process: the core's controller plus this page-side host for it. Same API the
  * simulator has always used (start, exit, onTrayMessage, onCommand, snapshot, timers, …).
  */
 export class TrayAppModel {
@@ -90,8 +90,8 @@ export class TrayAppModel {
    * @param {import('./clock.js').SimClock} o.clock
    * @param {import('./bluetooth.js').MockBluetooth} o.bt
    * @param {object} o.shell   mock shell (shell.js)
-   * @param {import('./icon.js').IconRenderer} o.renderer  carries the loaded C# core (renderer.core)
-   * @param {object} o.P       the C# tunables (read-only here; change them with kit.tune)
+   * @param {import('./icon.js').IconRenderer} o.renderer  carries the loaded core (renderer.core)
+   * @param {object} o.P       the core's tunables (read-only here; change them with kit.tune)
    * @param {SimSettings} o.settings
    * @param {{enabled:boolean}} o.autostart
    * @param {(line:string)=>void} o.log
@@ -149,7 +149,7 @@ export class TrayAppModel {
     return { ...s, running: this.running, autostart: this.autostart.enabled, timers: this.timers.active() };
   }
 
-  // ------------------------------------------------------------------ the host, called from C# (core.js "qt-host")
+  // ------------------------------------------------------------------ the host, called from the core (core.js "qt-host")
 
   log(line) { this._log(line); }
   nowMs() { return this.clock.now; }
