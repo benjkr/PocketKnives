@@ -139,7 +139,8 @@ with `PrintWindow`. Nobody has seen it on a screen yet.
   (`blades/quicktooth/assets/quicktooth.ico`, the same artwork as its `icon.svg`). The suite's
   logo is pixel art, only ever shown at its own sizes ([logo](../logo-concepts/README.md)): the
   window uses the largest frame of `assets/pocketknives.ico` that fits the 32 px slot (32, 48 or
-  64 px), so it's never scaled.
+  64 px), so it's never scaled. The same `.ico` is the `pk` exe's icon, and the settings window's
+  in the taskbar and the Start menu.
 - **Measured** (this prototype, both icons): an 862 KB exe with zero AOT warnings; 1.6 MB private
   working set while open; 56 ms from launch until it has painted and exited (median of 30).
   Closed, it costs nothing.
