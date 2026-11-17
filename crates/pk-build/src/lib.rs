@@ -12,7 +12,8 @@ use std::process::Command;
 
 /// Link flags for a `no_std` blade exe.
 pub fn exe() {
-    for arg in ["/NODEFAULTLIB", "/ENTRY:WinMainCRTStartup", "/SUBSYSTEM:WINDOWS", "/MANIFEST:NO"] {
+    // /DEBUG:NONE: rustc asks for a debug directory even when symbols are stripped (512 bytes).
+    for arg in ["/NODEFAULTLIB", "/ENTRY:WinMainCRTStartup", "/SUBSYSTEM:WINDOWS", "/MANIFEST:NO", "/DEBUG:NONE"] {
         println!("cargo:rustc-link-arg-bins={arg}");
     }
 }

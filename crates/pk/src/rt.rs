@@ -70,10 +70,46 @@ pub unsafe extern "C" fn bcmp(a: *const c_void, b: *const c_void, n: usize) -> i
     unsafe { memcmp(a, b, n) }
 }
 
+/// `alloc` calls `strlen` (C strings in its error paths); a byte scan with `repne scasb`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn strlen(s: *const core::ffi::c_char) -> usize {
+    let mut left: usize = usize::MAX;
+    unsafe { asm!("repne scasb", inout("rcx") left, inout("rdi") s => _, in("al") 0u8, options(nostack, readonly)) };
+    !left - 1
+}
+
 /// LLVM turns a scan for a zero `u16` into a `wcslen` call; `repne scasw` can't be turned back.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wcslen(s: *const u16) -> usize {
     let mut left: usize = usize::MAX;
     unsafe { asm!("repne scasw", inout("rcx") left, inout("rdi") s => _, in("ax") 0u16, options(nostack, readonly)) };
     !left - 1
+}
+
+/// The stack probe MSVC-target code calls before a frame larger than a page (also stable
+/// `slice::sort`'s scratch buffer): touches each 4 KB page below `rsp` in order, so the guard page
+/// grows the stack instead of being skipped. `rax` holds the size; only flags change, and the
+/// caller moves `rsp` itself (the same contract as the C runtime's and compiler-rt's).
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __chkstk() {
+    core::arch::naked_asm!(
+        "push rcx",
+        "push rax",
+        "cmp rax, 0x1000",
+        "lea rcx, [rsp + 24]",
+        "jb 3f",
+        "2:",
+        "sub rcx, 0x1000",
+        "test qword ptr [rcx], rcx",
+        "sub rax, 0x1000",
+        "cmp rax, 0x1000",
+        "ja 2b",
+        "3:",
+        "sub rcx, rax",
+        "test qword ptr [rcx], rcx",
+        "pop rax",
+        "pop rcx",
+        "ret",
+    )
 }
