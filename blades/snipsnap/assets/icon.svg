@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>SnipSnap</title>
+  <defs>
+    <linearGradient id="frame" x1="0" y1="8" x2="0" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5BA3FF"/><stop offset=".1" stop-color="#2A7AF2"/>
+      <stop offset=".22" stop-color="#0757DE"/><stop offset=".24" stop-color="#0A52D4"/>
+      <stop offset="1" stop-color="#0845C2"/>
+    </linearGradient>
+    <linearGradient id="close" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2A58A"/><stop offset=".45" stop-color="#DE5A33"/><stop offset="1" stop-color="#B83510"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="19" x2="0" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2F7FEA"/><stop offset="1" stop-color="#A6D3FF"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="33" x2="0" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#86D957"/><stop offset="1" stop-color="#2E8B1F"/>
+    </linearGradient>
+    <clipPath id="body"><rect x="7.5" y="19" width="49" height="32.5"/></clipPath>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx=".8" dy="1.6" stdDeviation="1.3" flood-color="#00133F" flood-opacity=".4"/>
+    </filter>
+    <filter id="cshadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="1" dy="1" stdDeviation=".6" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+  </defs>
+
+  <!-- window -->
+  <g filter="url(#shadow)">
+    <path d="M5 54V14Q5 8 11 8H53Q59 8 59 14V54Z" fill="url(#frame)" stroke="#0B2E8C"/>
+    <path d="M6.5 14Q6.5 9.5 11 9.5H53Q57.5 9.5 57.5 14" fill="none" stroke="#B5D3FF" stroke-opacity=".8"/>
+    <rect x="7.5" y="19" width="49" height="32.5" fill="url(#sky)" stroke="#0B3FB0" stroke-width=".6"/>
+  </g>
+
+  <!-- scene -->
+  <g clip-path="url(#body)">
+    <g fill="#fff" fill-opacity=".9">
+      <ellipse cx="15" cy="25" rx="5" ry="1.8"/><ellipse cx="17.5" cy="23.6" rx="3" ry="1.8"/>
+      <ellipse cx="47" cy="23.5" rx="4.2" ry="1.5"/><ellipse cx="49" cy="22.4" rx="2.4" ry="1.4"/>
+    </g>
+    <path d="M7.5 41C18 33 29 34 38 38.5S51 36.5 56.5 34.5V51.5H7.5Z" fill="url(#hill)"/>
+  </g>
+
+  <!-- close button -->
+  <rect x="48.5" y="10.5" width="7" height="7" rx="1.5" fill="url(#close)" stroke="#fff" stroke-width=".8"/>
+  <path d="M50.6 12.6L53.4 15.4M53.4 12.6L50.6 15.4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+
+  <!-- selection -->
+  <rect x="21" y="26" width="23" height="16" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-width="2"/>
+  <rect x="21" y="26" width="23" height="16" fill="none" stroke="#10245A" stroke-width="2" stroke-dasharray="3 2.5"/>
+  <g fill="#fff" stroke="#10245A" stroke-width=".8">
+    <rect x="19.5" y="24.5" width="3" height="3"/><rect x="42.5" y="24.5" width="3" height="3"/>
+    <rect x="19.5" y="40.5" width="3" height="3"/>
+  </g>
+
+  <!-- cursor, tip on the selection corner -->
+  <path transform="translate(44 42) scale(.9)" filter="url(#cshadow)"
+        d="M0 0V16.5L3.8 12.9L6.3 18.7L9 17.6L6.5 11.8H11.8Z"
+        fill="#fff" stroke="#000" stroke-width="1.25" stroke-linejoin="round"/>
+</svg>
