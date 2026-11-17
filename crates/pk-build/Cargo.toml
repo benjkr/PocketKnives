@@ -1,0 +1,10 @@
+[package]
+name = "pk-build"
+version = "0.1.0"
+description = "Build-script helpers for PocketKnives blade exes: the no-CRT link flags and Windows resources."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

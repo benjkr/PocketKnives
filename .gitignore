@@ -1,2 +1,5 @@
 installer/obj/
 dist/
+
+# Rust build output (the workspace at the repo root)
+/target/

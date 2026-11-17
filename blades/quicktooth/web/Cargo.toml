@@ -1,0 +1,16 @@
+[package]
+name = "quicktooth-web"
+version = "0.1.0"
+description = "QuickTooth's shared core compiled to WebAssembly for the browser simulator (sim/)."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+quicktooth-core.workspace = true
+
+[lints]
+workspace = true

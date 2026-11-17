@@ -1,0 +1,49 @@
+# The PocketKnives Rust workspace: the shared `pk` crate and the Rust blades.
+# The runner (runner/) is C#; it isn't part of this workspace.
+[workspace]
+resolver = "3"
+members = [
+    "crates/pk",
+    "crates/pk-build",
+    "blades/quicktooth/core",
+    "blades/quicktooth/win",
+    "blades/quicktooth/web",
+    "blades/snipsnap",
+]
+# The simulator's WebAssembly build is only built for wasm32 (sim/lib/core-build.mjs).
+default-members = [
+    "crates/pk",
+    "crates/pk-build",
+    "blades/quicktooth/core",
+    "blades/quicktooth/win",
+    "blades/snipsnap",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.dependencies]
+pk = { path = "crates/pk" }
+quicktooth-core = { path = "blades/quicktooth/core" }
+windows-sys = "0.61"
+windows = { version = "0.62", default-features = false }
+windows-core = { version = "0.62", default-features = false }
+libm = "0.2"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+# One small exe per blade: size-optimised, whole-program LTO, no unwinding, no symbols.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+
+[profile.dev]
+panic = "abort"

@@ -1,0 +1,7 @@
+# Zero warnings is a build rule (AGENTS.md): every warning in this workspace fails the build.
+# Build scripts and dependencies are built for the host too, but cargo caps lints for registry crates.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-D", "warnings"]
+
+[target.wasm32-unknown-unknown]
+rustflags = ["-D", "warnings"]

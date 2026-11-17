@@ -1,0 +1,15 @@
+[package]
+name = "quicktooth-core"
+version = "0.1.0"
+description = "QuickTooth's behaviour and looks, with no Windows APIs: shared by the exe and the browser simulator."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Exact maths (sqrt, floor, ...) on every target, and sin/cos/pow in the browser build. The exe
+# takes sin/cos/pow from the Windows C runtime instead, as .NET did (see src/math.rs).
+libm.workspace = true
+
+[lints]
+workspace = true
