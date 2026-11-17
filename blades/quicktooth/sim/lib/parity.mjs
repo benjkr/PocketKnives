@@ -1,7 +1,7 @@
 // `qt-sim parity`: renders the icon check sheets with the real app (QuickTooth.exe --render-icons)
-// and with the simulator's JS port, then diffs them pixel by pixel. Fails if they drift apart.
+// and with the simulator's WebAssembly build of the same code, then diffs them pixel by pixel. Fails if they drift apart.
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,7 +9,7 @@ import { launch, ORIGIN, REPO_ROOT } from './browser.mjs';
 
 const run = promisify(execFile);
 
-// The simulator draws with the app's own C# renderer (src/QuickTooth.Core, compiled to WebAssembly),
+// The simulator draws with the app's own Rust renderer (core/, compiled to WebAssembly),
 // so the sheets should match QuickTooth.exe's to within 1 level: the only differences come from
 // the browser's and Windows' maths libraries (sin/cos/pow) rounding a few edge pixels the other way.
 // Measured (Nov 2026): static mean |Δ| 0.03, anim 0.05, max 1 in both.
@@ -27,39 +27,24 @@ function check(name, r) {
   return failures;
 }
 
-// What `dotnet build -c Release` produces (publish.ps1 stages a native build under bin\publish).
-const BUILT_EXE = path.join(REPO_ROOT, 'src', 'QuickTooth', 'bin', 'Release', 'net10.0-windows10.0.19041.0', 'win-x64', 'QuickTooth.exe');
-
-async function findExe(justBuilt) {
-  if (justBuilt && await stat(BUILT_EXE).catch(() => null)) return BUILT_EXE;
-  const base = path.join(REPO_ROOT, 'src', 'QuickTooth', 'bin');
-  const hits = [];
-  async function walk(dir) {
-    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) await walk(p);
-      else if (e.name.toLowerCase() === 'quicktooth.exe') hits.push({ p, t: (await stat(p)).mtimeMs });
-    }
-  }
-  await walk(base);
-  hits.sort((a, b) => b.t - a.t);
-  return hits[0]?.p;
-}
+// What `cargo build --release -p quicktooth` produces (the Cargo workspace is the repository root).
+const WORKSPACE = path.resolve(REPO_ROOT, '..', '..');
+const BUILT_EXE = path.join(WORKSPACE, 'target', 'release', 'QuickTooth.exe');
 
 export async function parity({ outDir, build = true, exe, log = console.log }) {
   await mkdir(outDir, { recursive: true });
   if (!exe) {
     if (build) {
-      log('building src/QuickTooth (Release)…');
-      // Build only: publish.ps1 would install and start the tray app.
-      await run('dotnet', ['build', path.join(REPO_ROOT, 'src/QuickTooth/QuickTooth.csproj'), '-c', 'Release', '-nologo', '-v', 'q'], { cwd: REPO_ROOT, windowsHide: true, maxBuffer: 1 << 24 });
+      log('building quicktooth (release)…');
+      // Build only: nothing is installed or started.
+      await run('cargo', ['build', '--release', '-p', 'quicktooth', '--quiet'], { cwd: WORKSPACE, windowsHide: true, maxBuffer: 1 << 24 });
     }
-    exe = await findExe(build);
-    if (!exe) throw new Error('QuickTooth.exe not found under src/QuickTooth/bin; build it first (dotnet build src/QuickTooth -c Release)');
+    if (!await stat(BUILT_EXE).catch(() => null)) throw new Error('target/release/QuickTooth.exe not found; build it first (cargo build --release -p quicktooth)');
+    exe = BUILT_EXE;
   }
   const refDir = path.join(os.tmpdir(), `qt-sim-parity-${process.pid}`);
   await mkdir(refDir, { recursive: true });
-  log(`real renderer: ${path.relative(REPO_ROOT, exe)} --render-icons`);
+  log(`real renderer: ${path.relative(WORKSPACE, exe)} --render-icons`);
   // --render-icons is a CLI mode: draws to PNGs and exits; it never starts the tray.
   await run(exe, ['--render-icons', refDir], { windowsHide: true });
 
