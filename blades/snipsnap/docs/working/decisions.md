@@ -17,6 +17,8 @@ reintroduce these.
 - **A faster opt-level than `z`**: `"s"` made the exe 21.5 KB and 2 or 3 made it 25–26 KB, for
   nothing: at `z` the dimming (SSE2) and the 24-bit rows (8+4-byte stores) were already as fast as
   the C build's `/O1` loops or faster, and the paint is GDI either way.
+- **Ordinary stores in the dimming**: 3.6 ms on a 4480×1440 screen; streaming them past the
+  cache, 2.6 ms (the C loop: 4.1 ms).
 
 ## Behaviour and look
 

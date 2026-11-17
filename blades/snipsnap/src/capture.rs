@@ -250,10 +250,12 @@ unsafe extern "system" fn collect_window(w: HWND, _: LPARAM) -> i32 {
     if r.right <= r.left || r.bottom <= r.top {
         return 1;
     }
+    // The class name with its zero: both desktop classes have 7 letters.
+    const PROGMAN: [u16; 8] = crate::wide(b"Progman\0");
+    const WORKERW: [u16; 8] = crate::wide(b"WorkerW\0");
     let mut cls = [0u16; 16];
-    let len = unsafe { GetClassNameW(w, cls.as_mut_ptr(), 16) }.max(0) as usize;
-    let cls = &cls[..len];
-    let desktop = crate::is(cls, b"Progman") || crate::is(cls, b"WorkerW");
+    unsafe { GetClassNameW(w, cls.as_mut_ptr(), 16) };
+    let desktop = cls[..8] == PROGMAN || cls[..8] == WORKERW;
     // EnumWindows calls back on this thread, one window at a time.
     unsafe { (*WINS.ptr())[n] = Win { r, desktop } };
     NWINS.set(n + 1);
@@ -356,7 +358,7 @@ fn open_clipboard(owner: HWND) -> bool {
 /// Copies a sub-rectangle of a shot to the clipboard as a 24 bpp bottom-up DIB.
 fn to_clipboard(owner: HWND, s: &Shot, rx: i32, ry: i32, w: i32, h: i32) -> bool {
     const HEADER: usize = size_of::<BITMAPINFOHEADER>();
-    let stride = (w as usize * 3 + 3) & !3;
+    let stride = pixels::dib24_stride(w);
     let bytes = stride * h as usize;
     let g = unsafe { GlobalAlloc(GMEM_MOVEABLE, HEADER + bytes) };
     if g.is_null() {
@@ -378,7 +380,7 @@ fn to_clipboard(owner: HWND, s: &Shot, rx: i32, ry: i32, w: i32, h: i32) -> bool
     unsafe { bh.write_unaligned(hdr) };
     // The block holds the header and then `bytes` of pixel rows.
     let dst = unsafe { core::slice::from_raw_parts_mut((bh as *mut u8).add(HEADER), bytes) };
-    pixels::dib24(s.px(), s.w as usize, rx as usize, ry as usize, w as usize, h as usize, stride, dst);
+    pixels::dib24(s.px(), s.w, rx, ry, w, h, dst);
     unsafe { GlobalUnlock(g) };
 
     let mut ok = false;

@@ -1,7 +1,7 @@
 //! The pixel work on the hot paths: the dimmed copy (before the overlay shows), the overlay's
 //! repaint and the 24-bit clipboard rows (after the click). No state of its own, so the loop
 //! benchmark builds this file as it is.
-use core::arch::x86_64::{__m128i, _mm_and_si128, _mm_loadu_si128, _mm_set1_epi32, _mm_srli_epi32, _mm_storeu_si128};
+use core::arch::x86_64::{__m128i, _mm_and_si128, _mm_loadu_si128, _mm_set1_epi32, _mm_sfence, _mm_srli_epi32, _mm_stream_si128};
 use windows_sys::Win32::Foundation::RECT;
 use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, ExcludeClipRect, FrameRect, HBRUSH, HDC, InflateRect, IntersectRect, RestoreDC, SRCCOPY, SaveDC,
@@ -12,25 +12,44 @@ use windows_sys::Win32::Graphics::Gdi::{
 pub fn dim(src: &[u32], dst: &mut [u32]) {
     // SSE2 is part of x86-64, so the intrinsics' only requirement holds.
     let mask = unsafe { _mm_set1_epi32(0x7F7F7F) };
-    let mut s = src.chunks_exact(4);
-    let mut d = dst.chunks_exact_mut(4);
-    for (s, d) in (&mut s).zip(&mut d) {
-        // Each chunk is 4 pixels, 16 bytes: in bounds for an unaligned load and store.
+    let len = src.len().min(dst.len());
+    // A DIB section's pixels are page-aligned: then all but the last few go four at a time,
+    // stored straight to memory past the cache, which the image is far bigger than (a third
+    // faster here). The rest, or everything if `dst` isn't aligned, one at a time.
+    let n = if dst.as_ptr() as usize % 16 == 0 { len & !3 } else { 0 };
+    let (s, d) = (src.as_ptr(), dst.as_mut_ptr());
+    let mut i = 0;
+    while i < n {
+        // i + 4 <= n <= len: in bounds; d + i is 16-byte aligned.
         unsafe {
-            let v = _mm_loadu_si128(s.as_ptr() as *const __m128i);
-            _mm_storeu_si128(d.as_mut_ptr() as *mut __m128i, _mm_and_si128(_mm_srli_epi32(v, 1), mask));
+            let v = _mm_loadu_si128(s.add(i) as *const __m128i);
+            _mm_stream_si128(d.add(i) as *mut __m128i, _mm_and_si128(_mm_srli_epi32(v, 1), mask));
         }
+        i += 4;
     }
-    for (s, d) in s.remainder().iter().zip(d.into_remainder()) {
-        *d = (*s >> 1) & 0x7F7F7F;
+    unsafe { _mm_sfence() };
+    while i < len {
+        unsafe { *d.add(i) = (*s.add(i) >> 1) & 0x7F7F7F };
+        i += 1;
     }
 }
 
+/// The length of a 24 bpp DIB row `w` pixels wide: padded to 4 bytes.
+pub fn dib24_stride(w: i32) -> usize {
+    (w as usize).wrapping_mul(3).wrapping_add(3) & !3
+}
+
 /// The `w`×`h` area at (`rx`, `ry`) of a top-down 32 bpp image `src_w` pixels wide, as the rows
-/// of a bottom-up 24 bpp DIB, `stride` bytes each with the padding zeroed, into `dst`. Does
-/// nothing if the area isn't inside both.
-pub fn dib24(src: &[u32], src_w: usize, rx: usize, ry: usize, w: usize, h: usize, stride: usize, dst: &mut [u8]) {
-    if rx + w > src_w || (ry + h) * src_w > src.len() || w * 3 > stride || stride * h > dst.len() {
+/// of a bottom-up 24 bpp DIB, the padding zeroed, into `dst`. Does nothing if the area isn't
+/// inside both.
+pub fn dib24(src: &[u32], src_w: i32, rx: i32, ry: i32, w: i32, h: i32, dst: &mut [u8]) {
+    // None negative: then each is below 2^31, and no sum or product below can wrap.
+    if src_w | rx | ry | w | h < 0 {
+        return;
+    }
+    let (src_w, rx, ry, w, h) = (src_w as usize, rx as usize, ry as usize, w as usize, h as usize);
+    let stride = dib24_stride(w as i32);
+    if rx + w > src_w || (ry + h) * src_w > src.len() || stride * h > dst.len() {
         return;
     }
     for y in 0..h {

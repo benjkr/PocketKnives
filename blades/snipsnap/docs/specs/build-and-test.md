@@ -16,8 +16,8 @@ current in the same change, and lean.
     in code) and `/DEBUG:NONE`, which keeps a debug directory out of `.rdata`.
   - The code: `src/main.rs` (defaults, command line, output, settings, hotkeys, the background
     instance), `src/capture.rs` (captures, overlay, clipboard, flash) and `src/pixels.rs` (the
-    dimming, the overlay paint and the 24-bit rows; SSE2 and 8+4-byte stores, which every x64 CPU
-    has).
+    dimming with SSE2 and streaming stores, which every x64 CPU has; the overlay paint; the 24-bit
+    rows with 8+4-byte stores).
 - The exe is 20,480 bytes and imports only `KERNEL32`, `USER32`, `GDI32` and `dwmapi`. Sections
   are padded to 512 bytes, so growth comes in those steps.
 - `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window.
