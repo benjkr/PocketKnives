@@ -1,9 +1,9 @@
 # Adding a blade
 
-Read before starting a new blade or importing an existing tool as one. How blades are launched
-together, what code they share and which language a new blade uses by default aren't decided yet
-([runner design](runner-design.md)). Until then, ask the user which language a new blade is
-written in. Every blade gets a page with its icon in the [settings window](../specs/runner.md).
+Read before starting a new blade or importing an existing tool as one. A new blade is Rust,
+`no_std` on the shared `crates/pk`, in the Cargo workspace at the root
+([decisions](decisions.md)); QuickTooth shows the whole path, including a core that also runs in a
+browser simulator. Every blade gets a page with its icon in the [settings window](../specs/runner.md).
 
 ## Folder layout
 
@@ -14,14 +14,15 @@ blades/<name>/              one lower-case word: the folder and exe name
   assets/icon.svg           its logo, shown in the root README
   docs/specs/<area>.md      what each area does now
   docs/working/<topic>.md   only the blade-specific working rules it needs
-  .gitignore                its own build output
-  …                         source and the build script
+  Cargo.toml, build.rs      its crate (a member of the root workspace; build.rs calls
+                            `pk_build::exe()`, and `pk_build::resources` for an icon)
+  src/main.rs               `#![no_std]`, `#![no_main]`, `pk::entry!(main)`
 ```
 
 ## What a blade provides
 
 - **One program and one build command** with zero warnings, which an agent can point at a scratch
-  folder without touching the user's installed copy (QuickTooth: `dotnet publish … -o <dir>`;
+  folder without touching the user's installed copy (QuickTooth: `cargo build --release -p quicktooth --target-dir <dir>`;
   SnipSnap: `build.bat <dir>`).
 - **One instance per user session**, found by its window class or mutex, so a second start exits
   and a command reaches the running copy.

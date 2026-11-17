@@ -8,24 +8,28 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it do
 - A copy of the Windows 11 taskbar in Playwright's bundled Chromium (never Chrome or Edge) with
   QuickTooth's icon, tooltip and menu. It's for seeing and testing changes without the real
   taskbar, including while the PC is locked.
-- **Real**: the app's own code. `src/QuickTooth.Core` is compiled to WebAssembly by
-  `src/QuickTooth.Web`: the renderer, `TrayController` and `Tunables`, so the same pixels, timers
-  and log lines as the exe.
+- **Real**: the app's own code. The core (`core/`) is compiled to WebAssembly through `web/`: the
+  renderer, the controller and the tunables, so the same pixels, timers and log lines as the exe.
 - **Simulated**: Windows' own drawing of the taskbar, tray, tooltip and menu (`web/shell.js`,
   `web/menu.js`, measured from real captures in `reference/`). Also Win32 timers on the 15.625 ms
   system tick (`SetTimer(83)` fires every 94.8 ms), the device worker (`web/tray.js`) and Bluetooth
   (`web/bluetooth.js`).
 
-## How the page runs the C#
+## How the page runs the core
 
-- `lib/core-build.mjs` rebuilds `src/QuickTooth.Web` into `sim/web/core` whenever the core's
-  sources change; every launch prints `app core: …` with the build it uses. It needs the .NET 10
-  SDK, with no workload.
-- `web/core.js` loads it and supplies the `qt-host` imports. Each app instance gets its own JS
-  host object (`TrayAppModel` in `web/tray.js`), so after `qt.restartApp()` the old app's leftover
-  work still lands on its own stopped timers.
-- `InlineContext` (C#) runs await continuations as soon as the awaited JS promise settles. Without
-  it, .NET resumes them a browser turn later, after the virtual clock has moved on.
+- `lib/core-build.mjs` rebuilds the `quicktooth-web` crate for `wasm32-unknown-unknown` into
+  `sim/web/core` whenever the core, `web/`, the glyphs or the Cargo files change; every launch
+  prints `app core: …` with the build it uses. It needs only Rust (the repo's toolchain pin adds the
+  target).
+- `web/core.js` loads the `.wasm` and supplies the `qt-host` imports; it keeps the same `core`
+  object the rest of the page calls (`RenderStatic`, `AppCreate`, …). The ABI is plain numbers:
+  UTF-8 strings by pointer and length, host objects by handle, and an async import takes an op ID
+  the page completes with `qt_complete` once its promise settles (`web/src/lib.rs` documents it).
+  Each app instance gets its own JS host object (`TrayAppModel` in `web/tray.js`), so after
+  `qt.restartApp()` the old app's leftover work still lands on its own stopped timers.
+- Woken tasks run as soon as the awaited promise settles, in order and never nested
+  (`exec::Inline`, what C#'s `InlineContext` did), not a browser turn later, after the virtual
+  clock has moved on.
 - One virtual clock drives everything: manual mode for agents (deterministic, seeded RNG), real
   time for recordings. A screenshot at t shows exactly that moment.
 
@@ -43,7 +47,7 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it do
   (an animation contact sheet; `--compare --tune Name=value` sets numbers side by side), `parity`,
   `menu-check`, `test` (all fidelity checks and scenarios), `open` (a window with a control panel).
 - The `cli` step and `qt.cli` hand `--toggle`, `--connect`, … and `--set key=value…` to the running
-  app as the exe does (`--set` through `Bridge.AppSet`, the same core path the tray's `WM_COPYDATA`
+  app as the exe does (`--set` through `AppSet`, the same core path the tray's `WM_COPYDATA`
   takes); the page's settings keep `lowBatteryPercent` across restarts.
-- `--tune` overrides any `Tunables.cs` value by name. JavaScript animation sketches (`--variant`)
-  are gone: looks are changed in `IconRenderer.cs`.
+- `--tune` overrides any value in `core/src/tunables.rs` by name. JavaScript animation sketches
+  (`--variant`) are gone: looks are changed in `core/src/icon`.

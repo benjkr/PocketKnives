@@ -50,9 +50,9 @@ Two smaller things help as well:
 
 ## Install
 
-You need Windows 11 (or Windows 10 2004+). Nothing else: QuickTooth is a single native exe of about 5 MB, with no .NET runtime to install.
+You need Windows 11 (or Windows 10 2004+). Nothing else: QuickTooth is a single exe of about 0.3 MB, with no runtime to install.
 
-To build it yourself you need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and Visual Studio (or its Build Tools) with "Desktop development with C++", for the native linker.
+To build it yourself you need [Rust](https://rustup.rs) (the repo pins the version) and Visual Studio (or its Build Tools) with "Desktop development with C++", for the linker and the Windows SDK.
 
 ```powershell
 cd blades\quicktooth     # in a PocketKnives checkout
@@ -89,23 +89,23 @@ Settings live in `%APPDATA%\QuickTooth\settings.json`. Every connect and disconn
 - **Battery.** Windows doesn't expose battery for AirPods. AirPods broadcast their own status over Bluetooth Low Energy while out of the case, and QuickTooth listens briefly and passively, without connecting, and reads the level from that. Other headsets show the battery level Windows reports, if any.
 - **Live status.** It comes from Windows' audio notifications, checked every 0.5 s while connecting and every 20 s otherwise.
 
-The source is in `src/`:
+The source is Rust, in three crates:
 
 | File | What it does |
 | --- | --- |
-| `QuickTooth.Core/TrayController.cs` | the tray behaviour: connect/disconnect, timeouts, tooltip, menu |
-| `QuickTooth.Core/IconRenderer.cs` | drawing the icons and their animation |
-| `QuickTooth.Core/Tunables.cs` | every timing and animation number |
-| `QuickTooth/TrayApp.cs` | the Windows side of the tray icon (window, notification icon, menu) |
-| `QuickTooth/BluetoothAudio.cs` | finding the headset and sending connect/disconnect |
-| `QuickTooth/Battery.cs` | reading the battery broadcast |
-| `QuickTooth/Native/` | Windows interop |
+| `core/src/controller.rs` | the tray behaviour: connect/disconnect, timeouts, tooltip, menu |
+| `core/src/icon/` | drawing the icons and their animation |
+| `core/src/tunables.rs` | every timing and animation number |
+| `win/src/tray.rs` | the Windows side of the tray icon (window, notification icon, menu) |
+| `win/src/audio.rs` | finding the headset and sending connect/disconnect |
+| `win/src/ble.rs` | reading the battery broadcast |
+| `win/src/cli.rs` | the command-line options |
 
-`QuickTooth.Core` has no Windows code: the same C# runs in the app and, compiled to WebAssembly (`QuickTooth.Web`), in the simulator below.
+`core/` has no Windows code: the same Rust runs in the app and, compiled to WebAssembly (`web/`), in the simulator below.
 
 `tools/airpods_glyph.py` regenerates the tray icons (`assets/airpods-pro-*.svg`); it needs `pip install shapely`.
 
-`sim/` is a browser simulator of the Windows 11 taskbar that runs QuickTooth's own code (`src/QuickTooth.Core`) against a mocked Bluetooth stack with tunable delays. It's for previewing and testing changes without a real taskbar. See [`sim/README.md`](sim/README.md).
+`sim/` is a browser simulator of the Windows 11 taskbar that runs QuickTooth's own code (`core/`) against a mocked Bluetooth stack with tunable delays. It's for previewing and testing changes without a real taskbar. See [`sim/README.md`](sim/README.md).
 
 Working on QuickTooth (people and coding agents alike): start with the suite's [`AGENTS.md`](../../AGENTS.md), then this blade's [`AGENTS.md`](AGENTS.md). Together they have the rules every change follows, and this blade's points to a spec for each area in `docs/specs/`.
 

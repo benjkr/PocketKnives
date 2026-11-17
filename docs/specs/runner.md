@@ -34,8 +34,8 @@
 ## Build and preview
 
 Build with [the suite installer script](installer.md). It stages the runner and its Windows 11
-settings app under `installer/obj/app`. Both are Native AOT and use the same .NET runtime pin as
-QuickTooth. The WinUI app carries its Windows App SDK runtime and starts only for that look.
+settings app under `installer/obj/app`. Both are Native AOT and share the runner's .NET runtime pin
+(`runner/Directory.Build.targets`). The WinUI app carries its Windows App SDK runtime and starts only for that look.
 
 From a scratch copy of that stage, run `pk --preview`, then click the tray icon or run
 `pk --preview settings`. Preview instances use their own tray identity and save changes to

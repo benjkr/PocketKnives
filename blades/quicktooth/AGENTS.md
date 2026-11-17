@@ -1,8 +1,9 @@
 # AGENTS.md: QuickTooth
 
 QuickTooth: a Windows 11 notification-area icon that connects or disconnects the user's AirPods in
-one click, in about 1–3 s instead of ~16 s through Quick Settings. C# / .NET 10, shipped as one
-Native AOT exe. The same app code also runs in a browser simulator of the taskbar.
+one click, in about 1–3 s instead of ~16 s through Quick Settings. Rust, `no_std`, shipped as one
+small exe that needs no runtime. The same app code also runs in a browser simulator of the taskbar
+(WebAssembly).
 
 **The suite's [`AGENTS.md`](../../AGENTS.md) comes first**: its rules hold here too. This file adds
 what's specific to QuickTooth. Paths and commands here and in this blade's `docs/` are from
@@ -10,11 +11,11 @@ what's specific to QuickTooth. Paths and commands here and in this blade's `docs
 
 ## Rules for QuickTooth
 
-- **One codebase, two hosts.** Behaviour and looks live in `src/QuickTooth.Core`, which has no
-  Windows APIs: the icon and its animation, the tray state machine, tooltip and menu text,
-  settings, and every timing number (`Tunables.cs`). The Windows app (`src/QuickTooth`) and the
-  simulator's WebAssembly build (`src/QuickTooth.Web`) only adapt the platform. Never copy core
-  logic into JavaScript or a host ([architecture](docs/working/architecture.md)).
+- **One codebase, two hosts.** Behaviour and looks live in `core/` (the `quicktooth-core` crate),
+  which has no Windows APIs: the icon and its animation, the tray state machine, tooltip and menu
+  text, settings, and every timing number (`core/src/tunables.rs`). The Windows app (`win/`) and
+  the simulator's WebAssembly build (`web/`) only adapt the platform. Never copy core logic into
+  JavaScript or a host ([architecture](docs/working/architecture.md)).
 - **Show it in the simulator before it ships.** A change to what the tray looks like or does is
   previewed from `sim/` (stills, recordings, before/after), and `bun qt-sim.mjs test` passes on
   the final code.
@@ -25,17 +26,19 @@ what's specific to QuickTooth. Paths and commands here and in this blade's `docs
 - **Installing**: on the user's PC QuickTooth comes from the PocketKnives installer, from
   `master` ([installer](../../docs/specs/installer.md)); its own `publish.ps1` and installer
   aren't used there ([build and install](docs/specs/build-and-install.md)).
-- **Native AOT**: JSON and COM are source-generated (no reflection), and the runtime patch pin in
-  `src/Directory.Build.targets` never goes backwards. Budget: one exe of about 5.3 MB that needs no
-  .NET runtime.
+- **The exe**: `no_std` on the suite's `crates/pk`; COM and WinRT through the `windows` crate
+  (no hand-written vtables), plain Win32 through `windows-sys`; no new crates without the user's
+  say. Budget: one exe of about 0.3 MB that imports only Windows DLLs, about 1.3 MB private working
+  set in the background, start-up and enumeration no slower than the C# build was
+  ([build and install](docs/specs/build-and-install.md)).
 - **The log**: `quicktooth.log` lines are compared across builds, the simulator and live runs.
 
 ## Running things
 
 - Use a top model and high effort for the rasterizer, COM/interop and timing races.
-- In the foreground: native AOT publish (~1 min), `bun qt-sim.mjs test` (~1 min), browser core
-  build (5–10 s). In the background, with `t3_background_wait`: real-time recordings and anything
-  longer.
+- In the foreground: `cargo build --release -p quicktooth` (a few seconds; ~30 s from clean),
+  `bun qt-sim.mjs test` (~1 min, browser core rebuild included). In the background, with
+  `t3_background_wait`: real-time recordings and anything longer.
 
 ## Verification
 
@@ -66,7 +69,7 @@ Replies, pull requests, this machine's quirks and the desktop rules are suite-wi
 | Finding the headset, one-shot connect/disconnect, link state, notifications, battery | [bluetooth](docs/specs/bluetooth.md) |
 | `settings.json`, PocketKnives Settings (`--settings`, `--set`), the log, command-line options, single instance | [settings and CLI](docs/specs/settings-and-cli.md) |
 | The browser simulator: what's real, the bridge, mock Bluetooth, commands | [simulator](docs/specs/simulator.md) |
-| Native AOT build, runtime pin, installer, `publish.ps1`, what gets installed, releases | [build and install](docs/specs/build-and-install.md) |
+| The Rust build, installer, `publish.ps1`, what gets installed, releases | [build and install](docs/specs/build-and-install.md) |
 | What to run for which change and what each check proves | [testing](docs/specs/testing.md) |
 
-Defaults live in code (`Tunables.cs`), not in the docs' prose.
+Defaults live in code (`core/src/tunables.rs`), not in the docs' prose.
