@@ -67,6 +67,12 @@ internal static unsafe class Windows
     [DllImport(User)] internal static extern int EnableWindow(nint window, int enabled);
     [DllImport(User)] internal static extern int DrawFrameControl(nint dc, ref Rect rect, uint type, uint state);
     [DllImport(User)] internal static extern int FillRect(nint dc, ref Rect rect, nint brush);
+    [DllImport(User)] internal static extern nint CreatePopupMenu();
+    [DllImport(User, CharSet = CharSet.Unicode, ExactSpelling = true)]
+    internal static extern int AppendMenuW(nint menu, uint flags, nuint id, string text);
+    [DllImport(User)] internal static extern int SetMenuDefaultItem(nint menu, uint item, uint byPosition);
+    [DllImport(User)] internal static extern int TrackPopupMenuEx(nint menu, uint flags, int x, int y, nint window, nint parameters);
+    [DllImport(User)] internal static extern int DestroyMenu(nint menu);
     [DllImport(User, CharSet = CharSet.Unicode, ExactSpelling = true)]
     internal static extern int SetWindowTextW(nint window, string text);
     [DllImport(User, CharSet = CharSet.Unicode, ExactSpelling = true)]

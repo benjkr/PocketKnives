@@ -5,8 +5,10 @@
   it to the taskbar. Windows retains the user's placement. The icon comes back after Explorer
   recreates the taskbar.
 - One click, Enter, or Space on the icon opens PocketKnives Settings or restores its existing
-  window. The Start menu shortcut runs `pk settings` and opens the same window. Closing Settings
-  leaves the icon available. The installer's `pk --exit` command closes both.
+  window. Right-click, Shift+F10 or the menu key on the icon shows **Settings** (the default
+  item) and **Exit**. The Start menu shortcut runs `pk settings` and opens the same window, and
+  starts the runner again after Exit. Closing Settings leaves the icon available. Exit and the
+  installer's `pk --exit` command close both.
 - General offers **Look**. Choosing XP, Windows 10, or Windows 11 saves the look under
   `HKCU\Software\PocketKnives` and reopens Settings on General. XP uses classic Win32
   controls and Windows 10 enables visual styles. Windows 11 is a separate WinUI window with Mica

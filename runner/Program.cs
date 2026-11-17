@@ -196,6 +196,25 @@ internal sealed unsafe class Program
         }
     }
 
+    private void ShowMenu(int x, int y)
+    {
+        const nuint settingsItem = 1, exitItem = 2;
+        nint menu = CreatePopupMenu();
+        if (menu == 0)
+            return;
+        AppendMenuW(menu, 0, settingsItem, "&Settings");
+        AppendMenuW(menu, 0, exitItem, "E&xit");
+        SetMenuDefaultItem(menu, (uint)settingsItem, 0);
+        // Without the foreground, the menu doesn't close when the user clicks elsewhere.
+        SetForegroundWindow(window);
+        int choice = TrackPopupMenuEx(menu, 0x0100 | 0x0002, x, y, window, 0); // TPM_RETURNCMD, TPM_RIGHTBUTTON
+        DestroyMenu(menu);
+        if (choice == (int)settingsItem)
+            OpenSettings();
+        else if (choice == (int)exitItem)
+            Stop();
+    }
+
     private void Stop()
     {
         stopping = true;
@@ -252,6 +271,8 @@ internal sealed unsafe class Program
             // NOTIFYICON_VERSION_4 packs the event in LOWORD(lParam).
             if ((lParam & 0xffff) is 0x0400 or 0x0401) // NIN_SELECT, NIN_KEYSELECT
                 app.OpenSettings();
+            else if ((lParam & 0xffff) == 0x007b) // WM_CONTEXTMENU: right-click, Shift+F10 or the menu key
+                app.ShowMenu((short)(wParam & 0xffff), (short)((wParam >> 16) & 0xffff));
             return 0;
         }
         if (message == Destroy)
