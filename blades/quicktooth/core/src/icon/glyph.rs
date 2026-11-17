@@ -155,7 +155,7 @@ fn is_regex_space(c: u8) -> bool {
 
 /// `double.Parse(s, CultureInfo.InvariantCulture)` (surrounding white space allowed).
 fn parse_number(s: &str) -> Option<f64> {
-    s.trim_matches(|c: char| c.is_ascii() && is_regex_space(c as u8)).parse().ok()
+    crate::num::parse_f64(s.trim_matches(|c: char| c.is_ascii() && is_regex_space(c as u8)))
 }
 
 /// A glyph from SVG text; `None` where the C# threw (no `<path>`, a curve, a bad number).
@@ -232,7 +232,7 @@ fn parse_path(d: &str) -> Option<Vec<Vec<Pt>>> {
                 *i += 1;
             }
         }
-        d[s..*i].parse().ok()
+        crate::num::parse_f64(&d[s..*i])
     }
 
     loop {

@@ -59,7 +59,8 @@ fn open_console() -> Writer {
 }
 
 fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
-    let cmd = args[0].to_lowercase();
+    // Every option is ASCII, so ASCII lower-casing matches what ToLowerInvariant matched.
+    let cmd = args[0].to_ascii_lowercase();
     let has = |flag: &str| args.iter().any(|a| a.eq_ignore_ascii_case(flag));
     match cmd.as_str() {
         "--list" => Ok(list(out, has("--all"))),
@@ -534,7 +535,7 @@ fn exit_tray(out: &mut Writer) -> u32 {
 }
 
 fn autostart(out: &mut Writer, arg: &str) -> u32 {
-    match arg.to_lowercase().as_str() {
+    match arg.to_ascii_lowercase().as_str() {
         "on" => system::set_autostart(true),
         "off" => system::set_autostart(false),
         _ => {}
@@ -574,7 +575,7 @@ fn icon_rect(out: &mut Writer) -> u32 {
 
 fn render_icons(out: &mut Writer, args: &[String]) -> u32 {
     if let Some(i) = args.iter().position(|a| a.eq_ignore_ascii_case("--zoom")) {
-        if let Some(z) = args.get(i + 1).and_then(|z| z.parse::<f64>().ok()) {
+        if let Some(z) = args.get(i + 1).and_then(|z| quicktooth_core::num::parse_f64(z)) {
             quicktooth_core::tunables::set_value(quicktooth_core::tunables::T::Zoom, z);
         }
     }
