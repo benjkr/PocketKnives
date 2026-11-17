@@ -18,5 +18,9 @@ blade's own decisions are in its `docs/working/decisions.md`.
   native controls with visual styles on; **Windows 11**, the Windows 11 Settings style (glassy,
   modern) in WinUI 3. A Windows 7 look drawn by hand was dropped. How it's built and which settings
   it offers are still open ([runner design](runner-design.md)).
+- **One installer for the suite**: `PocketKnives-Setup` (Inno Setup, per user) installs every
+  blade into `%LOCALAPPDATA%\Programs\PocketKnives`, each still its own program, with one entry in
+  installed apps ([installer](../specs/installer.md)). The blades' separate installs were removed
+  from the user's PC.
 - **How blades run together, shared code and the default language** for new blades: being decided
   ([runner design](runner-design.md)).

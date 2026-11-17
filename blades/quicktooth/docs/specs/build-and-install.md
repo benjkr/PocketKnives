@@ -29,8 +29,10 @@ and lean.
   - Uninstalling removes the app, its folder, the Start menu entry and the autostart value, and
     keeps `%APPDATA%\QuickTooth`.
   - Unsigned, so Windows SmartScreen warns on download.
-- **What goes on the user's PC**: only builds of `master`, from a release tag once tags exist;
-  never a branch or PR build. Say which commit or tag is installed.
+- **What goes on the user's PC**: QuickTooth from the
+  [PocketKnives installer](../../../../docs/specs/installer.md), from `master`. `publish.ps1` and
+  this installer make the stand-alone QuickTooth, for people without the suite; on the user's PC
+  it would run beside the suite's copy, so they aren't used there.
 
 ## Releases
 

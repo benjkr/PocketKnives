@@ -22,5 +22,6 @@ This machine's shell quirks and delegating are suite-wide:
   (5–10 s).
 - Real-time recordings (`run` of a recorded scenario, `examples/compare-profiles.mjs`) take as long
   as what they show: run them in the background and wait with `t3_background_wait`.
-- `installer/build.ps1` and `publish.ps1` only per [build and install](../specs/build-and-install.md),
-  and on the user's PC only for `master`.
+- `installer/build.ps1` and `publish.ps1` only per [build and install](../specs/build-and-install.md);
+  never install with them on the user's PC, which has QuickTooth from the
+  [PocketKnives installer](../../../../docs/specs/installer.md).
