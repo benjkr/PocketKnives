@@ -1,4 +1,4 @@
-//! The settings window, built in code as the C# app built it (runner/WinUI/Program.cs): a
+//! The settings window, built in code (the C# app before it had no XAML pages either): a
 //! NavigationView with General and the blades, each blade's sign-in switch in the pane, and each
 //! page's settings as cards. Every change applies at once through `runner-core`; a refusal shows
 //! the reason in the error bar and puts the control back.

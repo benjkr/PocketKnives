@@ -250,7 +250,8 @@ crate, a shared core that also runs in a browser simulator (WebAssembly), every 
   output, single instance, a lock and threads); `crates/pk-build` gives build scripts the link
   flags and resources. Code moves into `pk` only when a second blade needs it (a tray icon host,
   hotkeys).
-- The runner and its settings windows stay C#: the Windows 11 look is WinUI 3.
+- The runner is Rust too: `pk.exe` on `crates/pk`, and the Windows 11 look a WinUI 3 app in
+  `no_std` Rust (`runner/winui`).
 
 ## Recommendation
 

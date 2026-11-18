@@ -1,15 +1,14 @@
 # PocketKnives Settings in Rust
 
-The runner's Windows 11 settings window (the C# `runner/WinUI` before it) as a `no_std` Rust exe on
-`crates/pk`, with no .NET or MSBuild in the build. The settings behind it are `runner/core`'s
-(`runner-core`), which `pk.exe`'s XP and Windows 10 looks share. Folder name: `runner/winui` would
-be `runner/WinUI` on Windows.
+The runner's Windows 11 settings window, `winui\PocketKnives.Settings.exe`, as a `no_std` Rust exe
+on `crates/pk`, with no .NET or MSBuild in the build. The settings behind it are `runner/core`'s
+(`runner-core`), which `pk.exe`'s XP and Windows 10 looks share.
 
 ## Build and run
 
 ```powershell
 cargo build --release -p pocketknives-settings
-pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\pk-settings\winui -Exe target/release/pocketknives-settings.exe
+pwsh runner/winui/stage.ps1 -Out $env:TEMP\pk-settings\winui -Exe target/release/pocketknives-settings.exe
 # A preview: the switches write $env:TEMP\pk-settings\preview-settings.txt, not the sign-in entries.
 $env:POCKETKNIVES_SETTINGS_PREVIEW = '1'
 & "$env:TEMP\pk-settings\winui\PocketKnives.Settings.exe" 1
@@ -35,7 +34,7 @@ $env:POCKETKNIVES_SETTINGS_PREVIEW = '1'
   app calls: stage first, then `cargo run -p pocketknives-settings-gen -- <staged folder>` (it
   reads the folder's winmds). It keeps only the methods whose names appear in the app's sources
   (`src/*.rs`), so a newly called method needs a regeneration; the vtables stay whole.
-- Manifest, after changing the packages: `stage.ps1 -Out <folder> -Manifest runner/winui-rust/app.manifest`.
+- Manifest, after changing the packages: `stage.ps1 -Out <folder> -Manifest runner/winui/app.manifest`.
   It is byte-identical to the C# build's `WindowsAppSDK.manifest`; keep `.gitattributes`' `-text`.
 
 ## How it works

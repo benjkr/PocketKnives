@@ -11,13 +11,13 @@ AddMicrosoftWindowsAppSDKPayloadFilesFromComponents, plus NuGet's native runtime
 
 -Manifest also writes the activatable-class manifest the exe embeds, generated from the packages'
 package.appxfragment files as the targets' GenerateAppManifestFromAppxFragments task does (same
-order, exclusions and bytes). The repo commits it as runner/winui-rust/app.manifest, so
+order, exclusions and bytes). The repo commits it as runner/winui/app.manifest, so
 `cargo build` needs no network; run with -Manifest only when the packages change.
 
 .EXAMPLE
-pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\settings -Exe target/release/pocketknives-settings.exe
+pwsh runner/winui/stage.ps1 -Out $env:TEMP\settings -Exe target/release/pocketknives-settings.exe
 .EXAMPLE
-pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\settings -Manifest runner/winui-rust/app.manifest
+pwsh runner/winui/stage.ps1 -Out $env:TEMP\settings -Manifest runner/winui/app.manifest
 #>
 param(
     [Parameter(Mandatory)] [string]$Out,
@@ -27,9 +27,10 @@ param(
     [string]$Packages = (Join-Path ([IO.Path]::GetTempPath()) 'pocketknives-winappsdk')
 )
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'  # Windows PowerShell's progress bar slows downloads down
 $repo = Resolve-Path (Join-Path $PSScriptRoot '../..')
 
-# What Microsoft.WindowsAppSDK.WinUI 2.6.5 (the C# app's only package reference) brings in.
+# What Microsoft.WindowsAppSDK.WinUI 2.6.5 brings in (the C# app's only package reference was it).
 # Component packages are listed in the order their props register them, which is the order of
 # the generated manifest. Sha512: nuget.org's (the .nupkg.sha512 NuGet keeps beside a package).
 $pins = @(
@@ -53,7 +54,7 @@ function Get-Package($pin) {
     Write-Host "Downloading $($pin.Id) $($pin.Version)"
     Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/$id/$($pin.Version)/$name.nupkg" -OutFile $nupkg
     $hash = (Get-FileHash -Algorithm SHA512 $nupkg).Hash
-    $pinned = [Convert]::ToHexString([Convert]::FromBase64String($pin.Sha512))
+    $pinned = -join ([Convert]::FromBase64String($pin.Sha512) | ForEach-Object { $_.ToString('X2') })
     if ($hash -ne $pinned) {
         Remove-Item $nupkg
         throw "$name.nupkg doesn't match its pinned SHA-512."

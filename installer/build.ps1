@@ -2,9 +2,9 @@
 # per-user installer (Inno Setup 6.7+).
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
-# Needs what each part's build needs: Visual Studio (or Build Tools) with "Desktop development
-# with C++" (the linker and resource compiler for every part), Rust through rustup (SnipSnap and
-# QuickTooth; rust-toolchain.toml picks the version) and the .NET 10 SDK (the runner).
+# Needs Visual Studio (or Build Tools) with "Desktop development with C++" (the linker and resource
+# compiler) and Rust through rustup (rust-toolchain.toml picks the version). The first build
+# downloads the Windows App SDK runtime from nuget.org (runner/winui/stage.ps1; pinned, hash-checked).
 # Nothing running is stopped and nothing is written to the blades' folders.
 $ErrorActionPreference = 'Stop'
 $root  = Split-Path $PSScriptRoot
@@ -25,21 +25,26 @@ New-Item -ItemType Directory $stage | Out-Null
 & cmd /c (Join-Path $root 'blades\snipsnap\build.bat') $stage
 if ($LASTEXITCODE -ne 0) { throw 'SnipSnap build failed' }
 
-# QuickTooth: one exe (Rust), built from the repo root so cargo finds rust-toolchain.toml and
-# .cargo/config.toml, into installer\obj.
+# QuickTooth, the runner (pk.exe) and its Windows 11 settings app: Rust, built from the repo root
+# so cargo finds rust-toolchain.toml and .cargo/config.toml, into installer\obj. One package per
+# build, so each exe is exactly what its own `cargo build -p` makes.
 $cargoOut = Join-Path $PSScriptRoot 'obj\cargo'
+$release = Join-Path $cargoOut 'release'
 Push-Location $root
-try { cargo build --release -p quicktooth --target-dir $cargoOut } finally { Pop-Location }
-if ($LASTEXITCODE -ne 0) { throw 'QuickTooth build failed' }
-Copy-Item (Join-Path $cargoOut 'release\QuickTooth.exe') $stage
+try {
+    foreach ($package in 'quicktooth', 'pocketknives-runner', 'pocketknives-settings') {
+        cargo build --release -p $package --target-dir $cargoOut
+        if ($LASTEXITCODE -ne 0) { throw "$package build failed" }
+    }
+} finally { Pop-Location }
+Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'pk.exe') $stage
 
-$runner = Join-Path $root 'runner\pk.csproj'
-dotnet publish $runner -c Release -nologo -o $stage
-if ($LASTEXITCODE -ne 0) { throw 'PocketKnives runner publish failed' }
+# The blade icons the settings windows show.
+$icons = New-Item -ItemType Directory (Join-Path $stage 'icons')
+Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico') $icons
 
-$winUi = Join-Path $root 'runner\WinUI\PocketKnives.Settings.csproj'
-dotnet publish $winUi -c Release -nologo -o (Join-Path $stage 'winui')
-if ($LASTEXITCODE -ne 0) { throw 'PocketKnives Windows 11 settings publish failed' }
+# The Windows 11 settings app, with the Windows App SDK runtime beside it.
+& (Join-Path $root 'runner\winui\stage.ps1') -Out (Join-Path $stage 'winui') -Exe (Join-Path $release 'pocketknives-settings.exe')
 
 & $iscc /Qp "/DAppSource=$stage" (Join-Path $PSScriptRoot 'PocketKnives.iss')
 if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }

@@ -1,4 +1,4 @@
-//! Regenerates `runner/winui-rust/src/bindings.rs`, the Windows App SDK (WinUI 3) bindings of
+//! Regenerates `runner/winui/src/bindings.rs`, the Windows App SDK (WinUI 3) bindings of
 //! PocketKnives.Settings.exe, from the winmds in a staged payload folder (`stage.ps1` puts them
 //! there). Windows.* types come from the `windows` crate; only Microsoft.* types are generated.
 //!

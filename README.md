@@ -35,8 +35,8 @@ Windows 11 (or Windows 10 2004+), no admin rights. Build the installer and run i
 ```
 
 It needs Visual Studio's C++ build tools, Rust through [rustup](https://rustup.rs) (the repo pins
-the version), the .NET 10 SDK (for the settings window) and Inno Setup 6.7+
-(`winget install JRSoftware.InnoSetup`). It installs every blade into
+the version) and Inno Setup 6.7+ (`winget install JRSoftware.InnoSetup`); the first build downloads
+the Windows App SDK runtime for the Windows 11 settings window from nuget.org. It installs every blade into
 `%LOCALAPPDATA%\Programs\PocketKnives` and asks which should start when you sign in. The installer
 is unsigned, so SmartScreen warns about it.
 
