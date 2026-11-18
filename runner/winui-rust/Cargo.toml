@@ -26,21 +26,17 @@ windows-sys = { workspace = true, features = [
 ] }
 # The Windows.* types the generated Microsoft.* bindings (src/bindings.rs) use.
 windows = { workspace = true, features = [
-    "ApplicationModel_Activation",
     "Foundation",
     "Foundation_Collections",
     "Graphics",
-    "Media_Casting",
     "Storage_Streams",
     "System",
-    "UI",
     "UI_Core",
     "UI_Text",
 ] }
 windows-core.workspace = true
-# The generated bindings name these windows-rs crates directly (collections, async, vectors).
+# The generated bindings name these windows-rs crates directly (collections, vectors).
 windows-collections = { version = "0.3", default-features = false }
-windows-future = { version = "0.3", default-features = false }
 windows-numerics = { version = "0.3", default-features = false }
 
 [build-dependencies]

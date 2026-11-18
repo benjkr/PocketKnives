@@ -1,10 +1,9 @@
-# PocketKnives Settings in Rust (spike)
+# PocketKnives Settings in Rust
 
-A feasibility spike: the runner's Windows 11 settings window (today `runner/WinUI`, C# Native AOT)
-as a `no_std` Rust exe on `crates/pk`, with no .NET or MSBuild in the build. It shows the C#
-window's layout and controls; the settings behind them are stubs (`src/stub.rs`), and a change is
-only reported on the page's event line. Folder name: `runner/winui` would be `runner/WinUI` on
-Windows.
+The runner's Windows 11 settings window (the C# `runner/WinUI` before it) as a `no_std` Rust exe on
+`crates/pk`, with no .NET or MSBuild in the build. The settings behind it are `runner/core`'s
+(`runner-core`), which `pk.exe`'s XP and Windows 10 looks share. Folder name: `runner/winui` would
+be `runner/WinUI` on Windows.
 
 ## Build and run
 
@@ -21,14 +20,19 @@ pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\settings -Exe target/release/poc
   exe, as the SDK's self-contained MSBuild targets do. It also copies WinUI's
   `Microsoft.UI.Xaml.Controls.pri` as `PocketKnives.Settings.pri`: without a resource index the
   control styles don't load.
-- The argument is the runner's window handle (any non-zero integer). Exit codes: 0 closed, 2 bad
-  arguments, 3 no Windows App SDK runtime next to the exe, 4 WinUI failed. When stdout goes to a
-  pipe or a file, a failure prints one line saying why.
+- The argument is the runner's window handle (any non-zero integer). The suite is the folder
+  above the exe's. Run it directly only with `POCKETKNIVES_SETTINGS_PREVIEW=1` (as `pk --preview`
+  sets it): otherwise its switches change the real sign-in entries. Exit codes: 0 closed, 2 bad
+  arguments, 3 no Windows App SDK runtime next to the exe, 4 WinUI failed, 5 the settings could
+  not be read (a blade that didn't answer). When stdout goes to a pipe or a file, a failure prints
+  one line saying why.
 
 ## Regenerating
 
-- Bindings, after changing `gen/src/main.rs`'s type list or the packages: stage first, then
-  `cargo run -p pocketknives-settings-gen -- <staged folder>` (it reads the folder's winmds).
+- Bindings, after changing `gen/src/main.rs`'s type list, the packages, or the WinUI methods the
+  app calls: stage first, then `cargo run -p pocketknives-settings-gen -- <staged folder>` (it
+  reads the folder's winmds). It keeps only the methods whose names appear in the app's sources
+  (`src/*.rs`), so a newly called method needs a regeneration; the vtables stay whole.
 - Manifest, after changing the packages: `stage.ps1 -Out <folder> -Manifest runner/winui-rust/app.manifest`.
   It is byte-identical to the C# build's `WindowsAppSDK.manifest`; keep `.gitattributes`' `-text`.
 
