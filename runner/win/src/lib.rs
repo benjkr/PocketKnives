@@ -9,7 +9,11 @@ extern crate std;
 
 use alloc::format;
 use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::ptr::null;
 use runner_core::blade_settings::{ALT, CTRL, SHIFT, WIN, is_extended, join_hotkey, split_hotkey};
+use windows_sys::Win32::Globalization::{LCMAP_UPPERCASE, LCMapStringEx, LOCALE_NAME_INVARIANT};
 use windows_sys::Win32::Security::Cryptography::{BCRYPT_SHA256_ALG_HANDLE, BCryptHash};
 use windows_sys::core::GUID;
 
@@ -75,18 +79,25 @@ pub fn guid_n(g: &GUID) -> String {
     )
 }
 
-/// .NET's `ToUpperInvariant`: each character's simple upper case. A character whose upper case
-/// is more than one character (`ß`) has no simple mapping and stays.
+/// .NET's `ToUpperInvariant`: each character's simple upper case (`ß`, which has none, stays),
+/// as Windows' invariant locale maps it.
 fn upper_invariant(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            let mut u = c.to_uppercase();
-            match (u.next(), u.next()) {
-                (Some(one), None) => one,
-                _ => c,
-            }
-        })
-        .collect()
+    let text: Vec<u16> = s.encode_utf16().collect();
+    let mut upper = vec![0u16; text.len()];
+    let n = unsafe {
+        LCMapStringEx(
+            LOCALE_NAME_INVARIANT,
+            LCMAP_UPPERCASE,
+            text.as_ptr(),
+            text.len() as i32,
+            upper.as_mut_ptr(),
+            upper.len() as i32,
+            null(),
+            null(),
+            0,
+        )
+    };
+    String::from_utf16_lossy(&upper[..n.max(0) as usize])
 }
 
 // The hotkey box's value is the key | HOTKEYF flags << 8; a blade's is RegisterHotKey's.
@@ -135,7 +146,6 @@ pub fn hotkey_value(boxed: u32, saved: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec::Vec;
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| String::from(*s)).collect()
