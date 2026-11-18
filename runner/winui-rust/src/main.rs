@@ -25,7 +25,7 @@ mod boxed;
 mod stub;
 mod ui;
 
-use core::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicIsize, Ordering};
 use pk::wide::to_wide;
 use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows_sys::Win32::System::Environment::SetEnvironmentVariableW;
@@ -39,8 +39,6 @@ pub const EXIT_WINUI: u32 = 4;
 /// The runner's window. The real app posts it a message to reopen Settings in another look; the
 /// spike never does.
 static RUNNER: AtomicIsize = AtomicIsize::new(0);
-/// Set when WinUI started but the window could not open: `Application.Start` still returns.
-static FAILED: AtomicU32 = AtomicU32::new(0);
 
 pk::entry!(main);
 
@@ -63,13 +61,13 @@ fn main() -> u32 {
         report("Application.Start failed", &e);
         return EXIT_WINUI;
     }
-    FAILED.load(Ordering::Relaxed)
+    0
 }
 
-/// Records that the window could not open and ends the app: `Start` then returns.
-pub fn fail(code: u32) {
-    FAILED.store(code, Ordering::Relaxed);
-    pk::exit(code);
+/// Ends the process with `code` when WinUI started but the window could not open: `Start`
+/// would otherwise keep running with no window, or return as if it had closed.
+pub fn fail(code: u32) -> ! {
+    pk::exit(code)
 }
 
 /// Prints why WinUI failed, when stdout goes somewhere (a pipe or a file): one line.
