@@ -161,7 +161,7 @@ fn build() -> Result<NavigationView> {
         |_, change: Ref<NavigationViewSelectionChangedEventArgs>| {
             let Some(change) = change.as_ref() else { return Ok(()) };
             let index = change.SelectedItem()?.cast::<FrameworkElement>()?.Tag()?.cast::<IReference<i32>>()?.Value()?;
-            show_page(index as usize)?;
+            show_page(index as usize).inspect_err(|e| crate::report("A page could not be built", e))?;
             event(&format!("Navigation: page {index}"))
         },
     ))?;
@@ -326,7 +326,8 @@ fn hotkey_control(blade: usize, index: usize) -> Result<Button> {
             return Ok(());
         }
         l.get().set(true);
-        button.cast::<Button>()?.SetContent(&boxed("Press the new keys")?)
+        button.cast::<Button>()?.SetContent(&boxed("Press the new keys")?)?;
+        event("Hotkey: listening")
     }))?;
     let l = Local(listening.clone());
     button.LostFocus(&RoutedEventHandler::new(move |sender, _| match sender.as_ref() {
@@ -362,7 +363,9 @@ fn hotkey_control(blade: usize, index: usize) -> Result<Button> {
         change(blade, index, value, &shown)?;
         stop(&button, l.get())
     });
-    button.AddHandler(&UIElement::KeyDownEvent()?, &crate::boxed::key_handler(handler), true)?;
+    button
+        .AddHandler(&UIElement::KeyDownEvent()?, &crate::boxed::key_handler(handler), true)
+        .inspect_err(|e| crate::report("AddHandler", e))?;
     Ok(button)
 }
 

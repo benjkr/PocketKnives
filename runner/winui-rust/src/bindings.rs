@@ -1723,7 +1723,7 @@ pub mod Microsoft {
                 0xd8eef1c9_1234_56f1_9963_45dd9c80a661
             );
             impl windows_core::RuntimeType for ApplicationInitializationCallback {
-                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::new().push_slice(b"delegate(").push_other(windows_core::imp::ConstBuffer::for_interface::<Self>()).push_slice(b")");
             }
             impl ApplicationInitializationCallback {
                 pub fn new<
@@ -5337,7 +5337,7 @@ pub mod Microsoft {
             unsafe impl Sync for RoutedEventArgs {}
             windows_core::imp::define_interface!(RoutedEventHandler, RoutedEventHandler_Vtbl, 0xdae23d85_69ca_5bdf_805b_6161a3a215cc);
             impl windows_core::RuntimeType for RoutedEventHandler {
-                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::new().push_slice(b"delegate(").push_other(windows_core::imp::ConstBuffer::for_interface::<Self>()).push_slice(b")");
             }
             impl RoutedEventHandler {
                 pub fn new<
@@ -51446,7 +51446,7 @@ pub mod Microsoft {
                     0xa232390d_0e34_595e_8931_fa928a9909f4
                 );
                 impl windows_core::RuntimeType for SelectionChangedEventHandler {
-                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::new().push_slice(b"delegate(").push_other(windows_core::imp::ConstBuffer::for_interface::<Self>()).push_slice(b")");
                 }
                 impl SelectionChangedEventHandler {
                     pub fn new<
@@ -64457,7 +64457,7 @@ pub mod Microsoft {
                 }
                 windows_core::imp::define_interface!(KeyEventHandler, KeyEventHandler_Vtbl, 0xdb68e7cc_9a2b_527d_9989_25284daccc03);
                 impl windows_core::RuntimeType for KeyEventHandler {
-                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::new().push_slice(b"delegate(").push_other(windows_core::imp::ConstBuffer::for_interface::<Self>()).push_slice(b")");
                 }
                 impl KeyEventHandler {
                     pub fn new<

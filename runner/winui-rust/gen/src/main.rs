@@ -141,4 +141,34 @@ fn main() {
     bindgen.extend(TYPES.iter().map(|t| t.to_string()));
     let warnings = windows_bindgen::bindgen(&bindgen);
     print!("{warnings}");
+    let code = std::fs::read_to_string(&out).expect("read the bindings");
+    let (code, fixed) = delegate_signatures(&code);
+    std::fs::write(&out, code).expect("write the bindings");
+    println!("delegate signatures fixed: {fixed}");
+}
+
+/// windows-rs signs a delegate like an interface, `{iid}`, where WinRT signs it `delegate({iid})`
+/// (no "delegate(" exists in windows-rs 0.62). The signature makes the IIDs of generic interfaces
+/// over the delegate: XAML's `AddHandler` asks the boxed handler for the real
+/// `IReference<KeyEventHandler>` (BF4375EF-DACF-532E-90D9-AA1202B6055F) and windows-rs's box
+/// answers another. Delegates are the types whose `RuntimeType` impl is followed by a
+/// closure-taking `new`.
+fn delegate_signatures(code: &str) -> (String, usize) {
+    const INTERFACE: &str = "windows_core::imp::ConstBuffer::for_interface::<Self>();";
+    const DELEGATE: &str = "windows_core::imp::ConstBuffer::new().push_slice(b\"delegate(\").push_other(windows_core::imp::ConstBuffer::for_interface::<Self>()).push_slice(b\")\");";
+    let mut out = String::with_capacity(code.len() + 4096);
+    let mut fixed = 0;
+    let mut rest = code;
+    while let Some(at) = rest.find(INTERFACE) {
+        let after = &rest[at + INTERFACE.len()..];
+        // `}` closing the RuntimeType impl, then `impl Name {` and `pub fn new<` with an `F: Fn`.
+        let tail: String = after.chars().filter(|c| !c.is_whitespace()).take(200).collect();
+        let is_delegate = tail.starts_with('}') && tail[1..].starts_with("impl") && tail.contains("{pubfnnew<F:Fn(");
+        out.push_str(&rest[..at]);
+        out.push_str(if is_delegate { DELEGATE } else { INTERFACE });
+        fixed += is_delegate as usize;
+        rest = after;
+    }
+    out.push_str(rest);
+    (out, fixed)
 }
