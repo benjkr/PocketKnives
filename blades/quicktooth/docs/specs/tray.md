@@ -18,7 +18,7 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 - Tooltip and menu header: `<device> — <status>`, plus ` · <battery>` while connected and the
   reading is under 15 min old. Status: Checking…, Connected, Not connected, Not available (the
   saved device is missing), No device selected, Connecting…, Disconnecting…. Capped at 127
-  characters (`szTip`).
+  UTF-16 units (`szTip`; a character the cut would split is dropped whole).
 
 ## Clicks and commands
 

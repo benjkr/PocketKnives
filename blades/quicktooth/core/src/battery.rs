@@ -107,3 +107,32 @@ pub fn parse_apple_status(b: &[u8], model: u16, rssi: i32, now_epoch_ms: f64) ->
         source: "ble".into(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+
+    #[test]
+    fn apple_status_advert() {
+        // model 0x2027 (LE), status 0x20 set: low nibble is left; buds 9/8, charging bit 1, case 5.
+        let b = [0x07, 0x19, 0x01, 0x27, 0x20, 0x20, 0x89, 0x15, 0x00];
+        let r = parse_apple_status(&b, 0x2027, -60, 1.0).unwrap();
+        assert_eq!((r.left, r.right, r.case), (Some(90), Some(80), Some(50)));
+        assert!(r.buds_charging && !r.case_charging);
+        assert_eq!(r.buds(), Some(80));
+        assert_eq!(r.text().as_deref(), Some("80% charging · case 50%"));
+        assert_eq!(r.describe(), "buds 80% (L 90, R 80), case 50, rssi -60, ble");
+        // Bit 0x20 clear: the nibbles swap; 15 = unknown; case charging is bit 2.
+        let b = [0x07, 0x19, 0x01, 0x27, 0x20, 0x00, 0x3F, 0x4F, 0x00];
+        let r = parse_apple_status(&b, 0x2027, -60, 1.0).unwrap();
+        assert_eq!((r.left, r.right, r.case), (Some(30), None, None));
+        assert!(!r.buds_charging && r.case_charging);
+        assert_eq!(r.text().as_deref(), Some("30%"));
+        // Another model, a short message, another type, nothing known: no reading.
+        assert!(parse_apple_status(&[0x07, 0x19, 0x01, 0x14, 0x20, 0x20, 0x89, 0x15, 0x00], 0x2027, -60, 1.0).is_none());
+        assert!(parse_apple_status(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x20, 0x89, 0x15], 0x2027, -60, 1.0).is_none());
+        assert!(parse_apple_status(&[0x10, 0x19, 0x01, 0x27, 0x20, 0x20, 0x89, 0x15, 0x00], 0x2027, -60, 1.0).is_none());
+        assert!(parse_apple_status(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x20, 0xFF, 0x0F, 0x00], 0x2027, -60, 1.0).is_none());
+    }
+}

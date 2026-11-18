@@ -28,9 +28,10 @@ what's specific to QuickTooth. Paths and commands here and in this blade's `docs
   aren't used there ([build and install](docs/specs/build-and-install.md)).
 - **The exe**: `no_std` on the suite's `crates/pk`; COM and WinRT through the `windows` crate
   (no hand-written vtables), plain Win32 through `windows-sys`; no new crates without the user's
-  say. Budget: one exe of about 0.3 MB that imports only Windows DLLs, about 1.3 MB private working
-  set in the background, start-up and enumeration no slower than the C# build was
-  ([build and install](docs/specs/build-and-install.md)).
+  say. Budget: one exe of about 0.3 MB that imports only Windows DLLs; start-up, enumeration and
+  memory no worse than the C# build under the same read-only measures (`--watch-endpoints`:
+  1.3 MB private working set against 3.5 MB). The tray's own idle memory is measured on the
+  installed copy ([build and install](docs/specs/build-and-install.md)).
 - **The log**: `quicktooth.log` lines are compared across builds, the simulator and live runs.
 
 ## Running things
