@@ -10,6 +10,8 @@ publish.workspace = true
 [[bin]]
 name = "QuickTooth"
 path = "src/main.rs"
+# A no_std exe: its own panic handler and entry point can't link with the test harness.
+test = false
 
 [dependencies]
 pk.workspace = true

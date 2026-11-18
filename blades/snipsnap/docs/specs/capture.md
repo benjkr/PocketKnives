@@ -1,7 +1,7 @@
 # Capture: the three modes, the overlay, the clipboard, the flash
 
 Part of SnipSnap's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it does now; the numbers
-are the `#define`s at the top of `snipsnap.c`. Keep it current in the same change, and lean.
+are the constants at the top of `src/main.rs`. Keep it current in the same change, and lean.
 
 ## Reading the screen
 

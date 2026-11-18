@@ -1,7 +1,7 @@
 # Hotkeys and command line
 
 Part of SnipSnap's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it does now; the hotkey
-lists are the `FALLBACKS` table and the settings the `SETTINGS` table at the top of `snipsnap.c`.
+lists are the `FALLBACKS` table and the settings the `SETTINGS` table at the top of `src/main.rs`.
 Keep it current in the same change, and lean.
 
 ## The background instance (`snipsnap` with no argument)

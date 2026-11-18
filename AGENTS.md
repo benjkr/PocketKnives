@@ -14,7 +14,7 @@ in a blade's docs are from that blade's folder.
 
 | Blade | What it does | Built with | Start here |
 |---|---|---|---|
-| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | One C file, no CRT, MSVC | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
+| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | Rust, `no_std` on `pk`, four system DLLs | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
 | QuickTooth | Connects or disconnects AirPods with one click on a tray icon | Rust, `no_std` on `pk`; browser simulator (WebAssembly) | [`blades/quicktooth/AGENTS.md`](blades/quicktooth/AGENTS.md) |
 
 The Rust blades share one Cargo workspace (`Cargo.toml` at the root, toolchain pinned in
@@ -40,10 +40,9 @@ their build scripts. The runner is C#.
   a branch, an open PR or anything unmerged. Unmerged work is previewed, or checked read-only from
   a build in a scratch folder.
 - **Builds stay clean**: zero compiler warnings (`.cargo/config.toml` makes every Rust warning an
-  error; C builds with `/W4 /WX`; the runner's .NET treats warnings as errors), zero AOT/trim
-  warnings and no reflection in the runner, and each blade's size and memory budget holds.
-  Security pins (the Rust toolchain in `rust-toolchain.toml`, the runner's .NET runtime patch pin)
-  never go backwards.
+  error; the runner's .NET treats warnings as errors), zero AOT/trim warnings and no reflection
+  in the runner, and each blade's size and memory budget holds. Security pins (the Rust
+  toolchain in `rust-toolchain.toml`, the runner's .NET runtime patch pin) never go backwards.
 - **Log lines are behaviour.** A blade's log lines, console output and exit codes are compared
   across builds or read by scripts and launchers; change their wording only on purpose, with
   whatever reads them.
