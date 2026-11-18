@@ -1,0 +1,48 @@
+[package]
+name = "pocketknives-settings"
+version = "0.1.0"
+description = "PocketKnives Settings, Windows 11 look: a WinUI 3 window in no_std Rust (feasibility spike)."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+# Cargo bin names can't contain dots: stage.ps1 copies it into the payload as PocketKnives.Settings.exe.
+name = "pocketknives-settings"
+path = "src/main.rs"
+# A no_std exe: its own panic handler and entry point can't link with the test harness.
+test = false
+
+[dependencies]
+pk.workspace = true
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
+# The Windows.* types the generated Microsoft.* bindings (src/bindings.rs) use.
+windows = { workspace = true, features = [
+    "ApplicationModel_Activation",
+    "Foundation",
+    "Foundation_Collections",
+    "Graphics",
+    "Media_Casting",
+    "Storage_Streams",
+    "System",
+    "UI",
+    "UI_Core",
+    "UI_Text",
+] }
+windows-core.workspace = true
+# The generated bindings name these windows-rs crates directly (collections, async, vectors).
+windows-collections = { version = "0.3", default-features = false }
+windows-future = { version = "0.3", default-features = false }
+windows-numerics = { version = "0.3", default-features = false }
+
+[build-dependencies]
+pk-build = { path = "../../crates/pk-build" }
+
+[lints]
+workspace = true

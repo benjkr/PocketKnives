@@ -9,6 +9,8 @@ members = [
     "blades/quicktooth/web",
     "blades/snipsnap",
     "runner/core",
+    "runner/winui-rust",
+    "runner/winui-rust/gen",
 ]
 # The simulator's WebAssembly build is only built for wasm32 (sim/lib/core-build.mjs).
 default-members = [
@@ -18,6 +20,7 @@ default-members = [
     "blades/quicktooth/win",
     "blades/snipsnap",
     "runner/core",
+    "runner/winui-rust",
 ]
 
 [workspace.package]
