@@ -5,6 +5,8 @@
 use core::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
 static HOOK: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
+// Only the panic handler reads these, and `cargo test` builds without it (it links std).
+#[cfg_attr(test, allow(dead_code))]
 static REPORTED: AtomicBool = AtomicBool::new(false);
 
 /// Called once when the process panics, on the thread that panicked. It must not wait for a lock
@@ -14,6 +16,7 @@ pub fn set_hook(f: fn()) {
 }
 
 /// Runs the hook (not again if the hook itself panics).
+#[cfg_attr(test, allow(dead_code))]
 pub(crate) fn report() {
     if REPORTED.swap(true, Ordering::AcqRel) {
         return;
