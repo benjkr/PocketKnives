@@ -17,7 +17,7 @@ use crate::bindings::Microsoft::UI::Xaml::{
 };
 use crate::bindings::Windows::UI::Xaml::Interop::TypeName;
 use alloc::boxed::Box;
-use core::cell::OnceCell;
+use core::cell::{Cell, OnceCell};
 use core::ffi::c_void;
 use core::mem::MaybeUninit;
 use core::ptr::null_mut;
@@ -33,8 +33,8 @@ struct App {
     overrides: &'static IApplicationOverrides_Vtbl,
     provider: &'static IXamlMetadataProvider_Vtbl,
     refs: AtomicU32,
-    /// The inner Application's non-delegating IInspectable.
-    inner: *mut c_void,
+    /// The inner Application's non-delegating IInspectable (null while it is being made).
+    inner: Cell<*mut c_void>,
     /// The Application, through the inner object (its references count on this object).
     application: OnceCell<Application>,
     controls: OnceCell<XamlControlsXamlMetaDataProvider>,
@@ -42,19 +42,20 @@ struct App {
 
 /// Creates the app inside `Application.Start`'s callback.
 pub fn create() -> windows_core::Result<()> {
-    let app: &'static mut App = Box::leak(Box::new(App {
+    // Shared from here on: the inner object calls back into it while CreateInstance runs.
+    let app: &'static App = Box::leak(Box::new(App {
         overrides: &OVERRIDES,
         provider: &PROVIDER,
         refs: AtomicU32::new(1), // ours, held forever; the inner object adds and releases more as it builds
-        inner: null_mut(),
+        inner: Cell::new(null_mut()),
         application: OnceCell::new(),
         controls: OnceCell::new(),
     }));
-    let outer = app as *mut App as *mut c_void;
+    let outer = app as *const App as *mut c_void;
     let factory = windows_core::factory::<Application, IApplicationFactory>()?;
     let (mut inner, mut instance) = (null_mut(), null_mut());
     unsafe { (factory.vtable().CreateInstance)(factory.as_raw(), outer, &mut inner, &mut instance) }.ok()?;
-    app.inner = inner;
+    app.inner.set(inner);
     let _ = app.application.set(unsafe { Application::from_raw(instance) });
     Ok(())
 }
@@ -78,7 +79,7 @@ unsafe extern "system" fn query<const OFFSET: usize>(this: *mut c_void, iid: *co
         unsafe { me.add(1) }
     } else {
         // Everything else (IApplication, IWeakReferenceSource, IMarshal, ...) is the inner object's.
-        let inner = app.inner as *mut *const IUnknown_Vtbl;
+        let inner = app.inner.get() as *mut *const IUnknown_Vtbl;
         if inner.is_null() {
             unsafe { *out = null_mut() };
             return HRESULT(0x8000_4002_u32 as i32); // E_NOINTERFACE: not built yet
@@ -100,7 +101,7 @@ unsafe extern "system" fn release<const OFFSET: usize>(this: *mut c_void) -> u32
 }
 
 unsafe extern "system" fn get_iids<const OFFSET: usize>(this: *mut c_void, count: *mut u32, iids: *mut *mut GUID) -> HRESULT {
-    let inner = unsafe { app(this, OFFSET) }.inner as *mut *const IInspectable_Vtbl;
+    let inner = unsafe { app(this, OFFSET) }.inner.get() as *mut *const IInspectable_Vtbl;
     if inner.is_null() {
         unsafe { (*count, *iids) = (0, null_mut()) };
         return S_OK;
