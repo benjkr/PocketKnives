@@ -84,3 +84,27 @@ pub fn dword(key: HKEY, subkey: Option<&str>, name: &str) -> Option<u32> {
     };
     (r == ERROR_SUCCESS).then_some(v)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyW};
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+
+    /// A throwaway key under HKCU, created, written, read back and deleted.
+    #[test]
+    fn writes_and_reads_a_string() {
+        let sub = alloc::format!("Software\\PocketKnives.pk-test.{}", unsafe { GetCurrentProcessId() });
+        let key = Key::create(HKEY_CURRENT_USER, &sub).unwrap();
+        key.set_string("Look", "win10").unwrap();
+        key.set_string("Empty", "").unwrap();
+        drop(key);
+        assert_eq!(string(HKEY_CURRENT_USER, Some(&sub), "Look").as_deref(), Some("win10"));
+        assert_eq!(string(HKEY_CURRENT_USER, Some(&sub), "Empty").as_deref(), Some(""));
+        assert_eq!(string(HKEY_CURRENT_USER, Some(&sub), "Missing"), None);
+        assert_eq!(dword(HKEY_CURRENT_USER, Some(&sub), "Look"), None);
+        assert_eq!(unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, to_wide(&sub).as_ptr()) }, ERROR_SUCCESS);
+        assert_eq!(string(HKEY_CURRENT_USER, Some(&sub), "Look"), None);
+        assert!(Key::open(HKEY_CURRENT_USER, &sub, windows_sys::Win32::System::Registry::KEY_READ).is_err());
+    }
+}

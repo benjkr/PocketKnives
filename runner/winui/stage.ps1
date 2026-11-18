@@ -80,7 +80,9 @@ $fragments = @()
 foreach ($pin in $pins) {
     $dir = Get-Package $pin
     if ($pin.Component) {
-        $native = Join-Path $dir 'runtimes-framework\win-x64\native'
+        # As Get-ChildItem spells it: Windows PowerShell gives children long names under a short
+        # (8.3) path such as %TEMP%'s, so the relative paths below must start from the same form.
+        $native = (Get-Item -LiteralPath (Join-Path $dir 'runtimes-framework\win-x64\native')).FullName
         foreach ($file in Get-ChildItem -LiteralPath $native -Recurse -File) {
             if ($payload | Where-Object { $file.Name -like $_ }) {
                 Copy-Into $file.FullName $file.FullName.Substring($native.Length + 1)
