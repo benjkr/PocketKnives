@@ -31,10 +31,30 @@ pub struct Resources<'a> {
 }
 
 /// Compiles `r` into a `.res` and links it into the package's binaries. The version is the
-/// package's (`CARGO_PKG_VERSION`).
+/// package's (`CARGO_PKG_VERSION`). The icon is resource 1.
 pub fn resources(r: &Resources) {
+    resources_with_icon_id(r, 1);
+}
+
+/// As [`resources`], with the icon under `icon_id`: the runner's is 32512 (`IDI_APPLICATION`,
+/// the ID .NET gave it), which its own code loads.
+pub fn resources_with_icon_id(r: &Resources, icon_id: u16) {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
+    for p in [r.icon, r.manifest].into_iter().flatten() {
+        rerun(p);
+    }
+    let rc_path = out.join("resources.rc");
+    let res_path = out.join("resources.res");
+    fs::write(&rc_path, rc_text(r, icon_id, &version)).expect("write resources.rc");
+    let status = Command::new(rc_exe()).args(["/nologo", "/fo"]).arg(&res_path).arg(&rc_path).status().expect("run rc.exe");
+    assert!(status.success(), "rc.exe failed");
+    println!("cargo:rustc-link-arg-bins={}", res_path.display());
+}
+
+/// The `.rc` script: `r`'s icon under `icon_id`, its manifest, and `version` as the file and
+/// product version.
+fn rc_text(r: &Resources, icon_id: u16, version: &str) -> String {
     let mut nums: Vec<u32> = version.split(['.', '-', '+']).take(3).map(|p| p.parse().unwrap_or(0)).collect();
     nums.resize(4, 0);
     let dotted = nums.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",");
@@ -43,11 +63,9 @@ pub fn resources(r: &Resources) {
     // RT_MANIFEST = 24, CREATEPROCESS_MANIFEST_RESOURCE_ID = 1, VOS_NT_WINDOWS32 = 0x40004, VFT_APP = 1.
     let mut rc = String::new();
     if let Some(icon) = r.icon {
-        rerun(icon);
-        writeln!(rc, "1 ICON \"{}\"", escape(icon)).unwrap();
+        writeln!(rc, "{icon_id} ICON \"{}\"", escape(icon)).unwrap();
     }
     if let Some(manifest) = r.manifest {
-        rerun(manifest);
         writeln!(rc, "1 24 \"{}\"", escape(manifest)).unwrap();
     }
     write!(
@@ -62,13 +80,7 @@ pub fn resources(r: &Resources) {
         f = r.file_name,
     )
     .unwrap();
-
-    let rc_path = out.join("resources.rc");
-    let res_path = out.join("resources.res");
-    fs::write(&rc_path, rc).expect("write resources.rc");
-    let status = Command::new(rc_exe()).args(["/nologo", "/fo"]).arg(&res_path).arg(&rc_path).status().expect("run rc.exe");
-    assert!(status.success(), "rc.exe failed");
-    println!("cargo:rustc-link-arg-bins={}", res_path.display());
+    rc
 }
 
 fn rerun(p: &Path) {
@@ -99,4 +111,27 @@ fn rc_exe() -> PathBuf {
         .unwrap_or_default();
     versions.sort();
     versions.pop().expect("rc.exe not found: install the Windows SDK (Visual Studio's C++ workload has it)")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rc_script() {
+        let r = Resources {
+            icon: Some(Path::new(r"C:\a\app.ico")),
+            manifest: Some(Path::new(r"C:\a\app.manifest")),
+            product: "P",
+            file_name: "p.exe",
+        };
+        let rc = rc_text(&r, 1, "1.2.3-beta");
+        // rc reads a backslash in a string as an escape: each one is doubled.
+        assert!(rc.starts_with(r#"1 ICON "C:\\a\\app.ico""#));
+        assert!(rc.contains("\n1 24 \"C:\\\\a\\\\app.manifest\"\n1 VERSIONINFO\nFILEVERSION 1,2,3,0\n"));
+        assert!(rc.contains("VALUE \"FileVersion\", \"1.2.3-beta\"") && rc.contains("VALUE \"OriginalFilename\", \"p.exe\""));
+        assert!(rc_text(&r, 32512, "0.1.0").starts_with("32512 ICON \"C:"));
+        let bare = Resources { icon: None, manifest: None, ..r };
+        assert!(rc_text(&bare, 32512, "0.1.0").starts_with("1 VERSIONINFO\n"));
+    }
 }
