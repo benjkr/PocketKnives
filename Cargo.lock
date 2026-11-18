@@ -64,6 +64,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "runner-core"
+version = "0.1.0"
+dependencies = [
+ "pk",
+ "windows-sys",
+]
+
+[[package]]
 name = "snipsnap"
 version = "0.1.0"
 dependencies = [

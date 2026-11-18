@@ -1,5 +1,4 @@
-# The PocketKnives Rust workspace: the shared `pk` crate and the Rust blades.
-# The runner (runner/) is C#; it isn't part of this workspace.
+# The PocketKnives Rust workspace: the shared `pk` crate, the Rust blades and the runner.
 [workspace]
 resolver = "3"
 members = [
@@ -9,6 +8,7 @@ members = [
     "blades/quicktooth/win",
     "blades/quicktooth/web",
     "blades/snipsnap",
+    "runner/core",
 ]
 # The simulator's WebAssembly build is only built for wasm32 (sim/lib/core-build.mjs).
 default-members = [
@@ -17,6 +17,7 @@ default-members = [
     "blades/quicktooth/core",
     "blades/quicktooth/win",
     "blades/snipsnap",
+    "runner/core",
 ]
 
 [workspace.package]
@@ -26,6 +27,7 @@ publish = false
 
 [workspace.dependencies]
 pk = { path = "crates/pk" }
+runner-core = { path = "runner/core" }
 quicktooth-core = { path = "blades/quicktooth/core" }
 windows-sys = "0.61"
 windows = { version = "0.62", default-features = false }
