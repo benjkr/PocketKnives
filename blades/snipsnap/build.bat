@@ -1,31 +1,20 @@
 @echo off
-rem Build snipsnap.exe with MSVC. Works from any prompt; sets up VS if needed.
+rem Build snipsnap.exe with cargo (the Rust workspace at the repo root). Works from any prompt:
+rem cargo finds the MSVC linker itself.
 rem   build.bat         builds snipsnap.exe here, stopping a running SnipSnap first
 rem   build.bat <dir>   builds <dir>\snipsnap.exe (an absolute path); stops nothing
 setlocal
 set "OUT=%~1"
+set "TARGET=%~dp0..\..\target"
 cd /d "%~dp0"
 
-if defined INCLUDE goto build
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-for /f "usebackq delims=" %%i in (`call "%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSDIR=%%i"
-if not defined VSDIR (
-  echo Visual Studio C++ build tools not found.
-  exit /b 1
-)
-call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
-
-:build
-if defined OUT goto compile
+if defined OUT goto build
 set "OUT=%CD%"
-rem Stop a running instance, otherwise the exe is locked and linking fails. Any running SnipSnap
+rem Stop a running instance, otherwise the exe is locked and the copy fails. Any running SnipSnap
 rem is found by its window class, so this stops the user's installed copy too.
 if exist snipsnap.exe start "" /wait snipsnap.exe quit
 
-:compile
-cl /nologo /W4 /WX /O1 /GS- /DSS_NOCRT snipsnap.c /Fo"%OUT%\snipsnap.obj" ^
-   /link /NODEFAULTLIB /ENTRY:WinMainCRTStartup /SUBSYSTEM:WINDOWS ^
-   /OPT:REF /OPT:ICF /MANIFEST:NO /OUT:"%OUT%\snipsnap.exe" ^
-   kernel32.lib user32.lib gdi32.lib dwmapi.lib || exit /b 1
-del /q "%OUT%\snipsnap.obj" 2>nul
+:build
+cargo build --release -p snipsnap --target-dir "%TARGET%" || exit /b 1
+copy /y "%TARGET%\release\snipsnap.exe" "%OUT%\snipsnap.exe" >nul || exit /b 1
 echo Built %OUT%\snipsnap.exe

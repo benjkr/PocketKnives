@@ -4,7 +4,7 @@ A browser copy of the Windows 11 taskbar with QuickTooth's tray icon in it. Use 
 icon, animation, tooltip, menu and connect/disconnect behaviour without a real taskbar (for example
 while the PC is locked), and to try changes before they reach the real taskbar.
 
-- **The app code is the real code.** The icon renderer, the tray state machine (timers, link-teardown wait, resend, timeout, tooltip, menu contents, battery) and every tunable are the app's own C# from `src/QuickTooth.Core`, compiled to WebAssembly (`src/QuickTooth.Web`) and run in the page. The exe runs the same code on Windows. `web/tray.js` and `web/icon.js` are only the page-side host: Win32 timers on the virtual clock, the device worker, the mock shell and Bluetooth.
+- **The app code is the real code.** The icon renderer, the tray state machine (timers, link-teardown wait, resend, timeout, tooltip, menu contents, battery) and every tunable are the app's own Rust from `core/`, compiled to WebAssembly (`web/`) and run in the page. The exe runs the same code on Windows. `web/tray.js` and `web/icon.js` are only the page-side host: Win32 timers on the virtual clock, the device worker, the mock shell and Bluetooth.
 - **Bluetooth is mocked at the app's own seam**: `Enumerate`, `SendOneShot`, `BluetoothConnected`, endpoint notifications, the BLE battery scan. A2DP and HFP are separate, and the profiles are calibrated on the real `quicktooth.log` (fast / typical / real-world mix / slow / flaky / unreachable / …).
 - **One virtual clock drives everything**, including fades and delays, so a screenshot at t = 1.234 s is exactly what the screen shows then, and recordings are frame-accurate.
 - **Runs only in Playwright's bundled Chromium**, never Chrome or Edge. Pixels come out at the physical resolution for 100–200 % scaling.
@@ -17,7 +17,7 @@ bun install            # playwright 1.60.0; uses its Chromium (revision 1223) �
 bun qt-sim.mjs doctor  # shows the browser and ffmpeg in use
 ```
 
-Needs Bun 1.4.4+ (older Bun hangs launching Chromium on Windows; `bun upgrade`), ffmpeg (for video, GIF and `--zoom`) and the .NET 10 SDK: every run first rebuilds the app's C# core for the browser if it changed (into `web/core`, about 5–10 s; prints which build it uses). No .NET workload is needed.
+Needs Bun 1.4.4+ (older Bun hangs launching Chromium on Windows; `bun upgrade`), ffmpeg (for video, GIF and `--zoom`) and Rust (rustup; the repo's `rust-toolchain.toml` adds the wasm32 target): every run first rebuilds the app's core for the browser if it changed (into `web/core`, a few seconds; prints which build it uses).
 
 ## Recipes
 
@@ -42,9 +42,9 @@ bun examples/compare-profiles.mjs fast typical slow unreachable
 # Every animation phase, one frame per real timer tick, both themes (+ GIFs)
 bun qt-sim.mjs frames --zoom 8
 
-# Try different numbers (src/QuickTooth.Core/Tunables.cs) side by side with the current ones
+# Try different numbers (core/src/tunables.rs) side by side with the current ones
 bun qt-sim.mjs frames --compare --tune Travel=2.4,TracerPeriod=0.8
-# A new look or behaviour: change src/QuickTooth.Core (e.g. IconRenderer.cs); the next run rebuilds it
+# A new look or behaviour: change core/ (e.g. src/icon); the next run rebuilds it
 bun qt-sim.mjs frames --zoom 8
 
 # Does it still behave? (fidelity checks + all scenarios with assertions)
@@ -76,7 +76,7 @@ Step flags for `shot` (applied in the order given): `--hover T`, `--move T`, `--
 Simulator options (any command that opens it): `--scale 1|1.25|1.5|1.75|2`, `--screen 1920x1080`,
 `--theme dark|light`, `--style solid|acrylic`, `--profile <name>`, `--seed N`, `--connected`,
 `--first-run` (empty settings, icon starts in the overflow), `--overflow`, `--no-cursor`, `--no-dwm`,
-`--timer-quantum 15.625` (0 = exact timers), `--tune Name=value,…` (or JSON; names from `src/QuickTooth.Core/Tunables.cs`), `--settle ms`.
+`--timer-quantum 15.625` (0 = exact timers), `--tune Name=value,…` (or JSON; names from `core/src/tunables.rs`), `--settle ms`.
 
 ## Scenarios
 
@@ -159,7 +159,7 @@ Every knob can be set alone: `hfpMs`, `hfpTailChance`/`hfpTailMs`, `a2dpAfterHfp
 | Other scales, DWM menu corners/shadow, fades, overflow flyout | reasoned, not measured | extrapolated |
 
 `reference/metrics.json` lists every number with its source. The probes in `reference/probe/`
-(`dotnet run sim/reference/probe/menuprobe.cs -- dark <dir>`) re-measure the menu and timer. They open a
+(`dotnet run sim/reference/probe/menuprobe.cs -- dark <dir>`, with the .NET 10 SDK) re-measure the menu and timer. They open a
 throwaway menu or timer of their own and never touch a running QuickTooth.
 
 Not simulated: keyboard focus in the tray (Win+B, arrows), notification balloons, multiple monitors,
@@ -167,8 +167,8 @@ Quick Settings and anything else that isn't on QuickTooth's path.
 
 ## Changing the app
 
-There is nothing to keep in sync: the simulator runs `src/QuickTooth.Core`, the same C# as the exe.
+There is nothing to keep in sync: the simulator runs `core/`, the same Rust as the exe.
 
-- **Looks, animation, behaviour, menu contents, tooltip text, timings**: change `src/QuickTooth.Core`. The next `qt-sim` run rebuilds the browser build; run `bun qt-sim.mjs test`.
-- **Numbers only**: `--tune` (or `qt.tune({...})`) overrides any `Tunables.cs` value in the page without touching the C#.
-- **The Windows side** (`src/QuickTooth/TrayApp.cs`: window, Shell_NotifyIcon, menus, HICONs; `WindowsDevices.cs`: real Bluetooth) isn't run here. Its page-side counterparts are `web/tray.js` (TrayAppModel's host methods) and `web/bluetooth.js`.
+- **Looks, animation, behaviour, menu contents, tooltip text, timings**: change `core/`. The next `qt-sim` run rebuilds the browser build; run `bun qt-sim.mjs test`.
+- **Numbers only**: `--tune` (or `qt.tune({...})`) overrides any `core/src/tunables.rs` value in the page without touching the code.
+- **The Windows side** (`win/src/tray.rs`: window, Shell_NotifyIcon, menus, HICONs; `audio.rs`, `ble.rs`: real Bluetooth) isn't run here. Its page-side counterparts are `web/tray.js` (TrayAppModel's host methods) and `web/bluetooth.js`.

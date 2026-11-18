@@ -23,9 +23,9 @@ export function buildPanel(root, qt) {
     <h2>App</h2>
     <div class="row" id="p-app"></div>
     <div class="kv" id="p-state"></div>
-    <h2>Tunables <span class="note">(from the C#; drag to try values)</span></h2>
+    <h2>Tunables <span class="note">(from the app's core; drag to try values)</span></h2>
     <div class="tune" id="p-tune"></div>
-    <div class="row"><button id="p-tune-reset">Reset to C# values</button></div>
+    <div class="row"><button id="p-tune-reset">Reset to the app's values</button></div>
     <h2>Animation frames <span class="note">(at the real ~94.8 ms timer cadence)</span></h2>
     <div id="p-strips"></div>
     <h2>quicktooth.log</h2>

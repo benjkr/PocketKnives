@@ -1,6 +1,13 @@
 <Project>
-  <Import Project="../blades/quicktooth/src/Directory.Build.props" />
+  <!-- Shared by the runner (pk.csproj) and its Windows 11 settings app (WinUI/). -->
   <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The runtime is compiled into the Native AOT exes and bundled with the self-contained WinUI
+         app, so never build with an older patch than this one (10.0.14+ fixes CVE-2026-111497).
+         A newer SDK's own, newer patch is left alone. See Directory.Build.targets. -->
+    <PkRuntimePatch>10.0.15</PkRuntimePatch>
     <OutputType>WinExe</OutputType>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>

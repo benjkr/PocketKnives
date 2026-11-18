@@ -1,4 +1,4 @@
-// The tray icon renderer in the simulator is the app's own: IconRenderer from src/QuickTooth.Core,
+// The tray icon renderer in the simulator is the app's own: core/src/icon (Rust),
 // compiled to WebAssembly (core.js). Same pixels as QuickTooth.exe — `qt-sim parity` checks it.
 // This file only wraps it for canvas use and keeps a few page helpers.
 
@@ -6,8 +6,8 @@ export const PHASES = ['Connecting', 'Landing', 'Disconnecting', 'Cancelling'];
 
 export class IconRenderer {
   /**
-   * @param {object} core the loaded C# Bridge exports (core.js loadCore())
-   * @param {object} P    the C# tunables as last read (kit.P; kit.tune keeps it current)
+   * @param {object} core the loaded core exports (core.js loadCore())
+   * @param {object} P    the core's tunables as last read (kit.P; kit.tune keeps it current)
    */
   constructor(core, P) { this.core = core; this.P = P; }
 

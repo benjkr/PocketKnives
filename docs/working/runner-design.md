@@ -239,32 +239,24 @@ Proposed blade settings integration:
 
 ## The default language and shared code for new blades
 
-- **Default: C# / .NET 10, Native AOT**, like QuickTooth. A new C# blade starts at about 0.85 MB of
-  exe, 1.2 MB private working set and a 15 ms start (the measured floor). That's small enough to
-  run as its own process, safe, quick to write, and QuickTooth already shows the whole path:
-  source-generated JSON and COM, zero AOT warnings, a runtime patch pin, and a shared core that
-  also runs in a browser simulator.
-- **C stays allowed** when size, memory or latency is the feature, as for SnipSnap. A C blade
-  follows the same manifest and command-line contract but doesn't get the shared library.
-- **Shared code**, extracted from QuickTooth (it already has all of this except hotkeys) rather
-  than written anew, in two projects every C# blade references and compiles into its own exe
-  (trimmed, so a blade pays only for what it uses):
-  - `PocketKnives.Core` (no Windows APIs, so a blade's core can run in a simulator too): settings
-    through source-generated JSON, saved via a temp file and a move; the log
-    (`yyyy-MM-dd HH:mm:ss.fff [pid] message`, rolled to `.old` at 512 KB); command-line parsing.
-  - `PocketKnives.Windows`: the tray icon host (`Shell_NotifyIcon` v4, re-added when Explorer
-    restarts, theme and DPI changes); global hotkeys with fallback lists, reporting which ones
-    registered (SnipSnap's scheme); single instance (a mutex, plus a window class and a registered
-    message so a second start forwards its command to the running copy); start with Windows (the
-    `HKCU\…\Run` value); attaching to the parent console for CLI output.
-  - The suite-wide `Directory.Build.props` and `.targets` (nullable, invariant globalisation, the
-    runtime patch pin) move to the repo root.
+Decided ([decisions](decisions.md)): **Rust, `no_std`, on the shared `crates/pk`**, one exe per
+blade. QuickTooth was ported from C# and shows the whole path: COM and WinRT through the `windows`
+crate, a shared core that also runs in a browser simulator (WebAssembly), every warning an error.
+
+- A Rust blade's floor is a few KB of exe and about 0.7 MB private working set (measured with a
+  message-only window and its loop: 3 KB with `/NODEFAULTLIB`, 120 KB with std). The C# Native AOT
+  floor above was 840 KB and 1.2 MB.
+- `crates/pk` replaces std (entry point, process heap, CRT-rules arguments, console and pipe
+  output, single instance, a lock and threads); `crates/pk-build` gives build scripts the link
+  flags and resources. Code moves into `pk` only when a second blade needs it (a tray icon host,
+  hotkeys).
+- The runner and its settings windows stay C#: the Windows 11 look is WinUI 3.
 
 ## Recommendation
 
 **Option A**: a runner that starts each blade as its own process, with a per-blade manifest and
-command-line conventions. New blades default to C# Native AOT on the shared `PocketKnives.Core`
-and `PocketKnives.Windows`; C only when the budget is the product.
+command-line conventions. New blades are Rust on the shared `crates/pk` (decided since; see
+above).
 
 - **Why**: the measured price of separate processes is about 0.6 MB per C blade and 1.2 MB per C#
   blade, while merging costs SnipSnap its 16 KB and no-CRT design, a rewrite and crash isolation,
@@ -278,11 +270,11 @@ and `PocketKnives.Windows`; C only when the budget is the product.
     every simulator scenario's log, timeline and final state diffed before and after.
   - Later, with the user's go on their PC: one sign-in entry for the runner instead of SnipSnap's
     Startup shortcut and QuickTooth's Run value, and a suite installer.
-  - Two languages to keep building (MSVC and the .NET SDK), as today.
+  - Two toolchains to keep building: Rust for the blades, the .NET SDK for the runner.
 - **Adding a blade then**:
-  1. Copy the template folder (or `pk new <name>`) to `blades/<name>/`. It has a C# project that
-     references the shared projects, plus `blade.json`, `AGENTS.md`, a README, docs and an icon
-     (`icon.svg` and `icon.ico`).
+  1. Copy the template folder (or `pk new <name>`) to `blades/<name>/`. It has a Rust crate on
+     `crates/pk`, plus `blade.json`, `AGENTS.md`, a README, docs and an icon (`icon.svg` and
+     `icon.ico`).
   2. Write the blade. Tray, hotkeys, settings (`--settings`, `--set`, the reload), log, single
      instance, autostart and the command line come from the shared code.
   3. Fill in `blade.json`, its settings included. The runner and the settings window find it

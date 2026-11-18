@@ -1,3 +1,20 @@
 <Project>
-  <Import Project="../blades/quicktooth/src/Directory.Build.targets" />
+  <!-- Raises the .NET runtime pack (framework-dependent and self-contained) and the Native AOT
+       compiler pack to at least $(PkRuntimePatch). -->
+  <Target Name="PkPinRuntimePatch" BeforeTargets="ProcessFrameworkReferences">
+    <ItemGroup>
+      <KnownFrameworkReference Condition="'%(Identity)' == 'Microsoft.NETCore.App' and '%(TargetFramework)' == 'net10.0' and
+                                          $([MSBuild]::VersionLessThan('%(KnownFrameworkReference.LatestRuntimeFrameworkVersion)', '$(PkRuntimePatch)'))">
+        <LatestRuntimeFrameworkVersion>$(PkRuntimePatch)</LatestRuntimeFrameworkVersion>
+      </KnownFrameworkReference>
+      <KnownRuntimePack Condition="'%(Identity)' == 'Microsoft.NETCore.App' and '%(TargetFramework)' == 'net10.0' and
+                                   $([MSBuild]::VersionLessThan('%(KnownRuntimePack.LatestRuntimeFrameworkVersion)', '$(PkRuntimePatch)'))">
+        <LatestRuntimeFrameworkVersion>$(PkRuntimePatch)</LatestRuntimeFrameworkVersion>
+      </KnownRuntimePack>
+      <KnownILCompilerPack Condition="'%(Identity)' == 'Microsoft.DotNet.ILCompiler' and '%(TargetFramework)' == 'net10.0' and
+                                      $([MSBuild]::VersionLessThan('%(KnownILCompilerPack.ILCompilerPackVersion)', '$(PkRuntimePatch)'))">
+        <ILCompilerPackVersion>$(PkRuntimePatch)</ILCompilerPackVersion>
+      </KnownILCompilerPack>
+    </ItemGroup>
+  </Target>
 </Project>

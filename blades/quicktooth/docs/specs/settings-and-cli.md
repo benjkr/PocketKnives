@@ -7,8 +7,9 @@ change, and lean.
 
 - `targetContainerId` (primary), `targetMac` (fallback), `targetName` (display only),
   `trayPromotedOnce` and, optionally, `lowBatteryPercent` (the low-battery warning; absent means
-  the default in `Tunables.cs`, and a file without it round-trips unchanged). Read and written
-  through a source-generated JSON context; saved through a temp file and a move.
+  the default in `core/src/tunables.rs`, and a file without it round-trips unchanged). Read and written
+  exactly as System.Text.Json did (`core/src/settings.rs`: camelCase, nulls left out, indented,
+  relaxed escaping, CRLF in the exe); saved through a temp file and a move.
 - A stored target is never swapped for another device: if it's missing, the tray says
   "Not available". With no target saved yet, the first paired device whose name contains
   "AirPods" (a connected one first) is chosen and saved.
@@ -16,7 +17,7 @@ change, and lean.
 ## Changing them from PocketKnives Settings
 
 QuickTooth's side of the suite's [blade settings contract](../../../../docs/specs/blade-settings.md),
-in `BladeSettings.cs` (core):
+in `core/src/blade_settings.rs`:
 
 - `--settings` prints two `choice` settings: `device` ("Headset": container IDs in `B` format,
   labelled with the devices the tray's Device menu offers; the value is the stored target, empty
@@ -37,13 +38,19 @@ in `BladeSettings.cs` (core):
 
 ## Log: `%APPDATA%\QuickTooth\quicktooth.log`
 
-- `yyyy-MM-dd HH:mm:ss.fff [pid] message`, moved to `.old` at 512 KB. Shared code logs through
-  `Log` (its sink is set by each host); the CLI can echo lines to the console.
+- `yyyy-MM-dd HH:mm:ss.fff [pid] message`, local time, CRLF, moved to `.old` at 512 KB. Shared code
+  logs through `core/src/log.rs` (its sink is set by each host).
 - The lines are compared across builds and with the simulator's log, so treat their wording as
   behaviour (`AGENTS.md`).
+- `ERROR <context>: <text>` lines carry a short message (the C# build wrote .NET's exception and
+  stack). A bug ends the process after `ERROR panic: QuickTooth stopped on a bug`; the C# build's
+  `ERROR wndproc …`, `ERROR ui callback …` and `read endpoint: …` lines (caught exceptions) are
+  gone. Failures the C# build only showed as exceptions log `ERROR icon`, `ERROR autostart`,
+  `ERROR delay`, `ERROR device worker`, `ERROR battery scan` or `ERROR tray`.
 
 ## Command line: `QuickTooth.exe [option]` (no option starts the tray)
 
+- `--version` prints `QuickTooth <version>  (Rust, no_std)`.
 - For people: `--toggle`, `--connect`, `--disconnect` (forwarded to the running tray, so they act
   exactly like a click; `--no-wait` returns at once), `--list [--all]`, `--battery`,
   `--autostart on|off|status`, `--exit`, `--version`, `--help`.

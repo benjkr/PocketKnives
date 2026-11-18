@@ -28,5 +28,15 @@ blade's own decisions are in its `docs/working/decisions.md`.
   code. The `blade.json` manifest proposed in the runner design was not built. The settings
   offered are the runner design's list: SnipSnap's three hotkeys and its flash, QuickTooth's
   headset and low-battery level.
-- **How blades run together, shared code and the default language** for new blades: being decided
+- **Blades are written in Rust**, `no_std`, each its own small exe on the shared `crates/pk`
+  (entry point, heap, arguments, console, single instance, threads); COM and WinRT through the
+  `windows` crate. QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.2 MB to about
+  0.27 MB with the same behaviour, log lines and pixels, checked against recordings of the C# build.
+  SnipSnap was ported from one C file for safety at the same size and speed: 20,480 bytes against
+  19,456, the same four system DLLs and 115 imported functions, its per-pixel loops (the dimming,
+  the repaint, the clipboard rows) measured no slower than the C on synthetic frames.
+  The runner and its settings windows stay C# (WinUI 3 has no Rust equivalent worth its cost).
+  Rejected: C# Native AOT as the default for blades (a 0.85 MB, 1.2 MB floor per blade), and Rust
+  with std (about 100 KB more per exe).
+- **How blades run together** beyond the runner and settings contract that exist: being decided
   ([runner design](runner-design.md)).

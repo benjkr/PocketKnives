@@ -14,15 +14,21 @@ in a blade's docs are from that blade's folder.
 
 | Blade | What it does | Built with | Start here |
 |---|---|---|---|
-| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | One C file, no CRT, MSVC | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
-| QuickTooth | Connects or disconnects AirPods with one click on a tray icon | C# / .NET 10, Native AOT; browser simulator | [`blades/quicktooth/AGENTS.md`](blades/quicktooth/AGENTS.md) |
+| SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | Rust, `no_std` on `pk`, four system DLLs | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
+| QuickTooth | Connects or disconnects AirPods with one click on a tray icon | Rust, `no_std` on `pk`; browser simulator (WebAssembly) | [`blades/quicktooth/AGENTS.md`](blades/quicktooth/AGENTS.md) |
+
+The Rust blades share one Cargo workspace (`Cargo.toml` at the root, toolchain pinned in
+`rust-toolchain.toml`) and `crates/pk`: what a `no_std` blade exe needs instead of Rust's std
+(entry point, heap, arguments, console, single instance, threads), plus `crates/pk-build` for
+their build scripts. The runner is C#.
 
 ## Rules every change follows
 
 - **One source of truth.** No copies of logic, values or text, no configuration for things that
   never vary, and no special case unless the platform forces it, with a comment saying which
   platform quirk. A rule or fact is written once: here if it holds for every blade, in the
-  blade's docs if it doesn't. A blade's code, assets and docs stay in its folder.
+  blade's docs if it doesn't. A blade's code, assets and docs stay in its folder; code more than
+  one blade uses goes in `crates/`, and only once a second blade needs it.
 - **Show it before it ships.** A change to what a blade looks like or does is shown to the user
   before it's merged, the way that blade's `AGENTS.md` says (QuickTooth: the simulator), with
   before/after when it replaces something.
@@ -33,9 +39,10 @@ in a blade's docs are from that blade's folder.
 - **Only `master` is installed on the user's PC** (tagged releases once they exist). Never install
   a branch, an open PR or anything unmerged. Unmerged work is previewed, or checked read-only from
   a build in a scratch folder.
-- **Native and AOT builds stay clean**: zero compiler warnings (C builds with `/W4 /WX`), zero
-  AOT/trim warnings, no reflection in .NET, and each blade's size and memory budget holds. Security
-  pins (such as QuickTooth's runtime patch pin) never go backwards.
+- **Builds stay clean**: zero compiler warnings (`.cargo/config.toml` makes every Rust warning an
+  error; the runner's .NET treats warnings as errors), zero AOT/trim warnings and no reflection
+  in the runner, and each blade's size and memory budget holds. Security pins (the Rust
+  toolchain in `rust-toolchain.toml`, the runner's .NET runtime patch pin) never go backwards.
 - **Log lines are behaviour.** A blade's log lines, console output and exit codes are compared
   across builds or read by scripts and launchers; change their wording only on purpose, with
   whatever reads them.

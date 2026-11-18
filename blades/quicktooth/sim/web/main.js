@@ -160,7 +160,7 @@ async function boot() {
     },
     exitApp() { app.exit(); },
 
-    /** Change tunables live in the C# core (src/QuickTooth.Core/Tunables.cs); the app redraws its icons. */
+    /** Change tunables live in the Rust core (core/src/tunables.rs); the app redraws its icons. */
     tune(overrides) { kit.tune(overrides); app.rebuildIcons(); return { ...kit.P }; },
 
     /**
