@@ -13,7 +13,8 @@
 //! posted, and each `WM_APP_INVOKE` runs everything queued, results and tasks in the order they
 //! arrived, including what's queued meanwhile. A result completes its `Done` and runs the task it
 //! wakes right there (C# queued the continuation itself). Continuations also run inside
-//! `TrackPopupMenuEx`'s modal loop. `delay` is a window timer with an id above the controller's.
+//! `TrackPopupMenuEx`'s modal loop. `delay` is a thread-pool timer whose expiry queues its result
+//! like any other (C#'s `Task.Delay`), so it takes its place in arrival order.
 use crate::audio::Audio;
 use crate::worker::Worker;
 use crate::{ble, clock, files, icons, ipc, pnp, system};
@@ -35,10 +36,11 @@ use quicktooth_core::controller::{ALL_TIMERS, TrayController};
 use quicktooth_core::devices::{OneShot, SendResult, Snapshot};
 use quicktooth_core::exec::{self, Done, Op, OpResult, Schedule, Task};
 use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Threading::{CreateTimerQueueTimer, DeleteTimerQueueTimer, WT_EXECUTEONLYONCE};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi};
 use windows_sys::Win32::UI::Shell::{
     NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_SELECT, NINF_KEY,
@@ -57,8 +59,6 @@ const WM_TRAY: u32 = WM_APP + 1;
 const NIN_KEYSELECT: u32 = NIN_SELECT | NINF_KEY;
 const WM_APP_INVOKE: u32 = WM_APP + 2;
 const WM_APP_DEVCHANGE: u32 = WM_APP + 3;
-/// `delay` timers use ids from here up; the controller's own timers are 1–10.
-const DELAY_TIMER_BASE: usize = 0x1000;
 
 type Deliver = Box<dyn FnOnce(Box<dyn Any + Send>)>;
 
@@ -73,7 +73,8 @@ struct Ui {
     /// The next task woken runs at once (the one a result being delivered wakes).
     run_woken_now: Cell<bool>,
     pending: RefCell<BTreeMap<usize, Deliver>>,
-    delays: RefCell<BTreeMap<usize, Done<()>>>,
+    /// `delay`'s thread-pool timers by result id, deleted once their result is delivered.
+    delay_timers: RefCell<BTreeMap<usize, isize>>,
     next_id: Cell<usize>,
     msg_taskbar_created: Cell<u32>,
     msg_command: Cell<u32>,
@@ -126,6 +127,14 @@ fn post_result<T: Send + 'static>(hwnd: isize, id: usize, value: OpResult<T>) {
     unsafe { PostMessageW(hwnd as HWND, WM_APP_INVOKE, 0, 0) };
 }
 
+/// A `delay` timer expired (on a thread-pool thread): queue its result for the UI thread.
+unsafe extern "system" fn delay_expired(param: *mut core::ffi::c_void, _: bool) {
+    let (hwnd, id) = *unsafe { Box::from_raw(param as *mut (isize, usize)) };
+    post_result(hwnd, id, OpResult::<()>::Ok(()));
+}
+
+static DELAY_FAILED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
 /// Runs everything queued for the UI thread, oldest first (C#'s `UiContext.Drain`). Nested calls
 /// (a modal loop inside a task) carry on with the same queues.
 fn drain(ui: &Ui) {
@@ -149,6 +158,11 @@ fn drain(ui: &Ui) {
                     deliver(value);
                     ui.run_woken_now.set(false);
                 }
+                let timer = ui.delay_timers.borrow_mut().remove(&id);
+                if let Some(t) = timer {
+                    // It has fired; no completion event, so this never waits.
+                    unsafe { DeleteTimerQueueTimer(null_mut(), t as HANDLE, null_mut()) };
+                }
             }
         }
     }
@@ -169,7 +183,7 @@ pub fn run() -> u32 {
         tasks: RefCell::new(VecDeque::new()),
         run_woken_now: Cell::new(false),
         pending: RefCell::new(BTreeMap::new()),
-        delays: RefCell::new(BTreeMap::new()),
+        delay_timers: RefCell::new(BTreeMap::new()),
         next_id: Cell::new(1),
         msg_taskbar_created: Cell::new(0),
         msg_command: Cell::new(0),
@@ -275,13 +289,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             return 0;
         }
         WM_TIMER => {
-            if wparam >= DELAY_TIMER_BASE {
-                unsafe { KillTimer(hwnd, wparam) };
-                let done = ui.delays.borrow_mut().remove(&wparam);
-                if let Some(done) = done {
-                    done.ok(());
-                }
-            } else if let Some(c) = c {
+            if let Some(c) = c {
                 c.on_timer(wparam as i32);
             }
             return 0;
@@ -411,13 +419,24 @@ impl TrayHost for WinHost {
             return Op::ok(());
         }
         let (op, done) = exec::op();
-        let id = DELAY_TIMER_BASE + (self.0.next() % (usize::MAX - DELAY_TIMER_BASE));
-        if unsafe { SetTimer(self.0.hwnd(), id, ms as u32, None) } == 0 {
-            // C#'s Task.Delay couldn't fail; finish now rather than never.
-            quicktooth_core::log::error("delay", "SetTimer failed");
-            return Op::ok(());
+        let id = self.0.expect(done);
+        let param = Box::into_raw(Box::new((self.0.hwnd() as isize, id)));
+        let mut timer: HANDLE = null_mut();
+        let made =
+            unsafe { CreateTimerQueueTimer(&mut timer, null_mut(), Some(delay_expired), param.cast(), ms as u32, 0, WT_EXECUTEONLYONCE) };
+        if made == 0 {
+            drop(unsafe { Box::from_raw(param) });
+            // C#'s Task.Delay couldn't fail: finish now rather than never (logged once).
+            if !DELAY_FAILED.swap(true, Ordering::Relaxed) {
+                quicktooth_core::log::error("delay", "CreateTimerQueueTimer failed");
+            }
+            let deliver = self.0.pending.borrow_mut().remove(&id);
+            if let Some(deliver) = deliver {
+                deliver(Box::new(OpResult::<()>::Ok(())));
+            }
+            return op;
         }
-        self.0.delays.borrow_mut().insert(id, done);
+        self.0.delay_timers.borrow_mut().insert(id, timer as isize);
         op
     }
 

@@ -12,7 +12,7 @@
 //!   events, `--set`, theme changes and woken tasks;
 //! - `add_icon`, `modify_icon`, `remove_icon` and `icon_anchor` wait on Explorer, and Windows
 //!   delivers messages sent to the window meanwhile (`WM_COPYDATA`, `WM_SETTINGCHANGE`, display
-//!   changes).
+//!   changes, and a `WM_APP_INVOKE` another process sends, which runs woken tasks there).
 use crate::Guid;
 use crate::battery::BatteryReading;
 use crate::devices::{OneShot, SendResult, Snapshot};
