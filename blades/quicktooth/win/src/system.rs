@@ -7,75 +7,19 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ptr::{null, null_mut};
+use pk::reg::{Key, dword as reg_dword, string as reg_string};
 use pk::wide::to_wide;
 use quicktooth_core::Guid;
-use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS, HWND};
+use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HWND};
 use windows_sys::Win32::Storage::FileSystem::GetFullPathNameW;
-use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows_sys::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_READ, KEY_SET_VALUE, REG_DWORD, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegCloseKey,
-    RegDeleteKeyValueW, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW, RegSetKeyValueW, RegSetValueExW,
+    HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_READ, KEY_SET_VALUE, REG_DWORD, REG_SZ, RegDeleteKeyValueW, RegEnumKeyExW, RegSetKeyValueW,
+    RegSetValueExW,
 };
-use windows_sys::Win32::UI::Shell::SHGetKnownFolderPath;
 
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE: &str = "QuickTooth";
-
-// ---------------------------------------------------------------------------- registry helpers
-
-/// A string value (REG_SZ, or REG_EXPAND_SZ expanded), `None` if absent or another type.
-fn reg_string(key: HKEY, subkey: Option<&str>, name: &str) -> Option<String> {
-    let sub = subkey.map(to_wide);
-    let name = to_wide(name);
-    let sub_ptr = sub.as_ref().map_or(null(), |s| s.as_ptr());
-    let mut buf: Vec<u16> = vec![0; 260];
-    loop {
-        let mut size = (buf.len() * 2) as u32;
-        let r = unsafe { RegGetValueW(key, sub_ptr, name.as_ptr(), RRF_RT_REG_SZ, null_mut(), buf.as_mut_ptr().cast(), &mut size) };
-        if r == ERROR_MORE_DATA {
-            buf.resize(size as usize / 2 + 1, 0);
-            continue;
-        }
-        return (r == ERROR_SUCCESS).then(|| pk::wide::from_buf(&buf[..size as usize / 2]));
-    }
-}
-
-fn reg_dword(key: HKEY, subkey: Option<&str>, name: &str) -> Option<u32> {
-    let sub = subkey.map(to_wide);
-    let name = to_wide(name);
-    let mut v = 0u32;
-    let mut size = 4u32;
-    let r = unsafe {
-        RegGetValueW(
-            key,
-            sub.as_ref().map_or(null(), |s| s.as_ptr()),
-            name.as_ptr(),
-            RRF_RT_REG_DWORD,
-            null_mut(),
-            (&mut v as *mut u32).cast(),
-            &mut size,
-        )
-    };
-    (r == ERROR_SUCCESS).then_some(v)
-}
-
-struct Key(HKEY);
-
-impl Key {
-    fn open(parent: HKEY, subkey: &str, access: u32) -> Result<Key, u32> {
-        let w = to_wide(subkey);
-        let mut k: HKEY = null_mut();
-        let r = unsafe { RegOpenKeyExW(parent, w.as_ptr(), 0, access, &mut k) };
-        if r == ERROR_SUCCESS { Ok(Key(k)) } else { Err(r) }
-    }
-}
-
-impl Drop for Key {
-    fn drop(&mut self) {
-        unsafe { RegCloseKey(self.0) };
-    }
-}
 
 // ---------------------------------------------------------------------------- Start with Windows
 
@@ -239,10 +183,7 @@ fn resolve_known_folder(path: &str) -> String {
     if path.len() > 38 && b[0] == b'{' && b[37] == b'}' && path.is_char_boundary(38) {
         if let Some(id) = Guid::parse(&path[..38]) {
             let g = windows_sys::core::GUID { data1: id.data1, data2: id.data2, data3: id.data3, data4: id.data4 };
-            let mut p = null_mut();
-            let hr = unsafe { SHGetKnownFolderPath(&g, 0, null_mut(), &mut p) };
-            let resolved = if hr == 0 {
-                let folder = unsafe { pk::wide::from_ptr(p) };
+            let resolved = if let Some(folder) = pk::env::known_folder(&g) {
                 let rest = path[38..].trim_start_matches('\\');
                 Some(full_path(&if folder.ends_with('\\') || rest.is_empty() {
                     format!("{folder}{rest}")
@@ -252,7 +193,6 @@ fn resolve_known_folder(path: &str) -> String {
             } else {
                 None
             };
-            unsafe { CoTaskMemFree(p as *const _) };
             return resolved.unwrap_or_else(|| path.into());
         }
     }

@@ -8,10 +8,6 @@ const HEAP_ALIGN: usize = 16;
 
 pub struct ProcessHeap;
 
-#[cfg(not(test))]
-#[global_allocator]
-static HEAP: ProcessHeap = ProcessHeap;
-
 impl ProcessHeap {
     /// Over-aligned blocks: allocate extra, align inside, keep the real pointer just before.
     unsafe fn alloc_aligned(&self, l: Layout, flags: u32) -> *mut u8 {
