@@ -1,7 +1,7 @@
-//! The settings window, built in code as the C# app builds it (runner/WinUI/Program.cs): a
+//! The settings window, built in code as the C# app built it (runner/WinUI/Program.cs): a
 //! NavigationView with General and the blades, each blade's sign-in switch in the pane, and each
-//! page's settings as cards. Changes go to [`stub`] and are reported on the event line under the
-//! cards, which the spike adds to show that events arrive.
+//! page's settings as cards. Every change applies at once through `runner-core`; a refusal shows
+//! the reason in the error bar and puts the control back.
 use crate::bindings::Microsoft::UI::Colors;
 use crate::bindings::Microsoft::UI::Text::FontWeights;
 use crate::bindings::Microsoft::UI::Xaml::Automation::AutomationProperties;
@@ -18,30 +18,39 @@ use crate::bindings::Microsoft::UI::Xaml::{
     Application, CornerRadius, FrameworkElement, GridLength, GridUnitType, HorizontalAlignment, ResourceDictionary, RoutedEventArgs,
     RoutedEventHandler, TextWrapping, Thickness, UIElement, VerticalAlignment, Window,
 };
-use crate::stub::{self, Kind};
 use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::{Cell, OnceCell, RefCell};
-use windows::Foundation::{IReference, PropertyValue, TypedEventHandler, Uri};
+use runner_core::blade_settings::{self, Kind, Setting};
+use runner_core::settings::{self, BLADES, Look, Startup, Suite};
+use runner_core::{join, link};
+use windows::Foundation::{PropertyValue, TypedEventHandler, Uri};
 use windows::Graphics::SizeInt32;
 use windows_core::{HRESULT, HSTRING, IInspectable, IUnknown, IUnknown_Vtbl, Interface, Ref, Result};
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
+use windows_sys::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, GetWindowThreadProcessId};
 
 /// What the handlers share. Only the UI thread touches it: XAML calls handlers on the thread that
-/// made the element.
+/// made the element. No `RefCell` borrow is held across a XAML call, which can run a handler.
 struct Ui {
     window: Window,
     page: ContentControl,
     status: InfoBar,
-    events: TextBlock,
-    root: String,
+    suite: Suite,
     suite_icon: String,
+    /// General, then the blades: the pane's items, in page order.
+    pages: RefCell<Vec<NavigationViewItem>>,
+    /// Which blades start at sign-in, as last applied.
+    startup: Cell<Startup>,
+    /// Each blade's settings as it printed them when the window opened.
+    settings: Vec<Vec<Setting>>,
+    /// Each setting's value as the blade last accepted it.
     saved: RefCell<Vec<Vec<String>>>,
+    /// Set while a handler puts a control back, so the change it raises isn't applied.
     updating: Cell<bool>,
-    ready: Cell<bool>,
 }
 
 struct Global(OnceCell<Ui>);
@@ -70,7 +79,9 @@ unsafe trait IWindowNative: IUnknown {
     fn window_handle(&self, hwnd: *mut isize) -> HRESULT;
 }
 
-/// `OnLaunched`: the control styles (what App.xaml does in C#), then the window.
+/// `OnLaunched`: the control styles (what App.xaml did in C#), the settings, then the window.
+/// A failed read (a blade that doesn't answer) ends the process with [`crate::EXIT_SETTINGS`],
+/// as the C# app ended on the exception.
 pub fn launched(app: &Application) -> Result<()> {
     let resources = ResourceDictionary::new()?;
     resources.MergedDictionaries()?.Append(&XamlControlsResources::new()?)?;
@@ -78,23 +89,28 @@ pub fn launched(app: &Application) -> Result<()> {
 
     let dir = pk::env::exe_dir();
     let root = dir.rsplit_once('\\').map_or(dir.as_str(), |(parent, _)| parent).into();
-    let saved = (0..stub::BLADES.len()).map(|b| stub::settings(b).iter().map(|s| String::from(s.value)).collect()).collect();
+    let suite = Suite::from_env(root);
+    let startup = suite.read_startup().unwrap_or_else(|e| unreadable(&e));
+    let settings: Vec<Vec<Setting>> =
+        BLADES.iter().map(|blade| blade_settings::read(&suite, blade).unwrap_or_else(|e| unreadable(&e))).collect();
+    let saved = settings.iter().map(|page| page.iter().map(|s| s.value.clone()).collect()).collect();
     let state = Ui {
         window: Window::new()?,
         page: ContentControl::new()?,
         status: InfoBar::new()?,
-        events: TextBlock::new()?,
-        root,
-        suite_icon: format!("{dir}\\pocketknives.ico"),
+        suite,
+        suite_icon: join(&dir, "pocketknives.ico"),
+        pages: RefCell::new(Vec::new()),
+        startup: Cell::new(startup),
+        settings,
         saved: RefCell::new(saved),
         updating: Cell::new(false),
-        ready: Cell::new(false),
     };
     if UI.0.set(state).is_err() {
         return Err(windows_core::Error::empty());
     }
     let ui = ui();
-    ui.window.SetTitle(&HSTRING::from(stub::TITLE))?;
+    ui.window.SetTitle(&HSTRING::from(settings::TITLE))?;
     ui.window.SetSystemBackdrop(&MicaBackdrop::new()?)?;
     ui.page.SetHorizontalContentAlignment(HorizontalAlignment::Stretch)?;
     ui.status.SetSeverity(InfoBarSeverity::Error)?;
@@ -106,9 +122,12 @@ pub fn launched(app: &Application) -> Result<()> {
     unsafe { ui.window.cast::<IWindowNative>()?.window_handle(&mut hwnd) }.ok()?;
     let scale = unsafe { GetDpiForWindow(hwnd as _) } as f64 / 96.0;
     ui.window.AppWindow()?.Resize(SizeInt32 { Width: (830.0 * scale) as i32, Height: (500.0 * scale) as i32 })?;
-    ui.window.Activate()?;
-    ui.ready.set(true);
-    Ok(())
+    ui.window.Activate()
+}
+
+fn unreadable(error: &str) -> ! {
+    crate::report_line(&format!("The settings could not be read: {error}"));
+    pk::exit(crate::EXIT_SETTINGS)
 }
 
 fn build() -> Result<NavigationView> {
@@ -125,11 +144,10 @@ fn build() -> Result<NavigationView> {
     footer.SetMargin(Thickness { Left: 16.0, Top: 8.0, Right: 8.0, Bottom: 12.0 })?;
     navigation.SetPaneFooter(&footer)?;
     let items = navigation.MenuItems()?;
-    let mut first = None;
-    for i in 0..=stub::BLADES.len() {
+    for i in 0..=BLADES.len() {
         if i == 1 {
             let header = NavigationViewItemHeader::new()?;
-            header.SetContent(&boxed(stub::BLADES_LABEL)?)?;
+            header.SetContent(&boxed(settings::BLADES_LABEL)?)?;
             items.Append(&header)?;
         }
         let item = NavigationViewItem::new()?;
@@ -137,13 +155,12 @@ fn build() -> Result<NavigationView> {
         icon.SetSource(&load_icon(&page_icon(i), 16)?)?;
         item.SetIcon(&icon)?;
         if i == 0 {
-            item.SetContent(&boxed(stub::GENERAL_NAME)?)?;
+            item.SetContent(&boxed(settings::GENERAL_NAME)?)?;
         } else {
             item.SetContent(&blade_row(i - 1)?)?;
         }
-        item.SetTag(&PropertyValue::CreateInt32(i as i32)?)?;
+        ui.pages.borrow_mut().push(item.clone());
         items.Append(&item)?;
-        first.get_or_insert(item);
     }
 
     let content = StackPanel::new()?;
@@ -152,34 +169,34 @@ fn build() -> Result<NavigationView> {
     let children = content.Children()?;
     children.Append(&ui.status)?;
     children.Append(&ui.page)?;
-    children.Append(&ui.events)?;
     let scroll = ScrollViewer::new()?;
     scroll.SetContent(&content)?;
     scroll.SetHorizontalContentAlignment(HorizontalAlignment::Stretch)?;
     navigation.SetContent(&scroll)?;
-    navigation.SelectionChanged(&TypedEventHandler::new(
-        |_, change: Ref<NavigationViewSelectionChangedEventArgs>| {
-            let Some(change) = change.as_ref() else { return Ok(()) };
-            let index = change.SelectedItem()?.cast::<FrameworkElement>()?.Tag()?.cast::<IReference<i32>>()?.Value()?;
-            show_page(index as usize).inspect_err(|e| crate::report("A page could not be built", e))?;
-            event(&format!("Navigation: page {index}"))
-        },
-    ))?;
-    if let Some(first) = first {
-        navigation.SetSelectedItem(&first)?;
-    }
+    navigation.SelectionChanged(&TypedEventHandler::new(|_, change: Ref<NavigationViewSelectionChangedEventArgs>| {
+        let Some(change) = change.as_ref() else { return Ok(()) };
+        let Ok(selected) = change.SelectedItem()?.cast::<IUnknown>() else { return Ok(()) };
+        // COM identity: the same object answers the same IUnknown.
+        let index = self::ui().pages.borrow().iter().position(|p| p.cast::<IUnknown>().is_ok_and(|p| p == selected));
+        match index {
+            Some(index) => show_page(index),
+            None => Ok(()),
+        }
+    }))?;
+    let first = ui.pages.borrow()[0].clone();
+    navigation.SetSelectedItem(&first)?;
     Ok(navigation)
 }
 
 fn page_icon(index: usize) -> String {
     match index {
         0 => ui().suite_icon.clone(),
-        i => format!("{}\\icons\\{}", ui().root, stub::BLADES[i - 1].icon),
+        i => ui().suite.blade_icon(&BLADES[i - 1]),
     }
 }
 
 fn blade_row(index: usize) -> Result<Grid> {
-    let name = stub::BLADES[index].name;
+    let name = BLADES[index].name;
     let row = Grid::new()?;
     row.SetWidth(167.0)?;
     two_columns(&row)?;
@@ -187,7 +204,7 @@ fn blade_row(index: usize) -> Result<Grid> {
     label.SetVerticalAlignment(VerticalAlignment::Center)?;
     row.Children()?.Append(&label)?;
     let toggle = ToggleSwitch::new()?;
-    toggle.SetIsOn(true)?;
+    toggle.SetIsOn(ui().startup.get()[index])?;
     toggle.SetOnContent(&boxed("")?)?;
     toggle.SetOffContent(&boxed("")?)?;
     toggle.SetMinWidth(0.0)?;
@@ -195,26 +212,43 @@ fn blade_row(index: usize) -> Result<Grid> {
     Grid::SetColumn(&toggle, 1)?;
     row.Children()?.Append(&toggle)?;
     toggle.Toggled(&RoutedEventHandler::new(move |sender, _| {
-        let on = sender.as_ref().map(|s| s.cast::<ToggleSwitch>()).transpose()?.map(|t| t.IsOn()).transpose()?;
-        event(&format!("Sign-in switch: {name} {}", if on == Some(true) { "on" } else { "off" }))
+        let ui = ui();
+        let Some(toggle) = sender.as_ref() else { return Ok(()) };
+        if ui.updating.get() {
+            return Ok(());
+        }
+        let toggle = toggle.cast::<ToggleSwitch>()?;
+        let mut startup = ui.startup.get();
+        let mut selected = startup;
+        selected[index] = toggle.IsOn()?;
+        // `startup` follows each row as it's applied, also when a later one fails.
+        let applied = ui.suite.apply_startup(&mut startup, &selected);
+        ui.startup.set(startup);
+        match applied {
+            Ok(()) => ui.status.SetIsOpen(false),
+            Err(error) => {
+                put_back(|| toggle.SetIsOn(startup[index]))?;
+                show_error(&error)
+            }
+        }
     }))?;
     Ok(row)
 }
 
 fn show_page(index: usize) -> Result<()> {
     let ui = ui();
-    let blade = index.checked_sub(1).map(|b| &stub::BLADES[b]);
+    let blade = index.checked_sub(1).map(|b| &BLADES[b]);
     let content = StackPanel::new()?;
     content.SetSpacing(20.0)?;
     let header = Grid::new()?;
     two_columns(&header)?;
     let texts = StackPanel::new()?;
     texts.SetSpacing(4.0)?;
-    let title = text(blade.map_or(stub::GENERAL_NAME, |b| b.name))?;
+    let title = text(blade.map_or(settings::GENERAL_NAME, |b| b.name))?;
     title.SetFontSize(28.0)?;
     title.SetFontWeight(FontWeights::SemiBold()?)?;
     texts.Children()?.Append(&title)?;
-    let description = text(blade.map_or(stub::GENERAL_DESCRIPTION, |b| b.description))?;
+    let description = text(blade.map_or(settings::GENERAL_DESCRIPTION, |b| b.description))?;
     description.SetTextWrapping(TextWrapping::Wrap)?;
     texts.Children()?.Append(&description)?;
     header.Children()?.Append(&texts)?;
@@ -226,85 +260,108 @@ fn show_page(index: usize) -> Result<()> {
     Grid::SetColumn(&icon, 1)?;
     header.Children()?.Append(&icon)?;
     content.Children()?.Append(&header)?;
-    match index {
-        0 => content.Children()?.Append(&look_card()?)?,
-        b => {
-            for (i, setting) in stub::settings(b - 1).iter().enumerate() {
-                let control: FrameworkElement = match setting.kind {
-                    Kind::Toggle => toggle_control(b - 1, i)?.cast()?,
-                    Kind::Choice(choices) => choice_control(b - 1, i, choices)?.cast()?,
-                    Kind::Hotkey => hotkey_control(b - 1, i)?.cast()?,
-                };
-                AutomationProperties::SetName(&control, &HSTRING::from(setting.label))?;
-                content.Children()?.Append(&card(setting.label, &control)?)?;
+    match blade {
+        None => content.Children()?.Append(&look_card()?)?,
+        Some(blade) if ui.settings[index - 1].is_empty() => {
+            content.Children()?.Append(&text(&format!("{} has no settings to show.", blade.name))?)?
+        }
+        Some(_) => {
+            for i in 0..ui.settings[index - 1].len() {
+                content.Children()?.Append(&setting_card(index - 1, i)?)?;
             }
         }
     }
     ui.page.SetContent(&content)
 }
 
-/// A change to one of a blade's settings. The stub refuses only the "Refused" choice, to show
-/// the error bar; the real app asks the blade (BladeSettings.Apply).
-fn change(blade: usize, index: usize, value: String, shown: &str) -> Result<bool> {
+fn setting_card(blade: usize, index: usize) -> Result<Border> {
+    let setting = &ui().settings[blade][index];
+    let control: FrameworkElement = match setting.kind {
+        Kind::Toggle => toggle_control(blade, index)?.cast()?,
+        Kind::Choice => choice_control(blade, index)?.cast()?,
+        Kind::Hotkey => hotkey_control(blade, index)?.cast()?,
+    };
+    AutomationProperties::SetName(&control, &HSTRING::from(&setting.label))?;
+    card(&setting.label, &control)
+}
+
+fn saved(blade: usize, index: usize) -> String {
+    ui().saved.borrow()[blade][index].clone()
+}
+
+/// Changes apply at once, as in Windows Settings. False, with the blade's reason shown, when the
+/// blade refuses.
+fn change(blade: usize, index: usize, value: String) -> Result<bool> {
     let ui = ui();
-    if ui.saved.borrow()[blade][index] == value {
+    if value == saved(blade, index) {
         return Ok(true);
     }
-    let label = stub::settings(blade)[index].label;
-    if shown.starts_with("Refused") {
-        show_error(&format!("{} refused the change to {label}.", stub::BLADES[blade].name))?;
-        event(&format!("Refused: {label} = {shown}"))?;
-        return Ok(false);
+    let key = ui.settings[blade][index].key.clone();
+    match blade_settings::apply(&ui.suite, &BLADES[blade], &[(key, value.clone())]) {
+        Ok(()) => {
+            ui.saved.borrow_mut()[blade][index] = value;
+            ui.status.SetIsOpen(false)?;
+            Ok(true)
+        }
+        Err(error) => {
+            show_error(&error)?;
+            Ok(false)
+        }
     }
-    ui.saved.borrow_mut()[blade][index] = value;
-    ui.status.SetIsOpen(false)?;
-    event(&format!("Changed: {label} = {shown}"))?;
-    Ok(true)
+}
+
+/// Puts a control back without applying the change that raises.
+fn put_back(revert: impl FnOnce() -> Result<()>) -> Result<()> {
+    let ui = ui();
+    ui.updating.set(true);
+    let reverted = revert();
+    ui.updating.set(false);
+    reverted
 }
 
 fn toggle_control(blade: usize, index: usize) -> Result<ToggleSwitch> {
     let toggle = ToggleSwitch::new()?;
-    toggle.SetIsOn(ui().saved.borrow()[blade][index] == "1")?;
+    toggle.SetIsOn(saved(blade, index) == "1")?;
     toggle.SetOnContent(&boxed("On")?)?;
     toggle.SetOffContent(&boxed("Off")?)?;
     toggle.SetMinWidth(0.0)?;
     toggle.Toggled(&RoutedEventHandler::new(move |sender, _: Ref<RoutedEventArgs>| {
-        let ui = ui();
         let Some(toggle) = sender.as_ref() else { return Ok(()) };
         let toggle = toggle.cast::<ToggleSwitch>()?;
-        let on = toggle.IsOn()?;
-        if ui.updating.get() || change(blade, index, String::from(if on { "1" } else { "0" }), if on { "On" } else { "Off" })? {
+        if ui().updating.get() || change(blade, index, String::from(if toggle.IsOn()? { "1" } else { "0" }))? {
             return Ok(());
         }
-        ui.updating.set(true);
-        toggle.SetIsOn(!on)?;
-        ui.updating.set(false);
-        Ok(())
+        put_back(|| toggle.SetIsOn(!toggle.IsOn()?))
     }))?;
     Ok(toggle)
 }
 
-fn choice_control(blade: usize, index: usize, choices: &'static [&'static str]) -> Result<ComboBox> {
+/// The position of the saved value among the setting's choices; -1 (nothing selected) if none.
+fn saved_choice(blade: usize, index: usize) -> i32 {
+    let value = saved(blade, index);
+    ui().settings[blade][index].choices.iter().position(|c| c.value == value).map_or(-1, |i| i as i32)
+}
+
+fn choice_control(blade: usize, index: usize) -> Result<ComboBox> {
     let combo = ComboBox::new()?;
     let items = combo.Items()?;
-    for choice in choices {
-        items.Append(&boxed(choice)?)?;
+    for choice in &ui().settings[blade][index].choices {
+        items.Append(&boxed(&choice.label)?)?;
     }
-    combo.SetSelectedIndex(ui().saved.borrow()[blade][index].parse().unwrap_or(-1))?;
+    combo.SetSelectedIndex(saved_choice(blade, index))?;
     combo.SetMinWidth(200.0)?;
     combo.SelectionChanged(&SelectionChangedEventHandler::new(move |sender, _| {
-        let ui = ui();
         let Some(combo) = sender.as_ref() else { return Ok(()) };
         let combo = combo.cast::<ComboBox>()?;
         let selected = combo.SelectedIndex()?;
-        if ui.updating.get() || selected < 0 || change(blade, index, format!("{selected}"), choices[selected as usize])? {
+        if ui().updating.get() || selected < 0 {
             return Ok(());
         }
-        ui.updating.set(true);
-        let saved = ui.saved.borrow()[blade][index].parse().unwrap_or(-1);
-        combo.SetSelectedIndex(saved)?;
-        ui.updating.set(false);
-        Ok(())
+        let value = ui().settings[blade][index].choices[selected as usize].value.clone();
+        if change(blade, index, value)? {
+            return Ok(());
+        }
+        put_back(|| combo.SetSelectedIndex(saved_choice(blade, index)))
     }))?;
     Ok(combo)
 }
@@ -312,12 +369,12 @@ fn choice_control(blade: usize, index: usize, choices: &'static [&'static str]) 
 /// WinUI has no hotkey box: click, then press the keys. Esc cancels.
 fn hotkey_control(blade: usize, index: usize) -> Result<Button> {
     let button = Button::new()?;
-    button.SetContent(&boxed(&stub::hotkey_name(&ui().saved.borrow()[blade][index]))?)?;
+    button.SetContent(&boxed(&blade_settings::hotkey_name(&saved(blade, index)))?)?;
     button.SetMinWidth(200.0)?;
     let listening = Rc::new(Cell::new(false));
     let stop = move |button: &Button, listening: &Cell<bool>| -> Result<()> {
         listening.set(false);
-        button.SetContent(&boxed(&stub::hotkey_name(&ui().saved.borrow()[blade][index]))?)
+        button.SetContent(&boxed(&blade_settings::hotkey_name(&saved(blade, index)))?)
     };
     let l = Local(listening.clone());
     button.Click(&RoutedEventHandler::new(move |sender, _| {
@@ -326,8 +383,7 @@ fn hotkey_control(blade: usize, index: usize) -> Result<Button> {
             return Ok(());
         }
         l.get().set(true);
-        button.cast::<Button>()?.SetContent(&boxed("Press the new keys")?)?;
-        event("Hotkey: listening")
+        button.cast::<Button>()?.SetContent(&boxed("Press the new keys")?)
     }))?;
     let l = Local(listening.clone());
     button.LostFocus(&RoutedEventHandler::new(move |sender, _| match sender.as_ref() {
@@ -337,35 +393,29 @@ fn hotkey_control(blade: usize, index: usize) -> Result<Button> {
     let l = Local(listening);
     let handler = KeyEventHandler::new(move |sender, key: Ref<KeyRoutedEventArgs>| {
         let (Some(button), Some(key)) = (sender.as_ref(), key.as_ref()) else { return Ok(()) };
-        let button = button.cast::<Button>()?;
         if !l.get().get() {
             return Ok(());
         }
+        let button = button.cast::<Button>()?;
         key.SetHandled(true)?;
         let code = key.Key()?.0;
         if code == 0x1b {
-            event("Hotkey: Esc cancels")?;
-            return stop(&button, l.get());
+            return stop(&button, l.get()); // Esc
         }
         if matches!(code, 0x10 | 0x11 | 0x12 | 0xa0..=0xa5 | 0x5b | 0x5c) {
-            return Ok(()); // a modifier alone
+            return Ok(()); // a modifier key alone
         }
-        let modifiers = if down(0x11) { stub::CTRL } else { 0 }
-            | if down(0x12) { stub::ALT } else { 0 }
-            | if down(0x10) { stub::SHIFT } else { 0 }
-            | if down(0x5b) || down(0x5c) { stub::WIN } else { 0 };
-        if modifiers & !stub::SHIFT == 0 {
-            event(&format!("Hotkey: key {code} without Ctrl, Alt or Win"))?;
+        let modifiers = if down(0x11) { blade_settings::CTRL } else { 0 }
+            | if down(0x12) { blade_settings::ALT } else { 0 }
+            | if down(0x10) { blade_settings::SHIFT } else { 0 }
+            | if down(0x5b) || down(0x5c) { blade_settings::WIN } else { 0 };
+        if modifiers & !blade_settings::SHIFT == 0 {
             return button.SetContent(&boxed("Add Ctrl, Alt or Win")?);
         }
-        let value = stub::join_hotkey(modifiers, code);
-        let shown = stub::hotkey_name(&value);
-        change(blade, index, value, &shown)?;
+        change(blade, index, blade_settings::join_hotkey(modifiers, code as u32))?;
         stop(&button, l.get())
     });
-    button
-        .AddHandler(&UIElement::KeyDownEvent()?, &crate::boxed::key_handler(handler), true)
-        .inspect_err(|e| crate::report("AddHandler", e))?;
+    button.AddHandler(&UIElement::KeyDownEvent()?, &crate::boxed::key_handler(handler), true)?;
     Ok(button)
 }
 
@@ -397,43 +447,48 @@ fn card(label: &str, control: &FrameworkElement) -> Result<Border> {
 fn look_card() -> Result<Border> {
     let choices = ComboBox::new()?;
     let items = choices.Items()?;
-    for name in stub::LOOK_NAMES {
+    for name in settings::LOOK_NAMES {
         items.Append(&boxed(name)?)?;
     }
-    choices.SetSelectedIndex(stub::LOOK_WINDOWS11)?;
-    AutomationProperties::SetName(&choices, &HSTRING::from(stub::LOOK_LABEL))?;
+    choices.SetSelectedIndex(Look::Windows11.index() as i32)?;
+    AutomationProperties::SetName(&choices, &HSTRING::from(settings::LOOK_LABEL))?;
     choices.SelectionChanged(&SelectionChangedEventHandler::new(|sender, _| {
         let Some(choices) = sender.as_ref() else { return Ok(()) };
         let choices = choices.cast::<ComboBox>()?;
-        let selected = choices.SelectedIndex()?;
-        if !(0..=1).contains(&selected) {
-            return Ok(());
+        let look = match choices.SelectedIndex()? {
+            0 => Look::Xp,
+            1 => Look::Windows10,
+            _ => return Ok(()),
+        };
+        if let Err(error) = switch_look(look) {
+            // Selecting Windows 11 raises this handler again, which ignores it.
+            choices.SetSelectedIndex(Look::Windows11.index() as i32)?;
+            show_error(&error)?;
         }
-        // The real app saves the look, asks the runner to reopen Settings and closes. The spike
-        // never messages the runner's window.
-        event(&format!(
-            "Look: {} (the runner, window {}, isn't messaged in the spike)",
-            stub::LOOK_NAMES[selected as usize],
-            crate::runner_window()
-        ))?;
-        choices.SetSelectedIndex(stub::LOOK_WINDOWS11)
+        Ok(())
     }))?;
-    card(stub::LOOK_LABEL, &choices.cast()?)
+    card(settings::LOOK_LABEL, &choices.cast()?)
+}
+
+/// Saves the look and asks the runner to reopen Settings in it, then closes this window.
+fn switch_look(look: Look) -> runner_core::Result<()> {
+    let runner = crate::runner_window() as windows_sys::Win32::Foundation::HWND;
+    let mut pid = 0;
+    if unsafe { GetWindowThreadProcessId(runner, &mut pid) } == 0 {
+        return Err(String::from("The PocketKnives runner has closed."));
+    }
+    ui().suite.save_look(look)?;
+    unsafe { AllowSetForegroundWindow(pid) };
+    if !link::post(runner, link::REOPEN_MESSAGE) {
+        return Err(String::from("The PocketKnives runner could not reopen Settings."));
+    }
+    ui().window.Close().map_err(|e| e.message().to_string())
 }
 
 fn show_error(message: &str) -> Result<()> {
     let ui = ui();
     ui.status.SetMessage(&HSTRING::from(message))?;
     ui.status.SetIsOpen(true)
-}
-
-/// Shows an event on the page's event line (not the ones the window raises while it opens).
-fn event(what: &str) -> Result<()> {
-    let ui = ui();
-    if !ui.ready.get() {
-        return Ok(());
-    }
-    ui.events.SetText(&HSTRING::from(format!("Last event: {what}")))
 }
 
 fn load_icon(path: &str, size: i32) -> Result<BitmapImage> {
@@ -466,4 +521,3 @@ fn two_columns(grid: &Grid) -> Result<()> {
     auto.SetWidth(GridLength { Value: 1.0, GridUnitType: GridUnitType::Auto })?;
     columns.Append(&auto)
 }
-
