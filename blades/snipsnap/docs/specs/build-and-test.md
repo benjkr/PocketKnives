@@ -6,8 +6,8 @@ current in the same change, and lean.
 ## The build
 
 - Rust (the toolchain pinned in `rust-toolchain.toml` at the repo root; rustup installs it) and
-  the MSVC linker from Visual Studio (or the Build Tools) with the C++ workload; cargo finds it
-  without a developer prompt. A rebuild takes about 1 s.
+  Visual Studio (or the Build Tools) with the C++ workload, for its libraries and the Windows
+  SDK; cargo finds them without a developer prompt. A rebuild takes about 1 s.
 - `cargo build --release -p snipsnap`, in the workspace at the repo root, with its size-optimised
   release profile (root `Cargo.toml`). Every warning fails the build (`.cargo/config.toml`).
   - `no_std`, `no_main`: `pk::entry!` is the entry point (`WinMainCRTStartup`, ending in

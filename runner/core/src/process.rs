@@ -18,7 +18,7 @@ use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_IN
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, GetExitCodeProcess, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
-    STARTUPINFOW, TerminateProcess, WaitForSingleObject,
+    STARTUPINFOW, TerminateProcess, WaitForMultipleObjects, WaitForSingleObject,
 };
 
 /// A started process, its handle closed when dropped (the process keeps running).
@@ -69,43 +69,80 @@ pub fn start_in(exe: &str, args: &[&str], dir: &str) -> core::result::Result<Chi
 /// Runs `exe` with `args` and collects its standard output (UTF-8). Waits up to `timeout_ms`;
 /// after that the process is ended and the error says it `did not answer`.
 pub fn run(exe: &str, args: &[&str], timeout_ms: u32) -> Result<(u32, String)> {
-    let mut sa: SECURITY_ATTRIBUTES = unsafe { zeroed() };
-    sa.nLength = size_of::<SECURITY_ATTRIBUTES>() as u32;
-    sa.bInheritHandle = TRUE;
-    let (mut read, mut write): (HANDLE, HANDLE) = (null_mut(), null_mut());
-    if unsafe { CreatePipe(&mut read, &mut write, &sa, 0) } == 0 {
-        return Err(format!("Could not start {}.", file_name(exe)));
+    Capture::start(exe, args)?.finish(timeout_ms)
+}
+
+/// [`run`] for several commands at once (up to 64, `WaitForMultipleObjects`' limit): all start
+/// together, each gets `timeout_ms`, and the results come back in the order given.
+pub fn run_all<const N: usize>(commands: [(&str, &[&str]); N], timeout_ms: u32) -> [Result<(u32, String)>; N] {
+    let started = commands.map(|(exe, args)| Capture::start(exe, args));
+    let mut handles = [null_mut(); N];
+    let mut count = 0;
+    for capture in started.iter().flatten() {
+        handles[count] = capture.child.handle();
+        count += 1;
     }
-    // Only the child's end is inherited.
-    unsafe { SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0) };
-    let child = spawn(exe, args, Some(write), None);
-    // Our copy of the write end must go, or the read never sees the end of the output.
-    unsafe { CloseHandle(write) };
-    let child = match child {
-        Ok(c) => c,
-        Err(_) => {
-            unsafe { CloseHandle(read) };
+    if count > 0 {
+        unsafe { WaitForMultipleObjects(count as u32, handles.as_ptr(), TRUE, timeout_ms) };
+    }
+    // Whatever is still running now has had its time.
+    started.map(|c| c?.finish(0))
+}
+
+/// A started process whose standard output another thread is reading.
+struct Capture<'a> {
+    exe: &'a str,
+    child: Child,
+    reader: pk::thread::Thread,
+    output: Arc<Mutex<Vec<u8>>>,
+}
+
+impl<'a> Capture<'a> {
+    fn start(exe: &'a str, args: &[&str]) -> Result<Capture<'a>> {
+        let mut sa: SECURITY_ATTRIBUTES = unsafe { zeroed() };
+        sa.nLength = size_of::<SECURITY_ATTRIBUTES>() as u32;
+        sa.bInheritHandle = TRUE;
+        let (mut read, mut write): (HANDLE, HANDLE) = (null_mut(), null_mut());
+        if unsafe { CreatePipe(&mut read, &mut write, &sa, 0) } == 0 {
             return Err(format!("Could not start {}.", file_name(exe)));
         }
-    };
-    // Read while waiting: a blade that fills the pipe would otherwise never end.
-    let reader = Pipe(read as usize);
-    let output = Arc::new(Mutex::new(Vec::new()));
-    let sink = output.clone();
-    let Some(thread) = pk::thread::spawn(move || *sink.lock() = reader.read_to_end()) else {
-        child.kill();
-        return Err(format!("Could not start {}.", file_name(exe)));
-    };
-    let code = child.wait(timeout_ms);
-    if code.is_none() {
-        child.kill();
+        // Only the child's end is inherited.
+        unsafe { SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0) };
+        let child = spawn(exe, args, Some(write), None);
+        // Our copy of the write end must go, or the read never sees the end of the output. Closed
+        // before the next start, so another child never inherits it.
+        unsafe { CloseHandle(write) };
+        let child = match child {
+            Ok(c) => c,
+            Err(_) => {
+                unsafe { CloseHandle(read) };
+                return Err(format!("Could not start {}.", file_name(exe)));
+            }
+        };
+        // Read while waiting: a blade that fills the pipe would otherwise never end.
+        let pipe = Pipe(read as usize);
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let sink = output.clone();
+        let Some(reader) = pk::thread::spawn(move || *sink.lock() = pipe.read_to_end()) else {
+            child.kill();
+            return Err(format!("Could not start {}.", file_name(exe)));
+        };
+        Ok(Capture { exe, child, reader, output })
     }
-    // The pipe ends with the process (the blades start nothing that inherits it).
-    thread.join();
-    let bytes = core::mem::take(&mut *output.lock());
-    match code {
-        Some(code) => Ok((code, decode_utf8(&bytes))),
-        None => Err(format!("{} did not answer.", file_stem(exe))),
+
+    /// Waits up to `ms` for the process to end, ends it after that, and collects its output.
+    fn finish(self, ms: u32) -> Result<(u32, String)> {
+        let code = self.child.wait(ms);
+        if code.is_none() {
+            self.child.kill();
+        }
+        // The pipe ends with the process (the blades start nothing that inherits it).
+        self.reader.join();
+        let bytes = core::mem::take(&mut *self.output.lock());
+        match code {
+            Some(code) => Ok((code, decode_utf8(&bytes))),
+            None => Err(format!("{} did not answer.", file_stem(self.exe))),
+        }
     }
 }
 
@@ -291,6 +328,29 @@ mod tests {
         let slow = run(cmd, &["/c", "ping -n 4 127.0.0.1 >nul"], 300);
         assert_eq!(slow, Err(String::from("cmd did not answer.")));
         assert_eq!(run("C:\\nowhere\\missing.exe", &[], 1000), Err(String::from("Could not start missing.exe.")));
+    }
+
+    /// Two 2-second commands finish together, not one after the other; a slow one is ended at the
+    /// time limit while the others keep their answers, in the order given.
+    #[test]
+    fn runs_at_the_same_time() {
+        let cmd = "C:\\Windows\\System32\\cmd.exe";
+        let wait2: &[&str] = &["/c", "ping -n 3 127.0.0.1 >nul& echo done& exit 4"];
+        let clock = std::time::Instant::now();
+        let both = run_all([(cmd, wait2), (cmd, wait2)], 10000);
+        let took = clock.elapsed().as_millis();
+        assert_eq!(both, [Ok((4, String::from("done\r\n"))), Ok((4, String::from("done\r\n")))]);
+        assert!(took < 3500, "took {took} ms");
+
+        // (cmd's ping keeps the pipe open after cmd is ended, so this waits for the ping.)
+        let quick: &[&str] = &["/c", "echo hi& exit 3"];
+        let slow: &[&str] = &["/c", "ping -n 3 127.0.0.1 >nul"];
+        let mixed = run_all([(cmd, slow), ("C:\\nowhere\\missing.exe", &[]), (cmd, quick)], 500);
+        assert_eq!(
+            mixed,
+            [Err(String::from("cmd did not answer.")), Err(String::from("Could not start missing.exe.")), Ok((3, String::from("hi\r\n")))]
+        );
+        assert_eq!(run_all::<0>([], 1000), []);
     }
 
     #[test]

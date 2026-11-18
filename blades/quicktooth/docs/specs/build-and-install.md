@@ -14,7 +14,7 @@ and lean.
   (`assets/quicktooth.ico`, `win/app.manifest`, version information) through the Windows SDK's
   `rc.exe`. Every warning is an error (`.cargo/config.toml`).
 - Building needs Rust through rustup (`rust-toolchain.toml` pins the toolchain and the wasm32
-  target) and Visual Studio's C++ build tools (the linker and the Windows SDK).
+  target) and Visual Studio's C++ build tools (their libraries and the Windows SDK).
 - The version is `version` in `win/Cargo.toml`; `--version` prints it and the installers read it.
 
 ## Installing

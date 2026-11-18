@@ -9,6 +9,9 @@ commands and how long they take are in its `docs/working/development.md`.
   also stop or replace the user's running copy: its development doc says which ones are safe
   (SnipSnap's `blades/snipsnap/build.bat` stops it).
 - Build output stays out of git: each blade's `.gitignore` covers its own.
+- The workspace links with Rust's own `rust-lld` (`.cargo/config.toml`). Visual Studio's C++
+  tools are still needed for their libraries (build scripts and tests link them) and the
+  Windows SDK's `rc.exe`.
 
 ## This Windows machine
 

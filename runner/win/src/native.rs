@@ -123,8 +123,8 @@ pub fn initialize() -> Result<()> {
 /// Opens the window in `look` (XP or Windows 10), with each blade's settings read from it now.
 pub fn open(suite: &'static Suite, look: Look) -> Result<()> {
     let mut blade_settings = Vec::new();
-    for blade in &BLADES {
-        blade_settings.push(blade_settings::read(suite, blade)?);
+    for page in blade_settings::read_all(suite) {
+        blade_settings.push(page?);
     }
     let original = suite.read_startup()?;
     let saved = blade_settings.iter().map(|page: &Vec<Setting>| page.iter().map(|s| s.value.clone()).collect()).collect();

@@ -43,5 +43,8 @@ blade's own decisions are in its `docs/working/decisions.md`.
   files written.
   Rejected: C# Native AOT as the default for blades (a 0.85 MB, 1.2 MB floor per blade), and Rust
   with std (about 100 KB more per exe).
+- **Build settings**: smallest code (`opt-level = "z"`), linked by `rust-lld`, which makes the
+  same code as MSVC's `link.exe` 512 bytes smaller. Rejected: `opt-level = 3` (QuickTooth's icon
+  frame 0.08 ms faster, exes 15–40% bigger) and a newer CPU level (`x86-64-v2`: no faster).
 - **How blades run together** beyond the runner and settings contract that exist: being decided
   ([runner design](runner-design.md)).

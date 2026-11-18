@@ -1,6 +1,6 @@
 //! A blade's settings as it prints them, and changing them through it
 //! (docs/specs/blade-settings.md). Both settings windows use this.
-use crate::settings::{Blade, Suite};
+use crate::settings::{BLADES, Blade, Suite};
 use crate::{Result, files, process};
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -32,15 +32,19 @@ pub struct Setting {
     pub choices: Vec<Choice>,
 }
 
-/// The blade's settings; none when its exe is missing or its settings command fails. The error
-/// is a blade that couldn't be started or didn't answer.
-pub fn read(suite: &Suite, blade: &Blade) -> Result<Vec<Setting>> {
-    let exe = suite.blade_exe(blade);
-    if !files::exists(&exe) {
-        return Ok(Vec::new());
-    }
-    let (code, output) = process::run(&exe, &[blade.settings_command], TIMEOUT_MS)?;
-    Ok(if code == 0 { parse(&output) } else { Vec::new() })
+/// Each blade's settings, in [`BLADES`] order: none when its exe is missing or its settings
+/// command fails; the error is a blade that couldn't be started or didn't answer. The blades are
+/// asked at the same time, so opening Settings waits for the slowest one, not for each in turn.
+pub fn read_all(suite: &Suite) -> [Result<Vec<Setting>>; BLADES.len()] {
+    let exes = BLADES.each_ref().map(|blade| suite.blade_exe(blade));
+    let commands: [_; BLADES.len()] = core::array::from_fn(|i| (exes[i].as_str(), core::slice::from_ref(&BLADES[i].settings_command)));
+    let mut answers = process::run_all(commands, TIMEOUT_MS).into_iter();
+    exes.each_ref().map(|exe| match answers.next() {
+        Some(Ok((0, output))) => Ok(parse(&output)),
+        // A missing exe can't start: that blade has no settings, not an error.
+        Some(Err(e)) if files::exists(exe) => Err(e),
+        _ => Ok(Vec::new()),
+    })
 }
 
 /// The settings a blade printed: one per line, tab-separated `key, kind, value, label` and then

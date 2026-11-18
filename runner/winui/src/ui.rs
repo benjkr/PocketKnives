@@ -92,7 +92,7 @@ pub fn launched(app: &Application) -> Result<()> {
     let suite = Suite::from_env(root);
     let startup = suite.read_startup().unwrap_or_else(|e| unreadable(&e));
     let settings: Vec<Vec<Setting>> =
-        BLADES.iter().map(|blade| blade_settings::read(&suite, blade).unwrap_or_else(|e| unreadable(&e))).collect();
+        blade_settings::read_all(&suite).into_iter().map(|page| page.unwrap_or_else(|e| unreadable(&e))).collect();
     let saved = settings.iter().map(|page| page.iter().map(|s| s.value.clone()).collect()).collect();
     let state = Ui {
         window: Window::new()?,

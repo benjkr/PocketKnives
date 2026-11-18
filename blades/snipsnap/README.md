@@ -87,13 +87,13 @@ memory in the background process.
 
 Needs Rust ([rustup](https://rustup.rs); the toolchain is pinned in the repo's
 `rust-toolchain.toml`) and Visual Studio (or the Build Tools) with the C++
-workload, for its linker:
+workload, for its libraries:
 
 ```
 build.bat
 ```
 
-It runs `cargo build --release -p snipsnap`, which finds the linker itself. It
+It runs `cargo build --release -p snipsnap`, which finds what it needs itself. It
 stops a running instance first so the exe isn't locked, then puts `snipsnap.exe`
 next to the script.
 

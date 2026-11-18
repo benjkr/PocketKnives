@@ -1,6 +1,6 @@
 @echo off
 rem Build snipsnap.exe with cargo (the Rust workspace at the repo root). Works from any prompt:
-rem cargo finds the MSVC linker itself.
+rem cargo finds the linker and Visual Studio's libraries itself.
 rem   build.bat         builds snipsnap.exe here, stopping a running SnipSnap first
 rem   build.bat <dir>   builds <dir>\snipsnap.exe (an absolute path); stops nothing
 setlocal
