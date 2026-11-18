@@ -7,7 +7,8 @@ settings. There's no manifest: a setting is defined once, in the blade's code.
 ## Reading: `<blade> <settings command>`
 
 SnipSnap: `snipsnap settings`. QuickTooth: `QuickTooth.exe --settings`. Settings runs every
-blade's command at the same time when it opens. Read-only, safe from any copy. Prints one line per
+blade's command at the same time when it opens; the XP and Windows 10 looks build their window
+while the blades answer. Read-only, safe from any copy. Prints one line per
 setting to stdout (a pipe), UTF-8, `\n` or `\r\n`, fields separated by a tab, and exits 0:
 
 ```

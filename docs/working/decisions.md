@@ -46,5 +46,9 @@ blade's own decisions are in its `docs/working/decisions.md`.
 - **Build settings**: smallest code (`opt-level = "z"`), linked by `rust-lld`, which makes the
   same code as MSVC's `link.exe` 512 bytes smaller. Rejected: `opt-level = 3` (QuickTooth's icon
   frame 0.08 ms faster, exes 15–40% bigger) and a newer CPU level (`x86-64-v2`: no faster).
+- **Settings reads the blades by asking them**, never from their files: QuickTooth's headsets are
+  live, and the runner would need every blade's keys, defaults and checks. The Windows 11 app asks
+  once WinUI has launched. Rejected: asking before WinUI loads (the window showed 34 ms sooner,
+  its content 13 ms later) or before its control styles load (no measurable change).
 - **How blades run together** beyond the runner and settings contract that exist: being decided
   ([runner design](runner-design.md)).

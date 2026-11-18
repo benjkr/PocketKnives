@@ -73,32 +73,44 @@ pub fn run(exe: &str, args: &[&str], timeout_ms: u32) -> Result<(u32, String)> {
 }
 
 /// [`run`] for several commands at once (up to 64, `WaitForMultipleObjects`' limit): all start
-/// together, each gets `timeout_ms`, and the results come back in the order given.
-pub fn run_all<const N: usize>(commands: [(&str, &[&str]); N], timeout_ms: u32) -> [Result<(u32, String)>; N] {
-    let started = commands.map(|(exe, args)| Capture::start(exe, args));
-    let mut handles = [null_mut(); N];
-    let mut count = 0;
-    for capture in started.iter().flatten() {
-        handles[count] = capture.child.handle();
-        count += 1;
+/// now and run while the caller does other work; [`Started::finish`] collects them.
+pub fn start_all<const N: usize>(commands: [(&str, &[&str]); N]) -> Started<N> {
+    Started { captures: commands.map(|(exe, args)| Capture::start(exe, args)) }
+}
+
+/// Commands from [`start_all`], still running or done.
+pub struct Started<const N: usize> {
+    captures: [Result<Capture>; N],
+}
+
+impl<const N: usize> Started<N> {
+    /// Each command's result, in the order given. They get `timeout_ms` more from now.
+    pub fn finish(self, timeout_ms: u32) -> [Result<(u32, String)>; N] {
+        let mut handles = [null_mut(); N];
+        let mut count = 0;
+        for capture in self.captures.iter().flatten() {
+            handles[count] = capture.child.handle();
+            count += 1;
+        }
+        if count > 0 {
+            unsafe { WaitForMultipleObjects(count as u32, handles.as_ptr(), TRUE, timeout_ms) };
+        }
+        // Whatever is still running now has had its time.
+        self.captures.map(|c| c?.finish(0))
     }
-    if count > 0 {
-        unsafe { WaitForMultipleObjects(count as u32, handles.as_ptr(), TRUE, timeout_ms) };
-    }
-    // Whatever is still running now has had its time.
-    started.map(|c| c?.finish(0))
 }
 
 /// A started process whose standard output another thread is reading.
-struct Capture<'a> {
-    exe: &'a str,
+struct Capture {
+    /// The exe's name without its extension, for the error.
+    name: String,
     child: Child,
     reader: pk::thread::Thread,
     output: Arc<Mutex<Vec<u8>>>,
 }
 
-impl<'a> Capture<'a> {
-    fn start(exe: &'a str, args: &[&str]) -> Result<Capture<'a>> {
+impl Capture {
+    fn start(exe: &str, args: &[&str]) -> Result<Capture> {
         let mut sa: SECURITY_ATTRIBUTES = unsafe { zeroed() };
         sa.nLength = size_of::<SECURITY_ATTRIBUTES>() as u32;
         sa.bInheritHandle = TRUE;
@@ -127,7 +139,7 @@ impl<'a> Capture<'a> {
             child.kill();
             return Err(format!("Could not start {}.", file_name(exe)));
         };
-        Ok(Capture { exe, child, reader, output })
+        Ok(Capture { name: file_stem(exe).into(), child, reader, output })
     }
 
     /// Waits up to `ms` for the process to end, ends it after that, and collects its output.
@@ -141,7 +153,7 @@ impl<'a> Capture<'a> {
         let bytes = core::mem::take(&mut *self.output.lock());
         match code {
             Some(code) => Ok((code, decode_utf8(&bytes))),
-            None => Err(format!("{} did not answer.", file_stem(self.exe))),
+            None => Err(format!("{} did not answer.", self.name)),
         }
     }
 }
@@ -337,7 +349,7 @@ mod tests {
         let cmd = "C:\\Windows\\System32\\cmd.exe";
         let wait2: &[&str] = &["/c", "ping -n 3 127.0.0.1 >nul& echo done& exit 4"];
         let clock = std::time::Instant::now();
-        let both = run_all([(cmd, wait2), (cmd, wait2)], 10000);
+        let both = start_all([(cmd, wait2), (cmd, wait2)]).finish(10000);
         let took = clock.elapsed().as_millis();
         assert_eq!(both, [Ok((4, String::from("done\r\n"))), Ok((4, String::from("done\r\n")))]);
         assert!(took < 3500, "took {took} ms");
@@ -345,12 +357,12 @@ mod tests {
         // (cmd's ping keeps the pipe open after cmd is ended, so this waits for the ping.)
         let quick: &[&str] = &["/c", "echo hi& exit 3"];
         let slow: &[&str] = &["/c", "ping -n 3 127.0.0.1 >nul"];
-        let mixed = run_all([(cmd, slow), ("C:\\nowhere\\missing.exe", &[]), (cmd, quick)], 500);
+        let mixed = start_all([(cmd, slow), ("C:\\nowhere\\missing.exe", &[]), (cmd, quick)]).finish(500);
         assert_eq!(
             mixed,
             [Err(String::from("cmd did not answer.")), Err(String::from("Could not start missing.exe.")), Ok((3, String::from("hi\r\n")))]
         );
-        assert_eq!(run_all::<0>([], 1000), []);
+        assert_eq!(start_all::<0>([]).finish(1000), []);
     }
 
     #[test]

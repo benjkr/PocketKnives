@@ -5,7 +5,7 @@ use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::cell::{Cell, RefCell};
+use core::cell::{Cell, OnceCell, RefCell};
 use core::ptr::{null, null_mut};
 use pk::wide::to_wide;
 use runner::{hotkey_box, hotkey_value};
@@ -91,7 +91,8 @@ struct Native {
     /// One entry per blade setting (blade, index, control), in control ID order from
     /// `FIRST_SETTING_ID`.
     setting_controls: RefCell<Vec<(usize, usize, HWND)>>,
-    blade_settings: Vec<Vec<Setting>>,
+    /// Each blade's settings as it printed them, once its answer is in (while `build` runs).
+    blade_settings: OnceCell<Vec<Vec<Setting>>>,
     /// What each blade has now: its values when the window opened, then what was applied.
     saved: RefCell<Vec<Vec<String>>>,
     /// The sign-in rows as they are now (as opened, then as applied).
@@ -112,7 +113,7 @@ pub fn handle() -> HWND {
 /// Alt+key belongs to a focused hotkey box, not to the dialog's access keys (&Apply).
 pub fn owns_keyboard(control: HWND) -> bool {
     current().is_some_and(|s| {
-        s.setting_controls.borrow().iter().any(|&(blade, index, c)| c == control && s.blade_settings[blade][index].kind == Kind::Hotkey)
+        s.setting_controls.borrow().iter().any(|&(blade, index, c)| c == control && s.blade_settings()[blade][index].kind == Kind::Hotkey)
     })
 }
 
@@ -122,12 +123,9 @@ pub fn initialize() -> Result<()> {
 
 /// Opens the window in `look` (XP or Windows 10), with each blade's settings read from it now.
 pub fn open(suite: &'static Suite, look: Look) -> Result<()> {
-    let mut blade_settings = Vec::new();
-    for page in blade_settings::read_all(suite) {
-        blade_settings.push(page?);
-    }
+    // The blades answer while the window is made.
+    let asked = blade_settings::ask_all(suite);
     let original = suite.read_startup()?;
-    let saved = blade_settings.iter().map(|page: &Vec<Setting>| page.iter().map(|s| s.value.clone()).collect()).collect();
     let settings = Rc::new(Native {
         suite,
         look,
@@ -148,12 +146,12 @@ pub fn open(suite: &'static Suite, look: Look) -> Result<()> {
         page_icons: RefCell::new([null_mut(); PAGES]),
         page_controls: RefCell::new(Default::default()),
         setting_controls: RefCell::new(Vec::new()),
-        blade_settings,
-        saved: RefCell::new(saved),
+        blade_settings: OnceCell::new(),
+        saved: RefCell::new(Vec::new()),
         original: RefCell::new(original),
     });
     *CURRENT.get().borrow_mut() = Some(settings.clone());
-    match settings.build() {
+    match settings.build(asked) {
         Ok(()) => {
             win::activate(settings.window.get());
             Ok(())
@@ -197,7 +195,12 @@ impl Native {
         ((px as i64 * self.dpi as i64 + 48) / 96) as i32
     }
 
-    fn build(&self) -> Result<()> {
+    /// Each blade's settings; none before `build` has them.
+    fn blade_settings(&self) -> &[Vec<Setting>] {
+        self.blade_settings.get().map_or(&[], Vec::as_slice)
+    }
+
+    fn build(&self, asked: blade_settings::Asked) -> Result<()> {
         let controls = INITCOMMONCONTROLSEX { dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32, dwICC: ICC_LISTVIEW_CLASSES };
         unsafe { InitCommonControlsEx(&controls) };
         self.create_fonts();
@@ -269,6 +272,12 @@ impl Native {
         }
         send(look_choice, CB_SETCURSEL, self.look.index(), 0);
         self.page_controls.borrow_mut()[0].extend([look_label, look_choice]);
+        let mut pages = Vec::new();
+        for page in asked.answers() {
+            pages.push(page?);
+        }
+        *self.saved.borrow_mut() = pages.iter().map(|page: &Vec<Setting>| page.iter().map(|s| s.value.clone()).collect()).collect();
+        let _ = self.blade_settings.set(pages);
         for i in 0..BLADES.len() {
             self.build_blade_page(i)?;
         }
@@ -285,7 +294,7 @@ impl Native {
     }
 
     fn build_blade_page(&self, blade: usize) -> Result<()> {
-        let settings = &self.blade_settings[blade];
+        let settings = &self.blade_settings()[blade];
         if settings.is_empty() {
             let text = format!("{} has no settings to show.", BLADES[blade].name);
             let label = self.control("STATIC", &text, 0, (178, 74, 330, 18), 0, false, 0)?;
@@ -329,7 +338,7 @@ impl Native {
 
     /// The blade's value for what a setting's control holds now.
     fn read_setting(&self, blade: usize, index: usize, control: HWND) -> String {
-        let setting = &self.blade_settings[blade][index];
+        let setting = &self.blade_settings()[blade][index];
         let before = self.saved.borrow()[blade][index].clone();
         match setting.kind {
             Kind::Toggle => String::from(if send(control, BM_GETCHECK, 0, 0) == 1 { "1" } else { "0" }),
@@ -351,7 +360,7 @@ impl Native {
         for (blade, index, control) in controls {
             let value = self.read_setting(blade, index, control);
             if value != self.saved.borrow()[blade][index] {
-                changes[blade].push((self.blade_settings[blade][index].key.clone(), value));
+                changes[blade].push((self.blade_settings()[blade][index].key.clone(), value));
             }
         }
         changes
@@ -532,7 +541,7 @@ impl Native {
         for (blade, changes) in changes.iter().enumerate() {
             blade_settings::apply(self.suite, &BLADES[blade], changes)?;
             for (key, value) in changes {
-                if let Some(index) = self.blade_settings[blade].iter().position(|s| &s.key == key) {
+                if let Some(index) = self.blade_settings()[blade].iter().position(|s| &s.key == key) {
                     self.saved.borrow_mut()[blade][index] = value.clone();
                 }
             }
