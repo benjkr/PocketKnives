@@ -9,8 +9,10 @@ be `runner/WinUI` on Windows.
 
 ```powershell
 cargo build --release -p pocketknives-settings
-pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\settings -Exe target/release/pocketknives-settings.exe
-& "$env:TEMP\settings\PocketKnives.Settings.exe" 1
+pwsh runner/winui-rust/stage.ps1 -Out $env:TEMP\pk-settings\winui -Exe target/release/pocketknives-settings.exe
+# A preview: the switches write $env:TEMP\pk-settings\preview-settings.txt, not the sign-in entries.
+$env:POCKETKNIVES_SETTINGS_PREVIEW = '1'
+& "$env:TEMP\pk-settings\winui\PocketKnives.Settings.exe" 1
 ```
 
 - `cargo build` needs no network: the WinUI bindings (`src/bindings.rs`) and the manifest
