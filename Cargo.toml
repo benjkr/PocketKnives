@@ -1,5 +1,5 @@
 # The PocketKnives Rust workspace: the shared `pk` crate and the Rust blades.
-# The runner (runner/) is C#; it isn't part of this workspace.
+# The runner (runner/) is C#, except the WinUI settings spike in runner/winui-rust.
 [workspace]
 resolver = "3"
 members = [
@@ -9,6 +9,8 @@ members = [
     "blades/quicktooth/win",
     "blades/quicktooth/web",
     "blades/snipsnap",
+    "runner/winui-rust",
+    "runner/winui-rust/gen",
 ]
 # The simulator's WebAssembly build is only built for wasm32 (sim/lib/core-build.mjs).
 default-members = [
@@ -17,6 +19,7 @@ default-members = [
     "blades/quicktooth/core",
     "blades/quicktooth/win",
     "blades/snipsnap",
+    "runner/winui-rust",
 ]
 
 [workspace.package]
