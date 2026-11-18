@@ -9,17 +9,17 @@ use core::ptr::{null, null_mut};
 use pk::sync::Mutex;
 use pk::wide::to_wide;
 use quicktooth_core::settings::Settings;
-use windows_sys::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, GetLastError, INVALID_HANDLE_VALUE, SYSTEMTIME};
+use windows_sys::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE, SYSTEMTIME};
 use windows_sys::Win32::Storage::FileSystem::{
     CREATE_ALWAYS, CreateDirectoryW, CreateFileW, FILE_APPEND_DATA, FILE_ATTRIBUTE_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ,
     FILE_SHARE_WRITE, GetFileAttributesExW, GetFileExInfoStandard, INVALID_FILE_ATTRIBUTES, MOVEFILE_COPY_ALLOWED,
     MOVEFILE_REPLACE_EXISTING, MoveFileExW, OPEN_ALWAYS, OPEN_EXISTING, ReadFile, WIN32_FILE_ATTRIBUTE_DATA, WriteFile,
 };
-use windows_sys::Win32::System::Com::CoTaskMemFree;
-use windows_sys::Win32::System::Diagnostics::Debug::{FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS, FormatMessageW};
 use windows_sys::Win32::System::SystemInformation::GetLocalTime;
 use windows_sys::Win32::System::Threading::GetCurrentProcessId;
-use windows_sys::Win32::UI::Shell::{FOLDERID_RoamingAppData, SHGetKnownFolderPath};
+use windows_sys::Win32::UI::Shell::FOLDERID_RoamingAppData;
+
+pub use pk::error::{last as last_error_message, message as error_message};
 
 /// The log is moved to `.old` once it's above this size.
 const LOG_ROLL_BYTES: u64 = 512 * 1024;
@@ -32,11 +32,7 @@ static LOG_GATE: Mutex<()> = Mutex::new(());
 /// `%APPDATA%\QuickTooth`, found as .NET's `Environment.GetFolderPath(ApplicationData)` did
 /// (the Roaming AppData known folder, which follows the user profile's environment).
 fn default_dir() -> String {
-    let mut p = null_mut();
-    let hr = unsafe { SHGetKnownFolderPath(&FOLDERID_RoamingAppData, 0, null_mut(), &mut p) };
-    let base = if hr == 0 { unsafe { pk::wide::from_ptr(p) } } else { String::new() };
-    unsafe { CoTaskMemFree(p as *const _) };
-    join(&base, "QuickTooth")
+    join(&pk::env::known_folder(&FOLDERID_RoamingAppData).unwrap_or_default(), "QuickTooth")
 }
 
 pub fn dir() -> String {
@@ -257,28 +253,4 @@ fn write_all(h: windows_sys::Win32::Foundation::HANDLE, bytes: &[u8]) -> bool {
         done += n as usize;
     }
     true
-}
-
-/// The system's text for the calling thread's last error.
-pub fn last_error_message() -> String {
-    error_message(unsafe { GetLastError() })
-}
-
-/// The system's text for a Win32 error code or an HRESULT, without the trailing line break.
-pub fn error_message(code: u32) -> String {
-    let mut buf = [0u16; 512];
-    let n = unsafe {
-        FormatMessageW(
-            FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            null(),
-            code,
-            0,
-            buf.as_mut_ptr(),
-            buf.len() as u32,
-            null(),
-        )
-    } as usize;
-    let text = String::from_utf16_lossy(&buf[..n]);
-    let text = text.trim_end();
-    if text.is_empty() { format!("Error 0x{code:08X}") } else { text.into() }
 }

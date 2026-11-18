@@ -48,6 +48,15 @@ pub fn exe_dir() -> String {
     p
 }
 
+/// A known folder's path (`FOLDERID_*`), as .NET's `Environment.GetFolderPath` finds it.
+pub fn known_folder(id: &windows_sys::core::GUID) -> Option<String> {
+    let mut p = core::ptr::null_mut();
+    let hr = unsafe { windows_sys::Win32::UI::Shell::SHGetKnownFolderPath(id, 0, core::ptr::null_mut(), &mut p) };
+    let path = (hr == 0).then(|| unsafe { crate::wide::from_ptr(p) });
+    unsafe { windows_sys::Win32::System::Com::CoTaskMemFree(p as *const _) };
+    path
+}
+
 /// The current directory, without a trailing backslash (except at a drive's root).
 pub fn current_dir() -> String {
     let mut buf = vec![0u16; 260];

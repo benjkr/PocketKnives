@@ -1,0 +1,45 @@
+[package]
+name = "pocketknives-runner"
+version = "1.0.0"
+description = "pk.exe, the PocketKnives runner: the suite's tray icon and its XP and Windows 10 settings window."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# What can be tested without the exe's entry point: the command line, the preview identity and
+# the hotkey box's values.
+[lib]
+name = "runner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pk"
+path = "src/main.rs"
+# A no_std exe: its own panic handler and entry point can't link with the test harness.
+test = false
+
+[dependencies]
+pk.workspace = true
+runner-core.workspace = true
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_Security_Cryptography",
+    "Win32_System_Environment",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+pk-build = { path = "../../crates/pk-build" }
+
+[lints]
+workspace = true

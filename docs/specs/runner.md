@@ -33,9 +33,11 @@
 
 ## Build and preview
 
-Build with [the suite installer script](installer.md). It stages the runner and its Windows 11
-settings app under `installer/obj/app`. Both are Native AOT and share the runner's .NET runtime pin
-(`runner/Directory.Build.targets`). The WinUI app carries its Windows App SDK runtime and starts only for that look.
+Build with [the suite installer script](installer.md). It stages the runner (`runner/win`,
+`pk.exe`) and its Windows 11 settings app (`runner/winui`) under `installer/obj/app`. Both are
+`no_std` Rust and share `runner/core`. The WinUI app carries the Windows App SDK runtime, which
+`runner/winui/stage.ps1` lays out from pinned, hash-checked NuGet packages, and starts only for
+that look.
 
 From a scratch copy of that stage, run `pk --preview`, then click the tray icon or run
 `pk --preview settings`. Preview instances use their own tray identity and save changes to

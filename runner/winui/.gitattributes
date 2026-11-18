@@ -1,0 +1,2 @@
+# Byte-exact as stage.ps1 -Manifest writes it (the Windows App SDK task's mixed line ends).
+app.manifest -text

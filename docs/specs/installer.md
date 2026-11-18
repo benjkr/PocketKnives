@@ -6,7 +6,10 @@ What it does now. Keep it current in the same change, and lean.
   checkout and wraps them with Inno Setup 6.7+ (`winget install JRSoftware.InnoSetup`) into
   `dist/PocketKnives-Setup-<version>.exe`. The version is `AppVersion` in
   `installer/PocketKnives.iss`. It builds into `installer/obj` only: it stops nothing and writes
-  nothing to the blades' folders (SnipSnap through `build.bat <dir>`).
+  nothing to the blades' folders (SnipSnap through `build.bat <dir>`). The Windows App SDK
+  packages for the Windows 11 settings app are downloaded from nuget.org on the first build,
+  checked against their pinned SHA-512 and cached in `%TEMP%\pocketknives-winappsdk`
+  (`runner/winui/stage.ps1`).
 - **What it installs**: the [runner](runner.md), its Windows 11 settings app, and each blade's exe
   into `%LOCALAPPDATA%\Programs\PocketKnives`, without an admin prompt. The Start menu's
   PocketKnives folder contains PocketKnives Settings and one entry per blade. Windows lists one
