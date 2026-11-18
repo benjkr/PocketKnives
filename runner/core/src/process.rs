@@ -57,7 +57,13 @@ impl Drop for Child {
 /// Starts `exe` with `args`, no window, sharing this process's standard handles. The error is
 /// Windows' reason.
 pub fn start(exe: &str, args: &[&str]) -> core::result::Result<Child, String> {
-    spawn(exe, args, None)
+    spawn(exe, args, None, None)
+}
+
+/// As [`start`], in the working directory `dir` (the Windows 11 settings app, which runs from its
+/// own folder).
+pub fn start_in(exe: &str, args: &[&str], dir: &str) -> core::result::Result<Child, String> {
+    spawn(exe, args, None, Some(dir))
 }
 
 /// Runs `exe` with `args` and collects its standard output (UTF-8). Waits up to `timeout_ms`;
@@ -72,7 +78,7 @@ pub fn run(exe: &str, args: &[&str], timeout_ms: u32) -> Result<(u32, String)> {
     }
     // Only the child's end is inherited.
     unsafe { SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0) };
-    let child = spawn(exe, args, Some(write));
+    let child = spawn(exe, args, Some(write), None);
     // Our copy of the write end must go, or the read never sees the end of the output.
     unsafe { CloseHandle(write) };
     let child = match child {
@@ -127,8 +133,9 @@ impl Drop for Pipe {
     }
 }
 
-fn spawn(exe: &str, args: &[&str], stdout: Option<HANDLE>) -> core::result::Result<Child, String> {
+fn spawn(exe: &str, args: &[&str], stdout: Option<HANDLE>, dir: Option<&str>) -> core::result::Result<Child, String> {
     let mut line = command_line(exe, args);
+    let dir = dir.map(to_wide);
     let mut si: STARTUPINFOW = unsafe { zeroed() };
     si.cb = size_of::<STARTUPINFOW>() as u32;
     if let Some(out) = stdout {
@@ -147,7 +154,7 @@ fn spawn(exe: &str, args: &[&str], stdout: Option<HANDLE>) -> core::result::Resu
             TRUE,
             CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
             null::<c_void>(),
-            null(),
+            dir.as_ref().map_or(null(), |d| d.as_ptr()),
             &si,
             &mut pi,
         )
@@ -284,5 +291,14 @@ mod tests {
         let slow = run(cmd, &["/c", "ping -n 4 127.0.0.1 >nul"], 300);
         assert_eq!(slow, Err(String::from("cmd did not answer.")));
         assert_eq!(run("C:\\nowhere\\missing.exe", &[], 1000), Err(String::from("Could not start missing.exe.")));
+    }
+
+    #[test]
+    fn starts_in_a_folder() {
+        let cmd = "C:\\Windows\\System32\\cmd.exe";
+        let check = ["/c", "if exist win.ini (exit 7) else (exit 3)"];
+        assert_eq!(start_in(cmd, &check, "C:\\Windows").unwrap().wait(5000), Some(7));
+        assert_eq!(start_in(cmd, &check, "C:\\Windows\\System32").unwrap().wait(5000), Some(3));
+        assert!(start_in(cmd, &check, "C:\\nowhere\\at all").is_err());
     }
 }

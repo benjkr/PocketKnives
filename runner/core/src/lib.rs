@@ -22,6 +22,9 @@ pub mod process;
 pub mod settings;
 mod shell_link;
 
+/// `File.Exists`: a file (not a folder) is there.
+pub use files::exists;
+
 /// A failure, as the sentence the settings window shows.
 pub type Result<T> = core::result::Result<T, alloc::string::String>;
 
