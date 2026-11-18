@@ -33,7 +33,7 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
 
 - **WPF to draw the icons**: pulled in the UI framework and ruled out Native AOT. Replaced by the
   shared rasterizer, which is also closer to the exact shape at the edges.
-- **C# / .NET 10 Native AOT** (a 5.4 MB exe, 15–18 MB private working set in the tray; 1.5 MB
+- **C# / .NET 10 Native AOT** (a 5.2 MB exe, 15–18 MB private working set in the tray; 1.5 MB
   of it the CsWinRT projection for the battery scan): replaced by Rust, `no_std`, one exe with no
   runtime. Before that, a self-contained .NET bundle (165 MB installed), a compressed single file
   (69 MB of RAM) and trimming (it switched off the COM and JSON the app used) were tried and

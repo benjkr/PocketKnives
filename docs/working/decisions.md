@@ -30,8 +30,8 @@ blade's own decisions are in its `docs/working/decisions.md`.
   headset and low-battery level.
 - **Blades are written in Rust**, `no_std`, each its own small exe on the shared `crates/pk`
   (entry point, heap, arguments, console, single instance, threads); COM and WinRT through the
-  `windows` crate. QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.4 MB to about
-  0.3 MB with the same behaviour, log lines and pixels, checked against recordings of the C# build.
+  `windows` crate. QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.2 MB to about
+  0.27 MB with the same behaviour, log lines and pixels, checked against recordings of the C# build.
   The runner and its settings windows stay C# (WinUI 3 has no Rust equivalent worth its cost).
   Rejected: C# Native AOT as the default for blades (a 0.85 MB, 1.2 MB floor per blade), and Rust
   with std (about 100 KB more per exe).
