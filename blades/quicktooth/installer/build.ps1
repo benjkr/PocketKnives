@@ -2,8 +2,8 @@
 # runtime on the user's PC) and wraps it with Inno Setup 6.7+.
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
-# Needs Rust (rustup; the repo's rust-toolchain.toml picks the version) and the MSVC linker:
-# Visual Studio (or Build Tools) with "Desktop development with C++".
+# Needs Rust (rustup; the repo's rust-toolchain.toml picks the version) and Visual Studio (or
+# Build Tools) with "Desktop development with C++", for its libraries and the Windows SDK.
 $ErrorActionPreference = 'Stop'
 $root   = Split-Path $PSScriptRoot
 $repo   = Split-Path (Split-Path $root)

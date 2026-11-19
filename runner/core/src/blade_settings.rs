@@ -1,6 +1,6 @@
 //! A blade's settings as it prints them, and changing them through it
 //! (docs/specs/blade-settings.md). Both settings windows use this.
-use crate::settings::{Blade, Suite};
+use crate::settings::{BLADES, Blade, Suite};
 use crate::{Result, files, process};
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -32,15 +32,33 @@ pub struct Setting {
     pub choices: Vec<Choice>,
 }
 
-/// The blade's settings; none when its exe is missing or its settings command fails. The error
-/// is a blade that couldn't be started or didn't answer.
-pub fn read(suite: &Suite, blade: &Blade) -> Result<Vec<Setting>> {
-    let exe = suite.blade_exe(blade);
-    if !files::exists(&exe) {
-        return Ok(Vec::new());
+/// Starts every blade's settings command at once, so they answer while the window is being
+/// made; [`Asked::answers`] collects them.
+pub fn ask_all(suite: &Suite) -> Asked {
+    let exes = BLADES.each_ref().map(|blade| suite.blade_exe(blade));
+    let commands: [_; BLADES.len()] = core::array::from_fn(|i| (exes[i].as_str(), core::slice::from_ref(&BLADES[i].settings_command)));
+    let started = process::start_all(commands);
+    Asked { exes, started }
+}
+
+/// The blades' settings commands, from [`ask_all`].
+pub struct Asked {
+    exes: [String; BLADES.len()],
+    started: process::Started<{ BLADES.len() }>,
+}
+
+impl Asked {
+    /// Each blade's settings, in [`BLADES`] order: none when its exe is missing or its settings
+    /// command fails; the error is a blade that couldn't be started or didn't answer.
+    pub fn answers(self) -> [Result<Vec<Setting>>; BLADES.len()] {
+        let mut answers = self.started.finish(TIMEOUT_MS).into_iter();
+        self.exes.each_ref().map(|exe| match answers.next() {
+            Some(Ok((0, output))) => Ok(parse(&output)),
+            // A missing exe can't start: that blade has no settings, not an error.
+            Some(Err(e)) if files::exists(exe) => Err(e),
+            _ => Ok(Vec::new()),
+        })
     }
-    let (code, output) = process::run(&exe, &[blade.settings_command], TIMEOUT_MS)?;
-    Ok(if code == 0 { parse(&output) } else { Vec::new() })
 }
 
 /// The settings a blade printed: one per line, tab-separated `key, kind, value, label` and then

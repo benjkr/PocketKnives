@@ -2,7 +2,7 @@
 # per-user installer (Inno Setup 6.7+).
 #   winget install JRSoftware.InnoSetup     # once, for ISCC.exe
 #   .\installer\build.ps1
-# Needs Visual Studio (or Build Tools) with "Desktop development with C++" (the linker and resource
+# Needs Visual Studio (or Build Tools) with "Desktop development with C++" (its libraries and the resource
 # compiler) and Rust through rustup (rust-toolchain.toml picks the version). The first build
 # downloads the Windows App SDK runtime from nuget.org (runner/winui/stage.ps1; pinned, hash-checked).
 # Nothing running is stopped and nothing is written to the blades' folders.

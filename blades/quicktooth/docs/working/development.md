@@ -8,7 +8,7 @@ unless they say the repo root. This machine's shell quirks and delegating are su
 
 - Rust through rustup. The repo's `rust-toolchain.toml` pins the version and the
   `wasm32-unknown-unknown` target; rustup installs both on first use. Visual Studio (or its Build
-  Tools) with "Desktop development with C++", for the MSVC linker and the Windows SDK's `rc.exe`.
+  Tools) with "Desktop development with C++", for its libraries and the Windows SDK's `rc.exe`.
 - `cd sim; bun install` once (Bun 1.4.4+; Playwright 1.60 with its Chromium). ffmpeg on `PATH` for
   recordings, GIFs and `--zoom`.
 - Inno Setup 6.7+ for the installer (`winget install JRSoftware.InnoSetup`). Python with `shapely`

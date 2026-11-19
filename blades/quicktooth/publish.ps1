@@ -1,6 +1,7 @@
 # Builds QuickTooth (one exe, Rust) and installs it to %LOCALAPPDATA%\Programs\QuickTooth.
 # A running copy is asked to exit first, because a running exe can't be overwritten.
-# Needs Rust (rustup) and the MSVC linker: Visual Studio (or Build Tools) with "Desktop development with C++".
+# Needs Rust (rustup) and Visual Studio (or Build Tools) with "Desktop development with C++", for
+# its libraries and the Windows SDK.
 param([switch]$NoStart)
 $ErrorActionPreference = 'Stop'
 $dest = Join-Path $env:LOCALAPPDATA 'Programs\QuickTooth'

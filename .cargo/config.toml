@@ -2,6 +2,9 @@
 # Build scripts and dependencies are built for the host too, but cargo caps lints for registry crates.
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-D", "warnings"]
+# Rust's own linker, shipped with the toolchain. Same code as MSVC's link.exe, 512 bytes smaller
+# (no Rich header or empty debug directory). It still links against Visual Studio's libraries.
+linker = "rust-lld"
 
 [target.wasm32-unknown-unknown]
 rustflags = ["-D", "warnings"]

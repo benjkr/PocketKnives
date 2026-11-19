@@ -52,7 +52,7 @@ Two smaller things help as well:
 
 You need Windows 11 (or Windows 10 2004+). Nothing else: QuickTooth is a single exe of about 0.3 MB, with no runtime to install.
 
-To build it yourself you need [Rust](https://rustup.rs) (the repo pins the version) and Visual Studio (or its Build Tools) with "Desktop development with C++", for the linker and the Windows SDK.
+To build it yourself you need [Rust](https://rustup.rs) (the repo pins the version) and Visual Studio (or its Build Tools) with "Desktop development with C++", for its libraries and the Windows SDK.
 
 ```powershell
 cd blades\quicktooth     # in a PocketKnives checkout
