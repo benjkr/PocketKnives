@@ -15,6 +15,8 @@ pub enum Kind {
     Hotkey,
     Toggle,
     Choice,
+    /// A choice shown as a row of pictures, one per choice ([`Suite::setting_picture`]).
+    Picture,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -74,6 +76,7 @@ pub fn parse(output: &str) -> Vec<Setting> {
             "hotkey" => Kind::Hotkey,
             "toggle" => Kind::Toggle,
             "choice" => Kind::Choice,
+            "picture" => Kind::Picture,
             _ => continue,
         };
         let choices = fields[4..]
@@ -86,6 +89,13 @@ pub fn parse(output: &str) -> Vec<Setting> {
         settings.push(Setting { key: fields[0].into(), kind, value: fields[2].into(), label: fields[3].into(), choices });
     }
     settings
+}
+
+/// A `picture` setting's pictures, one per choice; none if it has no choices or a picture is
+/// missing (the windows then show a drop-down, as for a `choice`).
+pub fn pictures(suite: &Suite, blade: &Blade, setting: &Setting) -> Option<Vec<String>> {
+    let paths: Vec<String> = setting.choices.iter().map(|c| suite.setting_picture(blade, &setting.key, &c.value)).collect();
+    (!paths.is_empty() && paths.iter().all(|p| files::exists(p))).then_some(paths)
 }
 
 /// Changes the blade's settings (`key=value` each). The error is the blade's own reason when it
@@ -192,9 +202,11 @@ mod tests {
     fn parses_what_blades_print() {
         let out = "rect\thotkey\t1092\tRectangle\r\nflash\ttoggle\t1\tFlash the captured area\r\n\
                    device\tchoice\tAA:BB\tHeadset\tAA:BB=AirPods Pro\t=skipped\tnoequals\tCC:DD=Other=x\n\
+                   icon\tpicture\tb\tTray icon\ta=A\tb=B\n\
                    \tchoice\tx\tno key\nbad\tslider\t1\tunknown kind\nshort\ttoggle\t1\n\n";
         let s = parse(out);
-        assert_eq!(s.len(), 3);
+        assert_eq!(s.len(), 4);
+        assert_eq!((s[3].kind, s[3].value.as_str(), s[3].choices.len()), (Kind::Picture, "b", 2));
         assert_eq!(
             s[0],
             Setting { key: "rect".into(), kind: Kind::Hotkey, value: "1092".into(), label: "Rectangle".into(), choices: vec![] }

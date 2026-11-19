@@ -22,6 +22,11 @@ setting to stdout (a pipe), UTF-8, `\n` or `\r\n`, fields separated by a tab, an
   - `toggle`: `value` is `1` or `0`.
   - `choice`: `value` is one of the choice values that follow, or empty when nothing is chosen
     (QuickTooth with no headset). Choice values never contain a tab, `=` or a line break.
+  - `picture`: a `choice` shown as pictures (QuickTooth's tray icon). Each choice's picture is
+    `icons\<blade>\<key>.<value>.ico` in the PocketKnives folder (`<blade>` as the runner names
+    it, e.g. `QuickTooth`), written by the blade when the suite is built
+    ([installer](installer.md)), with a size for each display scaling. Settings tints it like
+    its text in Windows 11. With a picture missing, Settings shows a drop-down.
 - `label`: shown next to the control, in the blade's words.
 - An empty line or a line that doesn't parse is skipped; the page shows what it understood.
 

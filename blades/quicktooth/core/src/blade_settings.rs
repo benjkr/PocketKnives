@@ -53,7 +53,7 @@ pub fn is_low_battery_choice(percent: i32) -> bool {
 
 /// The `--settings` lines: the headset (the devices the Device menu offers, plus the stored one
 /// marked "(not available)" when it's missing, as in the menu), the low-battery warning and the
-/// tray icon's artwork.
+/// tray icon's artwork (a `picture`: each choice's picture is written by `--write-setting-pictures`).
 pub fn describe(settings: &Settings, devices: &[BtDevice]) -> String {
     let mut s = String::new();
     let target = if settings.has_target() { settings.resolve(devices) } else { None };
@@ -76,7 +76,7 @@ pub fn describe(settings: &Settings, devices: &[BtDevice]) -> String {
     }
     s.push('\n');
 
-    s.push_str(&format!("{ICON_KEY}\tchoice\t{}\tTray icon", settings.artwork().key()));
+    s.push_str(&format!("{ICON_KEY}\tpicture\t{}\tTray icon", settings.artwork().key()));
     for a in Artwork::ALL {
         s.push_str(&format!("\t{}={}", a.key(), a.label()));
     }

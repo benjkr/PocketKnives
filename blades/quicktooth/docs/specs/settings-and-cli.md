@@ -20,11 +20,13 @@ change, and lean.
 QuickTooth's side of the suite's [blade settings contract](../../../../docs/specs/blade-settings.md),
 in `core/src/blade_settings.rs`:
 
-- `--settings` prints three `choice` settings: `device` ("Headset": container IDs in `B` format,
+- `--settings` prints three settings: the `choice`s `device` ("Headset": container IDs in `B` format,
   labelled with the devices the tray's Device menu offers; the value is the stored target, empty
   if none; a stored target that's missing is listed as `<name> (not available)`, as in the menu),
-  `lowBattery` ("Low battery warning": 10, 15, 20, 25 or 30 %) and `icon` ("Tray icon":
-  `airpodsPro` "AirPods Pro" or `airpods` "AirPods"). It enumerates like the tray
+  `lowBattery` ("Low battery warning": 10, 15, 20, 25 or 30 %), and the `picture` `icon` ("Tray
+  icon": `airpodsPro` "AirPods Pro" or `airpods` "AirPods"). Its pictures, `icon.<choice>.ico`,
+  are written by `--write-setting-pictures <dir>` when the suite is built: each artwork's
+  connected icon as on a light taskbar, at 16 to 64 px. It enumerates like the tray
   and writes nothing; about as fast as `--list`.
 - `--set key=value...` checks every pair first (form, key, battery and icon value); a bad one exits 2 with
   one line and changes nothing. The headset already chosen is no change, even while missing.
@@ -57,7 +59,8 @@ in `core/src/blade_settings.rs`:
 - For people: `--toggle`, `--connect`, `--disconnect` (forwarded to the running tray, so they act
   exactly like a click; `--no-wait` returns at once), `--list [--all]`, `--battery`,
   `--autostart on|off|status`, `--exit`, `--version`, `--help`.
-- For PocketKnives Settings: `--settings` and `--set key=value...` (above).
+- For PocketKnives Settings: `--settings` and `--set key=value...` (above), and for the suite's
+  build `--write-setting-pictures <dir>`.
 - Read-only checks for agents and tests: `--probe <endpoint id>`, `--render-icons <dir> [--zoom z]`,
   `--icon-rect`, `--show-menu` / `--close-menu`, `--settings-roundtrip <in> <out>`,
   `--stress-enumerate N`, `--watch-endpoints S`, `--selftest-icons [cycles]`

@@ -309,6 +309,17 @@ pub fn render_large_glyph(fill_glyph: bool, size: i32) -> Vec<u8> {
     canvas.to_bgra(BLACK)
 }
 
+/// The sizes of a setting picture.
+const PICTURE_SIZES: [usize; 9] = [16, 20, 24, 30, 32, 36, 40, 48, 64];
+
+/// The current artwork's picture for PocketKnives Settings' Tray icon picker: its connected
+/// icon as on a light taskbar, as an ICO with a size for each display scaling.
+pub fn setting_picture() -> Vec<u8> {
+    let images: Vec<(usize, Vec<u8>)> =
+        PICTURE_SIZES.iter().map(|&size| (size, render_bgra(IconState::Connected, true, size as i32))).collect();
+    png::ico(&images)
+}
+
 /// Draws with other artwork (SVG text) until reset; `None` restores the built-in glyph.
 /// Simulator only.
 pub fn set_glyphs(fill_svg: Option<&str>, line_svg: Option<&str>) {

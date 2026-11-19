@@ -1,4 +1,5 @@
-//! A minimal PNG writer for the check images: RGBA, stored (uncompressed) deflate blocks.
+//! A minimal PNG writer for the check images (RGBA, stored deflate blocks), and ICO files made
+//! of such PNGs for PocketKnives Settings.
 use alloc::vec::Vec;
 
 const CRC: [u32; 256] = {
@@ -76,6 +77,28 @@ fn chunk(f: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
         c = CRC[((c ^ v as u32) & 0xFF) as usize] ^ (c >> 8);
     }
     f.extend_from_slice(&(c ^ 0xFFFF_FFFF).to_be_bytes());
+}
+
+/// An ICO file of square straight-alpha BGRA images (`(size, pixels)`, at most 256 px each),
+/// each stored as a PNG.
+pub fn ico(images: &[(usize, Vec<u8>)]) -> Vec<u8> {
+    let pngs: Vec<Vec<u8>> = images.iter().map(|(size, px)| encode(px, *size, *size)).collect();
+    let mut out = Vec::new();
+    out.extend_from_slice(&[0, 0, 1, 0]); // reserved, type 1 (icon)
+    out.extend_from_slice(&(images.len() as u16).to_le_bytes());
+    let mut offset = 6 + 16 * images.len();
+    for ((size, _), png) in images.iter().zip(&pngs) {
+        out.push(*size as u8); // 256 is written as 0
+        out.push(*size as u8);
+        out.extend_from_slice(&[0, 0, 1, 0, 32, 0]); // no palette, reserved, 1 plane, 32 bits
+        out.extend_from_slice(&(png.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(offset as u32).to_le_bytes());
+        offset += png.len();
+    }
+    for png in &pngs {
+        out.extend_from_slice(png);
+    }
+    out
 }
 
 #[cfg(test)]

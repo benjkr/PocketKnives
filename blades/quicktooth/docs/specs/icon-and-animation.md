@@ -7,7 +7,8 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the a
 
 - Two artworks, picked with the Tray icon setting ([settings and CLI](settings-and-cli.md)); each
   is a pair of glyphs, connected (`-fill`) and not connected (`-line`), embedded in the core
-  (`Artwork` in `core/src/icon/glyph.rs`). A change redraws the static icons at once.
+  (`Artwork` in `core/src/icon/glyph.rs`). A change redraws the static icons at once. Settings
+  shows each artwork's connected icon as its picture (`icon::setting_picture`, an ICO of PNGs).
   `tools/airpods_glyph.py` (needs `pip install shapely svgpathtools`) generates all four files.
 - **AirPods Pro** (default), `assets/airpods-pro-*.svg`: from `tools/airpods_pro_shapes.json`,
   one earbud traced from the SVG Repo drawing #324521.

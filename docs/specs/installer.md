@@ -10,8 +10,10 @@ What it does now. Keep it current in the same change, and lean.
   packages for the Windows 11 settings app are downloaded from nuget.org on the first build,
   checked against their pinned SHA-512 and cached in `%TEMP%\pocketknives-winappsdk`
   (`runner/winui/stage.ps1`).
-- **What it installs**: the [runner](runner.md), its Windows 11 settings app, and each blade's exe
-  into `%LOCALAPPDATA%\Programs\PocketKnives`, without an admin prompt. The Start menu's
+- **What it installs**: the [runner](runner.md), its Windows 11 settings app, each blade's exe and
+  the icons Settings shows (each blade's, and the pictures a blade draws for its `picture`
+  settings, see [blade settings](blade-settings.md)) into `%LOCALAPPDATA%\Programs\PocketKnives`,
+  without an admin prompt. The Start menu's
   PocketKnives folder contains PocketKnives Settings and one entry per blade. Windows lists one
   PocketKnives app.
 - **Start when I sign in**: the runner starts at sign-in through a PocketKnives Startup shortcut
@@ -27,5 +29,6 @@ What it does now. Keep it current in the same change, and lean.
 - **What goes on the user's PC**: only builds of `master`, from a release tag once tags exist. Say
   which commit is installed. The blades' own stand-alone installs (QuickTooth's `publish.ps1` and
   installer, SnipSnap's folder) would run beside this one: they aren't used on the user's PC.
-- **Adding a blade**: build it into the stage in `build.ps1`, and give it a `[Files]` line, a Start
+- **Adding a blade**: build it into the stage in `build.ps1` (with its setting pictures, if it
+  has `picture` settings), and give it a `[Files]` line, a Start
   menu entry, a "start when I sign in" task and a stop command in `PocketKnives.iss`.

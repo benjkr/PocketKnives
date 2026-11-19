@@ -115,6 +115,12 @@ impl Suite {
         join(&join(&self.root, "icons"), blade.icon)
     }
 
+    /// The picture of one choice of a `picture` setting, `icons\<blade>\<key>.<value>.ico`: the
+    /// blade writes it there when the suite is built (docs/specs/blade-settings.md).
+    pub fn setting_picture(&self, blade: &Blade, key: &str, value: &str) -> String {
+        join(&join(&join(&self.root, "icons"), blade.name), &alloc::format!("{key}.{value}.ico"))
+    }
+
     /// The Windows 11 settings app.
     pub fn winui_exe(&self) -> String {
         join(&join(&self.root, "winui"), "PocketKnives.Settings.exe")

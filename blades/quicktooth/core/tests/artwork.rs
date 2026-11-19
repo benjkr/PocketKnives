@@ -10,7 +10,7 @@ fn artwork_setting_and_both_artworks() {
     // --settings: the current artwork and both choices.
     let mut settings = Settings::default();
     let line = |s: &Settings| blade_settings::describe(s, &[]).lines().find(|l| l.starts_with("icon\t")).map(String::from);
-    assert_eq!(line(&settings).as_deref(), Some("icon\tchoice\tairpodsPro\tTray icon\tairpodsPro=AirPods Pro\tairpods=AirPods"));
+    assert_eq!(line(&settings).as_deref(), Some("icon\tpicture\tairpodsPro\tTray icon\tairpodsPro=AirPods Pro\tairpods=AirPods"));
 
     // --set: checked first, applied once, the same pick again is no change.
     assert_eq!(blade_settings::parse(&["icon=beats"]).unwrap_err(), "Tray icon can be airpodsPro or airpods.");
@@ -18,7 +18,7 @@ fn artwork_setting_and_both_artworks() {
     assert_eq!(change.icon, Some(Artwork::AirPods));
     assert_eq!(blade_settings::apply(&change, &mut settings, None), SetResult::SaveFailed); // no save handler here
     assert_eq!((settings.icon.as_deref(), settings.artwork()), (Some("airpods"), Artwork::AirPods));
-    assert!(line(&settings).unwrap().starts_with("icon\tchoice\tairpods\t"));
+    assert!(line(&settings).unwrap().starts_with("icon\tpicture\tairpods\t"));
     assert_eq!(blade_settings::apply(&change, &mut settings, None), SetResult::Applied);
 
     // Both artworks: distinct icons, and every phase ends exactly on the static icon.
@@ -43,5 +43,11 @@ fn artwork_setting_and_both_artworks() {
         connected.push(icon::render_bgra(IconState::Connected, false, 16));
     }
     assert_ne!(connected[0], connected[1]);
+
+    // The Settings picture: an ICO of PNGs, one per size.
+    let ico = icon::setting_picture();
+    assert_eq!(&ico[..4], &[0, 0, 1, 0]);
+    assert_eq!(u16::from_le_bytes([ico[4], ico[5]]), 9);
+    assert_eq!(&ico[6..8], &[16, 16]);
     icon::set_artwork(Artwork::default());
 }

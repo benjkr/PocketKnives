@@ -39,9 +39,12 @@ try {
 } finally { Pop-Location }
 Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'pk.exe') $stage
 
-# The blade icons the settings windows show.
+# The blade icons the settings windows show, and the pictures of the blades' picture settings
+# (icons\<blade>\<key>.<value>.ico), drawn by the blade itself.
 $icons = New-Item -ItemType Directory (Join-Path $stage 'icons')
 Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico') $icons
+& (Join-Path $stage 'QuickTooth.exe') --write-setting-pictures (Join-Path $icons 'QuickTooth') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'QuickTooth could not write its setting pictures' }
 
 # The Windows 11 settings app, with the Windows App SDK runtime beside it.
 & (Join-Path $root 'runner\winui\stage.ps1') -Out (Join-Path $stage 'winui') -Exe (Join-Path $release 'pocketknives-settings.exe')
