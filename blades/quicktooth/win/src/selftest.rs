@@ -38,6 +38,7 @@ pub fn icons(out: &mut Writer, cycles: i32) -> u32 {
         target_name: Some("Test AirPods".into()),
         tray_promoted_once: true,
         low_battery_percent: None,
+        icon: None,
     };
     let schedule: Rc<dyn Schedule> = Rc::new(Inline::default());
     let app = TrayController::new(host.clone(), devices, settings, schedule);

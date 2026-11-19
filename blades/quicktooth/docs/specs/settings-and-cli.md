@@ -7,7 +7,8 @@ change, and lean.
 
 - `targetContainerId` (primary), `targetMac` (fallback), `targetName` (display only),
   `trayPromotedOnce` and, optionally, `lowBatteryPercent` (the low-battery warning; absent means
-  the default in `core/src/tunables.rs`, and a file without it round-trips unchanged). Read and written
+  the default in `core/src/tunables.rs`) and `icon` (the tray icon's artwork, `airpodsPro` or
+  `airpods`; absent or unknown means AirPods Pro). A file without them round-trips unchanged. Read and written
   exactly as System.Text.Json did (`core/src/settings.rs`: camelCase, nulls left out, indented,
   relaxed escaping, CRLF in the exe); saved through a temp file and a move.
 - A stored target is never swapped for another device: if it's missing, the tray says
@@ -19,12 +20,13 @@ change, and lean.
 QuickTooth's side of the suite's [blade settings contract](../../../../docs/specs/blade-settings.md),
 in `core/src/blade_settings.rs`:
 
-- `--settings` prints two `choice` settings: `device` ("Headset": container IDs in `B` format,
+- `--settings` prints three `choice` settings: `device` ("Headset": container IDs in `B` format,
   labelled with the devices the tray's Device menu offers; the value is the stored target, empty
-  if none; a stored target that's missing is listed as `<name> (not available)`, as in the menu)
-  and `lowBattery` ("Low battery warning": 10, 15, 20, 25 or 30 %). It enumerates like the tray
+  if none; a stored target that's missing is listed as `<name> (not available)`, as in the menu),
+  `lowBattery` ("Low battery warning": 10, 15, 20, 25 or 30 %) and `icon` ("Tray icon":
+  `airpodsPro` "AirPods Pro" or `airpods` "AirPods"). It enumerates like the tray
   and writes nothing; about as fast as `--list`.
-- `--set key=value...` checks every pair first (form, key, battery value); a bad one exits 2 with
+- `--set key=value...` checks every pair first (form, key, battery and icon value); a bad one exits 2 with
   one line and changes nothing. The headset already chosen is no change, even while missing.
 - With the tray running, the pairs go to it as `WM_COPYDATA` (`SendMessageTimeout`, 5 s): it saves
   its whole file, so it applies the change itself ([tray](tray.md)) and answers with the result.
@@ -32,7 +34,8 @@ in `core/src/blade_settings.rs`:
   writes the file itself then. With no tray, the
   CLI checks the headset against a fresh enumeration, applies and saves. Exit 0: saved (nothing is
   written when nothing changes).
-- Logged: `low battery warning set: N%` and the Device menu's `target set: …`.
+- Logged: `low battery warning set: N%`, `tray icon set: AirPods` (or `AirPods Pro`, followed by
+  `icons rebuilt: …` in a running tray) and the Device menu's `target set: …`.
 - `POCKETKNIVES_SETTINGS_PREVIEW=1`: both use `settings.json` and `quicktooth.log` next to the
   exe and never message a running tray.
 

@@ -1,10 +1,10 @@
-//! The tray icon's artwork and animation: a small scanline rasterizer drawing the two AirPods
-//! glyphs (`assets/airpods-pro-*.svg`), the low-battery dot and every animation phase, plus the
-//! PNG writer for check images. The same code draws in the exe and in the simulator
+//! The tray icon's artwork and animation: a small scanline rasterizer drawing the two glyphs of
+//! the artwork picked in Settings (`assets/airpods-pro-*.svg` or `assets/airpods-*.svg`), the
+//! low-battery dot and every animation phase, plus the PNG writer for check images. The same code draws in the exe and in the simulator
 //! (docs/specs/icon-and-animation.md).
 //!
-//! Connected = solid, with the ear tips dimmed; disconnected = the reverse: hollow, dimmed body
-//! and stem with solid ear tips. Each glyph carries its own per-path opacities.
+//! Connected = solid (AirPods Pro: ear tips dimmed); disconnected = hollow and dimmed (AirPods
+//! Pro: solid ear tips). Each glyph carries its own per-path opacities.
 use crate::math::{PI, ceil, clamp, cos, max, min, pow, sin, sqrt};
 use crate::tunables::{self, T};
 use alloc::vec::Vec;
@@ -12,6 +12,7 @@ use glyph::{Polyline, Pt, fill, line, point_at};
 use raster::{Canvas, Clip, Rgb, Xf, over};
 
 mod glyph;
+pub use glyph::{Artwork, artwork, set_artwork};
 pub mod png;
 mod raster;
 mod sort;

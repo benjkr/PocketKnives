@@ -341,7 +341,7 @@ fn settings_are_refused_while_pending() {
     refresh(&mock, vec![airpods(false, "AirPods Pro")]);
     c.on_command(quicktooth_core::host::tray_commands::TOGGLE);
     take_log();
-    let change = SettingsChange { device: None, low_battery: Some(15) };
+    let change = SettingsChange { device: None, low_battery: Some(15), icon: None };
     assert_eq!(c.apply_settings(&change), SetResult::Busy);
     assert_eq!(take_log(), ["settings: ignored, Connect still pending"]);
 }

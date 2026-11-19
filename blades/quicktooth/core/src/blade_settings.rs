@@ -3,6 +3,7 @@
 //! refusal. Used by the CLI, by the running tray a `--set` is handed to, and by the simulator.
 use crate::Guid;
 use crate::devices::BtDevice;
+use crate::icon::Artwork;
 use crate::settings::Settings;
 use alloc::format;
 use alloc::string::String;
@@ -38,10 +39,12 @@ impl SetResult {
 pub struct SettingsChange {
     pub device: Option<String>,
     pub low_battery: Option<i32>,
+    pub icon: Option<Artwork>,
 }
 
 pub const DEVICE_KEY: &str = "device";
 pub const LOW_BATTERY_KEY: &str = "lowBattery";
+pub const ICON_KEY: &str = "icon";
 pub const LOW_BATTERY_CHOICES: [i32; 5] = [10, 15, 20, 25, 30];
 
 pub fn is_low_battery_choice(percent: i32) -> bool {
@@ -49,7 +52,8 @@ pub fn is_low_battery_choice(percent: i32) -> bool {
 }
 
 /// The `--settings` lines: the headset (the devices the Device menu offers, plus the stored one
-/// marked "(not available)" when it's missing, as in the menu) and the low-battery warning.
+/// marked "(not available)" when it's missing, as in the menu), the low-battery warning and the
+/// tray icon's artwork.
 pub fn describe(settings: &Settings, devices: &[BtDevice]) -> String {
     let mut s = String::new();
     let target = if settings.has_target() { settings.resolve(devices) } else { None };
@@ -69,6 +73,12 @@ pub fn describe(settings: &Settings, devices: &[BtDevice]) -> String {
     s.push_str(&format!("\tchoice\t{}\tLow battery warning", settings.low_battery_warning()));
     for p in LOW_BATTERY_CHOICES {
         s.push_str(&format!("\t{p}={p}%"));
+    }
+    s.push('\n');
+
+    s.push_str(&format!("{ICON_KEY}\tchoice\t{}\tTray icon", settings.artwork().key()));
+    for a in Artwork::ALL {
+        s.push_str(&format!("\t{}={}", a.key(), a.label()));
     }
     s.push('\n');
     s
@@ -117,7 +127,13 @@ pub fn parse<S: AsRef<str>>(pairs: &[S]) -> Result<SettingsChange, String> {
             LOW_BATTERY_KEY => {
                 change.low_battery = LOW_BATTERY_CHOICES.iter().copied().find(|c| value == format!("{c}"));
                 if change.low_battery.is_none() {
-                    return Err(format!("Low battery warning can be {}.", choice_list()));
+                    return Err(format!("Low battery warning can be {}.", or_list(LOW_BATTERY_CHOICES.map(|c| format!("{c}%")))));
+                }
+            }
+            ICON_KEY => {
+                change.icon = Artwork::from_key(value);
+                if change.icon.is_none() {
+                    return Err(format!("Tray icon can be {}.", or_list(Artwork::ALL.map(Artwork::key))));
                 }
             }
             _ => return Err(format!("QuickTooth has no setting called \"{key}\".")),
@@ -150,25 +166,31 @@ pub fn apply(change: &SettingsChange, settings: &mut Settings, device: Option<&B
             crate::log!("low battery warning set: {p}%");
         }
     }
+    if let Some(a) = change.icon {
+        if a != settings.artwork() {
+            changed = true;
+            settings.icon = Some(a.key().into());
+            crate::log!("tray icon set: {}", a.label());
+        }
+    }
     if let Some(d) = device {
         settings.choose_target(d);
     }
     if !changed || settings.save() { SetResult::Applied } else { SetResult::SaveFailed }
 }
 
-/// "10%, 15%, 20%, 25% or 30%".
-fn choice_list() -> String {
+/// "a, b or c".
+fn or_list<S: AsRef<str>, const N: usize>(items: [S; N]) -> String {
     let mut s = String::new();
-    let n = LOW_BATTERY_CHOICES.len();
-    for (i, c) in LOW_BATTERY_CHOICES.iter().enumerate() {
+    for (i, item) in items.iter().enumerate() {
         s.push_str(if i == 0 {
             ""
-        } else if i == n - 1 {
+        } else if i == N - 1 {
             " or "
         } else {
             ", "
         });
-        s.push_str(&format!("{c}%"));
+        s.push_str(item.as_ref());
     }
     s
 }

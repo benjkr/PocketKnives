@@ -112,7 +112,7 @@ impl Win {
         }
         self.reentries.set(self.reentries.get() + 1);
         let c = self.c();
-        let _ = c.apply_settings(&SettingsChange { device: None, low_battery: Some(25) }); // WM_COPYDATA
+        let _ = c.apply_settings(&SettingsChange { device: None, low_battery: Some(25), icon: None }); // WM_COPYDATA
         c.on_setting_change(Some("ImmersiveColorSet")); // WM_SETTINGCHANGE (the theme flipped)
         c.on_setting_change(None);
         self.size.set(if self.size.get() == 16 { 20 } else { 16 });
@@ -206,7 +206,7 @@ impl TrayHost for Win {
 
 impl Win {
     fn sent_messages_inside_menu(&self, c: &TrayController) {
-        let _ = c.apply_settings(&SettingsChange { device: Some(OTHER.to_b()), low_battery: Some(10) });
+        let _ = c.apply_settings(&SettingsChange { device: Some(OTHER.to_b()), low_battery: Some(10), icon: None });
         c.on_setting_change(Some("ImmersiveColorSet"));
         c.on_taskbar_created();
         c.rebuild_icons_now();

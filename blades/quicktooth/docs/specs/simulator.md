@@ -48,6 +48,6 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it do
   `menu-check`, `test` (all fidelity checks and scenarios), `open` (a window with a control panel).
 - The `cli` step and `qt.cli` hand `--toggle`, `--connect`, … and `--set key=value…` to the running
   app as the exe does (`--set` through `AppSet`, the same core path the tray's `WM_COPYDATA`
-  takes); the page's settings keep `lowBatteryPercent` across restarts.
+  takes); the page's settings keep `lowBatteryPercent` and `icon` across restarts.
 - `--tune` overrides any value in `core/src/tunables.rs` by name. JavaScript animation sketches
   (`--variant`) are gone: looks are changed in `core/src/icon`.
