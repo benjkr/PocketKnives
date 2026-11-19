@@ -1,10 +1,10 @@
-//! The tray icon's artwork and animation: a small scanline rasterizer drawing the two AirPods
-//! glyphs (`assets/airpods-pro-*.svg`), the low-battery dot and every animation phase, plus the
-//! PNG writer for check images. The same code draws in the exe and in the simulator
+//! The tray icon's artwork and animation: a small scanline rasterizer drawing the two glyphs of
+//! the artwork picked in Settings (`assets/airpods-pro-*.svg` or `assets/airpods-*.svg`), the
+//! low-battery dot and every animation phase, plus the PNG writer for check images. The same code draws in the exe and in the simulator
 //! (docs/specs/icon-and-animation.md).
 //!
-//! Connected = solid, with the ear tips dimmed; disconnected = the reverse: hollow, dimmed body
-//! and stem with solid ear tips. Each glyph carries its own per-path opacities.
+//! Connected = solid (AirPods Pro: ear tips dimmed); disconnected = hollow and dimmed (AirPods
+//! Pro: solid ear tips). Each glyph carries its own per-path opacities.
 use crate::math::{PI, ceil, clamp, cos, max, min, pow, sin, sqrt};
 use crate::tunables::{self, T};
 use alloc::vec::Vec;
@@ -12,6 +12,7 @@ use glyph::{Polyline, Pt, fill, line, point_at};
 use raster::{Canvas, Clip, Rgb, Xf, over};
 
 mod glyph;
+pub use glyph::{Artwork, artwork, set_artwork};
 pub mod png;
 mod raster;
 mod sort;
@@ -306,6 +307,17 @@ pub fn render_large_glyph(fill_glyph: bool, size: i32) -> Vec<u8> {
     let mut canvas = Canvas::new(size);
     canvas.draw(if fill_glyph { fill() } else { line() }, 1.0, Xf::new(size as f64 / 24.0, 0.0, 0.0), Clip::NONE);
     canvas.to_bgra(BLACK)
+}
+
+/// The sizes of a setting picture.
+const PICTURE_SIZES: [usize; 9] = [16, 20, 24, 30, 32, 36, 40, 48, 64];
+
+/// The current artwork's picture for PocketKnives Settings' Tray icon picker: its connected
+/// icon as on a light taskbar, as an ICO with a size for each display scaling.
+pub fn setting_picture() -> Vec<u8> {
+    let images: Vec<(usize, Vec<u8>)> =
+        PICTURE_SIZES.iter().map(|&size| (size, render_bgra(IconState::Connected, true, size as i32))).collect();
+    png::ico(&images)
 }
 
 /// Draws with other artwork (SVG text) until reset; `None` restores the built-in glyph.

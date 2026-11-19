@@ -497,6 +497,14 @@ pub mod Microsoft {
             pub struct Application(windows_core::IUnknown);
             windows_core::imp::interface_hierarchy!(Application, windows_core::IUnknown, windows_core::IInspectable);
             impl Application {
+                pub fn Resources(&self) -> windows_core::Result<ResourceDictionary> {
+                    let this = self;
+                    unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                            .and_then(|| windows_core::Type::from_abi(result__))
+                    }
+                }
                 pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                 where
                     P0: windows_core::Param<ResourceDictionary>,
@@ -531,6 +539,13 @@ pub mod Microsoft {
                     unsafe {
                         (windows_core::Interface::vtable(this).OnLaunched)(windows_core::Interface::as_raw(this), args.param().abi()).ok()
                     }
+                }
+                pub fn Current() -> windows_core::Result<Application> {
+                    Self::IApplicationStatics(|this| unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Current)(windows_core::Interface::as_raw(this), &mut result__)
+                            .and_then(|| windows_core::Type::from_abi(result__))
+                    })
                 }
                 pub fn Start<P0>(callback: P0) -> windows_core::Result<()>
                 where
@@ -781,6 +796,14 @@ pub mod Microsoft {
                 DependencyObject
             );
             impl FrameworkElement {
+                pub fn Resources(&self) -> windows_core::Result<ResourceDictionary> {
+                    let this = self;
+                    unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                            .and_then(|| windows_core::Type::from_abi(result__))
+                    }
+                }
                 pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                 where
                     P0: windows_core::Param<ResourceDictionary>,
@@ -826,6 +849,12 @@ pub mod Microsoft {
                             .map(|| result__)
                     }
                 }
+                pub fn SetHorizontalAlignment(&self, value: HorizontalAlignment) -> windows_core::Result<()> {
+                    let this = self;
+                    unsafe {
+                        (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value).ok()
+                    }
+                }
                 pub fn VerticalAlignment(&self) -> windows_core::Result<VerticalAlignment> {
                     let this = self;
                     unsafe {
@@ -852,6 +881,14 @@ pub mod Microsoft {
                             core::mem::transmute_copy(value),
                         )
                         .ok()
+                    }
+                }
+                pub fn Parent(&self) -> windows_core::Result<DependencyObject> {
+                    let this = self;
+                    unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                            .and_then(|| windows_core::Type::from_abi(result__))
                     }
                 }
                 pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -884,6 +921,29 @@ pub mod Microsoft {
                 pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                     let this = &windows_core::Interface::cast::<IUIElement>(self)?;
                     unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                }
+                pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                    let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+                    unsafe {
+                        (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                    }
+                }
+                pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                    let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+                    unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                }
+                pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                where
+                    P0: windows_core::Param<Vector3Transition>,
+                {
+                    let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+                    unsafe {
+                        (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                            windows_core::Interface::as_raw(this),
+                            value.param().abi(),
+                        )
+                        .ok()
+                    }
                 }
                 pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                 where
@@ -1568,16 +1628,19 @@ pub mod Microsoft {
                 SetOpacityTransition: usize,
                 pub Translation: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows_numerics::Vector3) -> windows_core::HRESULT,
                 pub SetTranslation: unsafe extern "system" fn(*mut core::ffi::c_void, windows_numerics::Vector3) -> windows_core::HRESULT,
-                TranslationTransition: usize,
-                SetTranslationTransition: usize,
+                pub TranslationTransition:
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                pub SetTranslationTransition:
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub Rotation: unsafe extern "system" fn(*mut core::ffi::c_void, *mut f32) -> windows_core::HRESULT,
                 pub SetRotation: unsafe extern "system" fn(*mut core::ffi::c_void, f32) -> windows_core::HRESULT,
                 RotationTransition: usize,
                 SetRotationTransition: usize,
                 pub Scale: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows_numerics::Vector3) -> windows_core::HRESULT,
                 pub SetScale: unsafe extern "system" fn(*mut core::ffi::c_void, windows_numerics::Vector3) -> windows_core::HRESULT,
-                ScaleTransition: usize,
-                SetScaleTransition: usize,
+                pub ScaleTransition:
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                pub SetScaleTransition: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub TransformMatrix:
                     unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows_numerics::Matrix4x4) -> windows_core::HRESULT,
                 pub SetTransformMatrix:
@@ -1927,6 +1990,39 @@ pub mod Microsoft {
                 pub RegisterAsScrollPort:
                     unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
             }
+            windows_core::imp::define_interface!(IVector3Transition, IVector3Transition_Vtbl, 0x0c408bb9_f9a2_55d7_8aed_143d36d603f2);
+            impl windows_core::RuntimeType for IVector3Transition {
+                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+            }
+            #[repr(C)]
+            #[doc(hidden)]
+            pub struct IVector3Transition_Vtbl {
+                pub base__: windows_core::IInspectable_Vtbl,
+                pub Duration:
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::TimeSpan) -> windows_core::HRESULT,
+                pub SetDuration: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Foundation::TimeSpan) -> windows_core::HRESULT,
+                Components: usize,
+                SetComponents: usize,
+            }
+            windows_core::imp::define_interface!(
+                IVector3TransitionFactory,
+                IVector3TransitionFactory_Vtbl,
+                0xa3a084fc_b965_534b_900f_78e288129232
+            );
+            impl windows_core::RuntimeType for IVector3TransitionFactory {
+                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+            }
+            #[repr(C)]
+            #[doc(hidden)]
+            pub struct IVector3TransitionFactory_Vtbl {
+                pub base__: windows_core::IInspectable_Vtbl,
+                pub CreateInstance: unsafe extern "system" fn(
+                    *mut core::ffi::c_void,
+                    *mut core::ffi::c_void,
+                    *mut *mut core::ffi::c_void,
+                    *mut *mut core::ffi::c_void,
+                ) -> windows_core::HRESULT,
+            }
             windows_core::imp::define_interface!(IWindow, IWindow_Vtbl, 0x61f0ec79_5d52_56b5_86fb_40fa4af288b0);
             impl windows_core::RuntimeType for IWindow {
                 const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
@@ -2048,6 +2144,23 @@ pub mod Microsoft {
                         let mut result__ = core::mem::zeroed();
                         (windows_core::Interface::vtable(this).First)(windows_core::Interface::as_raw(this), &mut result__)
                             .and_then(|| windows_core::Type::from_abi(result__))
+                    }
+                }
+                pub fn Lookup<P0>(&self, key: P0) -> windows_core::Result<windows_core::IInspectable>
+                where
+                    P0: windows_core::Param<windows_core::IInspectable>,
+                {
+                    let this = &windows_core::Interface::cast::<
+                        windows_collections::IMap<windows_core::IInspectable, windows_core::IInspectable>,
+                    >(self)?;
+                    unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Lookup)(
+                            windows_core::Interface::as_raw(this),
+                            key.param().abi(),
+                            &mut result__,
+                        )
+                        .and_then(|| windows_core::Type::from_abi(result__))
                     }
                 }
                 pub fn Size(&self) -> windows_core::Result<u32> {
@@ -2335,6 +2448,29 @@ pub mod Microsoft {
                     let this = self;
                     unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
                 }
+                pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                    let this = self;
+                    unsafe {
+                        (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                    }
+                }
+                pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                    let this = self;
+                    unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                }
+                pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                where
+                    P0: windows_core::Param<Vector3Transition>,
+                {
+                    let this = self;
+                    unsafe {
+                        (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                            windows_core::Interface::as_raw(this),
+                            value.param().abi(),
+                        )
+                        .ok()
+                    }
+                }
                 pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                 where
                     P0: windows_core::Param<RoutedEventHandler>,
@@ -2390,6 +2526,43 @@ pub mod Microsoft {
             }
             unsafe impl Send for UIElement {}
             unsafe impl Sync for UIElement {}
+            #[repr(transparent)]
+            #[derive(Clone, Debug, Eq, PartialEq)]
+            pub struct Vector3Transition(windows_core::IUnknown);
+            windows_core::imp::interface_hierarchy!(Vector3Transition, windows_core::IUnknown, windows_core::IInspectable);
+            impl Vector3Transition {
+                pub fn new() -> windows_core::Result<Vector3Transition> {
+                    Self::IVector3TransitionFactory(|this| unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).CreateInstance)(
+                            windows_core::Interface::as_raw(this),
+                            core::ptr::null_mut(),
+                            &mut core::ptr::null_mut(),
+                            &mut result__,
+                        )
+                        .and_then(|| windows_core::Type::from_abi(result__))
+                    })
+                }
+                fn IVector3TransitionFactory<R, F: FnOnce(&IVector3TransitionFactory) -> windows_core::Result<R>>(
+                    callback: F,
+                ) -> windows_core::Result<R> {
+                    static SHARED: windows_core::imp::FactoryCache<Vector3Transition, IVector3TransitionFactory> =
+                        windows_core::imp::FactoryCache::new();
+                    SHARED.call(callback)
+                }
+            }
+            impl windows_core::RuntimeType for Vector3Transition {
+                const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_class::<Self, IVector3Transition>();
+            }
+            unsafe impl windows_core::Interface for Vector3Transition {
+                type Vtable = <IVector3Transition as windows_core::Interface>::Vtable;
+                const IID: windows_core::GUID = <IVector3Transition as windows_core::Interface>::IID;
+            }
+            impl windows_core::RuntimeName for Vector3Transition {
+                const NAME: &'static str = "Microsoft.UI.Xaml.Vector3Transition";
+            }
+            unsafe impl Send for Vector3Transition {}
+            unsafe impl Sync for Vector3Transition {}
             #[repr(transparent)]
             #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
             pub struct VerticalAlignment(pub i32);
@@ -2469,6 +2642,13 @@ pub mod Microsoft {
                             &mut result__,
                         )
                         .and_then(|| windows_core::Type::from_abi(result__))
+                    })
+                }
+                pub fn Current() -> windows_core::Result<Window> {
+                    Self::IWindowStatics(|this| unsafe {
+                        let mut result__ = core::mem::zeroed();
+                        (windows_core::Interface::vtable(this).Current)(windows_core::Interface::as_raw(this), &mut result__)
+                            .and_then(|| windows_core::Type::from_abi(result__))
                     })
                 }
                 fn IWindowFactory<R, F: FnOnce(&IWindowFactory) -> windows_core::Result<R>>(callback: F) -> windows_core::Result<R> {
@@ -2833,67 +3013,53 @@ pub mod Microsoft {
             pub mod Controls {
                 #[repr(transparent)]
                 #[derive(Clone, Debug, Eq, PartialEq)]
-                pub struct Border(windows_core::IUnknown);
-                windows_core::imp::interface_hierarchy!(Border, windows_core::IUnknown, windows_core::IInspectable);
+                pub struct BitmapIcon(windows_core::IUnknown);
+                windows_core::imp::interface_hierarchy!(BitmapIcon, windows_core::IUnknown, windows_core::IInspectable);
                 windows_core::imp::required_hierarchy!(
-                    Border,
+                    BitmapIcon,
                     super::super::Composition::IAnimationObject,
                     super::super::Composition::IVisualElement,
                     super::super::Composition::IVisualElement2,
+                    IconElement,
                     super::FrameworkElement,
                     super::UIElement,
                     super::DependencyObject
                 );
-                impl Border {
-                    pub fn new() -> windows_core::Result<Self> {
-                        Self::IActivationFactory(|f| f.ActivateInstance::<Self>())
-                    }
-                    fn IActivationFactory<R, F: FnOnce(&windows_core::imp::IGenericFactory) -> windows_core::Result<R>>(
-                        callback: F,
-                    ) -> windows_core::Result<R> {
-                        static SHARED: windows_core::imp::FactoryCache<Border, windows_core::imp::IGenericFactory> =
-                            windows_core::imp::FactoryCache::new();
-                        SHARED.call(callback)
-                    }
-                    pub fn SetBackground<P0>(&self, value: P0) -> windows_core::Result<()>
+                impl BitmapIcon {
+                    pub fn SetUriSource<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
-                        P0: windows_core::Param<super::Media::Brush>,
+                        P0: windows_core::Param<windows::Foundation::Uri>,
                     {
                         let this = self;
                         unsafe {
-                            (windows_core::Interface::vtable(this).SetBackground)(
-                                windows_core::Interface::as_raw(this),
-                                value.param().abi(),
-                            )
-                            .ok()
+                            (windows_core::Interface::vtable(this).SetUriSource)(windows_core::Interface::as_raw(this), value.param().abi())
+                                .ok()
                         }
                     }
-                    pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
+                    pub fn SetShowAsMonochrome(&self, value: bool) -> windows_core::Result<()> {
                         let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetShowAsMonochrome)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn new() -> windows_core::Result<BitmapIcon> {
+                        Self::IBitmapIconFactory(|this| unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).CreateInstance)(
+                                windows_core::Interface::as_raw(this),
+                                core::ptr::null_mut(),
+                                &mut core::ptr::null_mut(),
+                                &mut result__,
+                            )
+                            .and_then(|| windows_core::Type::from_abi(result__))
+                        })
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
                             let mut result__ = core::mem::zeroed();
-                            (windows_core::Interface::vtable(this).CornerRadius)(windows_core::Interface::as_raw(this), &mut result__)
-                                .map(|| result__)
-                        }
-                    }
-                    pub fn SetCornerRadius(&self, value: super::CornerRadius) -> windows_core::Result<()> {
-                        let this = self;
-                        unsafe {
-                            (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
-                        }
-                    }
-                    pub fn SetPadding(&self, value: super::Thickness) -> windows_core::Result<()> {
-                        let this = self;
-                        unsafe { (windows_core::Interface::vtable(this).SetPadding)(windows_core::Interface::as_raw(this), value).ok() }
-                    }
-                    pub fn SetChild<P0>(&self, value: P0) -> windows_core::Result<()>
-                    where
-                        P0: windows_core::Param<super::UIElement>,
-                    {
-                        let this = self;
-                        unsafe {
-                            (windows_core::Interface::vtable(this).SetChild)(windows_core::Interface::as_raw(this), value.param().abi())
-                                .ok()
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -2945,6 +3111,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -2973,6 +3146,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -2991,6 +3172,313 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
+                    where
+                        P0: windows_core::Param<super::RoutedEventHandler>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).LostFocus)(
+                                windows_core::Interface::as_raw(this),
+                                handler.param().abi(),
+                                &mut result__,
+                            )
+                            .map(|| result__)
+                        }
+                    }
+                    pub fn AddHandler<P0, P1>(&self, routedevent: P0, handler: P1, handledeventstoo: bool) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::RoutedEvent>,
+                        P1: windows_core::Param<windows_core::IInspectable>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).AddHandler)(
+                                windows_core::Interface::as_raw(this),
+                                routedevent.param().abi(),
+                                handler.param().abi(),
+                                handledeventstoo,
+                            )
+                            .ok()
+                        }
+                    }
+                    fn IBitmapIconFactory<R, F: FnOnce(&IBitmapIconFactory) -> windows_core::Result<R>>(
+                        callback: F,
+                    ) -> windows_core::Result<R> {
+                        static SHARED: windows_core::imp::FactoryCache<BitmapIcon, IBitmapIconFactory> =
+                            windows_core::imp::FactoryCache::new();
+                        SHARED.call(callback)
+                    }
+                    fn IBitmapIconStatics<R, F: FnOnce(&IBitmapIconStatics) -> windows_core::Result<R>>(
+                        callback: F,
+                    ) -> windows_core::Result<R> {
+                        static SHARED: windows_core::imp::FactoryCache<BitmapIcon, IBitmapIconStatics> =
+                            windows_core::imp::FactoryCache::new();
+                        SHARED.call(callback)
+                    }
+                }
+                impl windows_core::RuntimeType for BitmapIcon {
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_class::<Self, IBitmapIcon>();
+                }
+                unsafe impl windows_core::Interface for BitmapIcon {
+                    type Vtable = <IBitmapIcon as windows_core::Interface>::Vtable;
+                    const IID: windows_core::GUID = <IBitmapIcon as windows_core::Interface>::IID;
+                }
+                impl windows_core::RuntimeName for BitmapIcon {
+                    const NAME: &'static str = "Microsoft.UI.Xaml.Controls.BitmapIcon";
+                }
+                unsafe impl Send for BitmapIcon {}
+                unsafe impl Sync for BitmapIcon {}
+                #[repr(transparent)]
+                #[derive(Clone, Debug, Eq, PartialEq)]
+                pub struct Border(windows_core::IUnknown);
+                windows_core::imp::interface_hierarchy!(Border, windows_core::IUnknown, windows_core::IInspectable);
+                windows_core::imp::required_hierarchy!(
+                    Border,
+                    super::super::Composition::IAnimationObject,
+                    super::super::Composition::IVisualElement,
+                    super::super::Composition::IVisualElement2,
+                    super::FrameworkElement,
+                    super::UIElement,
+                    super::DependencyObject
+                );
+                impl Border {
+                    pub fn new() -> windows_core::Result<Self> {
+                        Self::IActivationFactory(|f| f.ActivateInstance::<Self>())
+                    }
+                    fn IActivationFactory<R, F: FnOnce(&windows_core::imp::IGenericFactory) -> windows_core::Result<R>>(
+                        callback: F,
+                    ) -> windows_core::Result<R> {
+                        static SHARED: windows_core::imp::FactoryCache<Border, windows_core::imp::IGenericFactory> =
+                            windows_core::imp::FactoryCache::new();
+                        SHARED.call(callback)
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBackground<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBackground)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
+                        let this = self;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).CornerRadius)(windows_core::Interface::as_raw(this), &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub fn SetCornerRadius(&self, value: super::CornerRadius) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetPadding(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe { (windows_core::Interface::vtable(this).SetPadding)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetChild<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::UIElement>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetChild)(windows_core::Interface::as_raw(this), value.param().abi())
+                                .ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::ResourceDictionary>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetResources)(windows_core::Interface::as_raw(this), value.param().abi())
+                                .ok()
+                        }
+                    }
+                    pub fn Width(&self) -> windows_core::Result<f64> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Width)(windows_core::Interface::as_raw(this), &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub fn SetWidth(&self, value: f64) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetWidth)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn Height(&self) -> windows_core::Result<f64> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Height)(windows_core::Interface::as_raw(this), &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub fn SetHeight(&self, value: f64) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetHeight)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetMinWidth(&self, value: f64) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetMinWidth)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn HorizontalAlignment(&self) -> windows_core::Result<super::HorizontalAlignment> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).HorizontalAlignment)(
+                                windows_core::Interface::as_raw(this),
+                                &mut result__,
+                            )
+                            .map(|| result__)
+                        }
+                    }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
+                    pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).VerticalAlignment)(windows_core::Interface::as_raw(this), &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub fn SetVerticalAlignment(&self, value: super::VerticalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetVerticalAlignment)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetMargin(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetMargin)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetName(&self, value: &windows_core::HSTRING) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetName)(
+                                windows_core::Interface::as_raw(this),
+                                core::mem::transmute_copy(value),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
+                    where
+                        P0: windows_core::Param<super::RoutedEventHandler>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Loaded)(
+                                windows_core::Interface::as_raw(this),
+                                handler.param().abi(),
+                                &mut result__,
+                            )
+                            .map(|| result__)
+                        }
+                    }
+                    pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -3129,6 +3617,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -3141,6 +3648,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -3192,6 +3707,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -3220,6 +3742,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -3238,6 +3768,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -3360,6 +3913,14 @@ pub mod Microsoft {
                         unsafe {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).First)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn GetAt(&self, index: u32) -> windows_core::Result<ColumnDefinition> {
+                        let this = self;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).GetAt)(windows_core::Interface::as_raw(this), index, &mut result__)
                                 .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
@@ -3491,6 +4052,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -3503,6 +4083,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -3554,6 +4142,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -3580,6 +4175,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -3658,6 +4261,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -3787,6 +4413,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -3799,6 +4444,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -3850,6 +4503,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -3878,6 +4538,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -3896,6 +4564,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -4004,6 +4695,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = self;
                         unsafe {
@@ -4029,6 +4739,14 @@ pub mod Microsoft {
                             )
                             .and_then(|| windows_core::Type::from_abi(result__))
                         })
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
@@ -4079,6 +4797,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -4107,6 +4832,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -4125,6 +4858,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -4193,6 +4949,14 @@ pub mod Microsoft {
                     super::DependencyObject
                 );
                 impl Grid {
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -4242,6 +5006,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -4270,6 +5041,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -4291,6 +5070,25 @@ pub mod Microsoft {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).ColumnDefinitions)(windows_core::Interface::as_raw(this), &mut result__)
                                 .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
                         }
                     }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
@@ -4367,6 +5165,29 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
                     }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -4419,6 +5240,47 @@ pub mod Microsoft {
                 }
                 unsafe impl Send for Grid {}
                 unsafe impl Sync for Grid {}
+                windows_core::imp::define_interface!(IBitmapIcon, IBitmapIcon_Vtbl, 0xc370bc29_805b_5bad_b615_ec640e579dbb);
+                impl windows_core::RuntimeType for IBitmapIcon {
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                }
+                #[repr(C)]
+                #[doc(hidden)]
+                pub struct IBitmapIcon_Vtbl {
+                    pub base__: windows_core::IInspectable_Vtbl,
+                    pub UriSource: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                    pub SetUriSource: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
+                    pub ShowAsMonochrome: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
+                    pub SetShowAsMonochrome: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
+                }
+                windows_core::imp::define_interface!(IBitmapIconFactory, IBitmapIconFactory_Vtbl, 0xb43b5ddc_cdb5_5ad6_8ac1_2fcca33be39e);
+                impl windows_core::RuntimeType for IBitmapIconFactory {
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                }
+                #[repr(C)]
+                #[doc(hidden)]
+                pub struct IBitmapIconFactory_Vtbl {
+                    pub base__: windows_core::IInspectable_Vtbl,
+                    pub CreateInstance: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *mut core::ffi::c_void,
+                        *mut *mut core::ffi::c_void,
+                        *mut *mut core::ffi::c_void,
+                    ) -> windows_core::HRESULT,
+                }
+                windows_core::imp::define_interface!(IBitmapIconStatics, IBitmapIconStatics_Vtbl, 0x01c67eb2_327e_5c4e_afb4_38b02ed12886);
+                impl windows_core::RuntimeType for IBitmapIconStatics {
+                    const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
+                }
+                #[repr(C)]
+                #[doc(hidden)]
+                pub struct IBitmapIconStatics_Vtbl {
+                    pub base__: windows_core::IInspectable_Vtbl,
+                    pub UriSourceProperty:
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                    pub ShowAsMonochromeProperty:
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                }
                 windows_core::imp::define_interface!(IBorder, IBorder_Vtbl, 0x1ca13b47_ff5c_5abc_a411_a177df9482a9);
                 impl windows_core::RuntimeType for IBorder {
                     const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_interface::<Self>();
@@ -6857,6 +7719,14 @@ pub mod Microsoft {
                     super::DependencyObject
                 );
                 impl IconElement {
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -6906,6 +7776,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -6934,6 +7811,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -6952,6 +7837,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -7028,6 +7936,14 @@ pub mod Microsoft {
                             windows_core::imp::FactoryCache::new();
                         SHARED.call(callback)
                     }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -7077,6 +7993,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -7103,6 +8026,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -7133,6 +8064,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -7197,6 +8151,14 @@ pub mod Microsoft {
                     super::DependencyObject
                 );
                 impl ImageIcon {
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -7246,6 +8208,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -7272,6 +8241,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -7314,6 +8291,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -7423,6 +8423,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -7435,6 +8454,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -7486,6 +8513,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -7512,6 +8546,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -7586,6 +8628,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -7675,6 +8740,14 @@ pub mod Microsoft {
                         unsafe {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).First)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn GetAt(&self, index: u32) -> windows_core::Result<windows_core::IInspectable> {
+                        let this = &windows_core::Interface::cast::<windows_collections::IVector<windows_core::IInspectable>>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).GetAt)(windows_core::Interface::as_raw(this), index, &mut result__)
                                 .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
@@ -7777,6 +8850,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -7789,6 +8881,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -7840,6 +8940,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -7866,6 +8973,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -7906,6 +9021,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -8026,6 +9164,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -8038,6 +9195,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -8089,6 +9254,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -8115,6 +9287,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -8245,6 +9425,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -8388,6 +9591,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -8400,6 +9622,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -8451,6 +9681,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -8477,6 +9714,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -8526,6 +9771,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -8661,6 +9929,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -8673,6 +9960,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -8724,6 +10019,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -8752,6 +10054,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -8770,6 +10080,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -8885,6 +10218,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -8897,6 +10249,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -8948,6 +10308,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -8974,6 +10341,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -9006,6 +10381,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -9121,6 +10519,14 @@ pub mod Microsoft {
                     super::DependencyObject
                 );
                 impl Panel {
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -9170,6 +10576,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -9196,6 +10609,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -9249,6 +10670,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -9374,6 +10818,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -9386,6 +10849,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -9437,6 +10908,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -9465,6 +10943,14 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -9483,6 +10969,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -9705,6 +11214,14 @@ pub mod Microsoft {
                     super::DependencyObject
                 );
                 impl StackPanel {
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -9754,6 +11271,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -9780,6 +11304,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -9816,6 +11348,25 @@ pub mod Microsoft {
                                 value.param().abi(),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = self;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
                         }
                     }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
@@ -9855,6 +11406,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -9938,6 +11512,14 @@ pub mod Microsoft {
                             windows_core::imp::FactoryCache::new();
                         SHARED.call(callback)
                     }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<super::ResourceDictionary>,
@@ -9987,6 +11569,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -10013,6 +11602,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -10092,6 +11689,29 @@ pub mod Microsoft {
                     pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
                     }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
@@ -10204,6 +11824,25 @@ pub mod Microsoft {
                             .ok()
                         }
                     }
+                    pub fn SetBorderThickness(&self, value: super::Thickness) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Media::Brush>,
+                    {
+                        let this = &windows_core::Interface::cast::<IControl>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn CornerRadius(&self) -> windows_core::Result<super::CornerRadius> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
@@ -10216,6 +11855,14 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe {
                             (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn Resources(&self) -> windows_core::Result<super::ResourceDictionary> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -10267,6 +11914,13 @@ pub mod Microsoft {
                             .map(|| result__)
                         }
                     }
+                    pub fn SetHorizontalAlignment(&self, value: super::HorizontalAlignment) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                .ok()
+                        }
+                    }
                     pub fn VerticalAlignment(&self) -> windows_core::Result<super::VerticalAlignment> {
                         let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
                         unsafe {
@@ -10293,6 +11947,14 @@ pub mod Microsoft {
                                 core::mem::transmute_copy(value),
                             )
                             .ok()
+                        }
+                    }
+                    pub fn Parent(&self) -> windows_core::Result<super::DependencyObject> {
+                        let this = &windows_core::Interface::cast::<super::IFrameworkElement>(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -10364,6 +12026,29 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
                     }
+                    pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value).ok()
+                        }
+                    }
+                    pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe { (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok() }
+                    }
+                    pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                    where
+                        P0: windows_core::Param<super::Vector3Transition>,
+                    {
+                        let this = &windows_core::Interface::cast::<super::IUIElement>(self)?;
+                        unsafe {
+                            (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                windows_core::Interface::as_raw(this),
+                                value.param().abi(),
+                            )
+                            .ok()
+                        }
+                    }
                     pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<super::RoutedEventHandler>,
@@ -10431,6 +12116,14 @@ pub mod Microsoft {
                         unsafe {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).First)(windows_core::Interface::as_raw(this), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn GetAt(&self, index: u32) -> windows_core::Result<super::UIElement> {
+                        let this = self;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).GetAt)(windows_core::Interface::as_raw(this), index, &mut result__)
                                 .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
@@ -10511,6 +12204,23 @@ pub mod Microsoft {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).First)(windows_core::Interface::as_raw(this), &mut result__)
                                 .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                    pub fn Lookup<P0>(&self, key: P0) -> windows_core::Result<windows_core::IInspectable>
+                    where
+                        P0: windows_core::Param<windows_core::IInspectable>,
+                    {
+                        let this = &windows_core::Interface::cast::<
+                            windows_collections::IMap<windows_core::IInspectable, windows_core::IInspectable>,
+                        >(self)?;
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(this).Lookup)(
+                                windows_core::Interface::as_raw(this),
+                                key.param().abi(),
+                                &mut result__,
+                            )
+                            .and_then(|| windows_core::Type::from_abi(result__))
                         }
                     }
                     pub fn Size(&self) -> windows_core::Result<u32> {
@@ -10672,6 +12382,26 @@ pub mod Microsoft {
                                 .ok()
                             }
                         }
+                        pub fn SetBorderThickness(&self, value: super::super::Thickness) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::IControl>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
+                        pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                        where
+                            P0: windows_core::Param<super::super::Media::Brush>,
+                        {
+                            let this = &windows_core::Interface::cast::<super::IControl>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                    windows_core::Interface::as_raw(this),
+                                    value.param().abi(),
+                                )
+                                .ok()
+                            }
+                        }
                         pub fn CornerRadius(&self) -> windows_core::Result<super::super::CornerRadius> {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
@@ -10684,6 +12414,14 @@ pub mod Microsoft {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
                                 (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                            }
+                        }
+                        pub fn Resources(&self) -> windows_core::Result<super::super::ResourceDictionary> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                    .and_then(|| windows_core::Type::from_abi(result__))
                             }
                         }
                         pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -10740,6 +12478,13 @@ pub mod Microsoft {
                                 .map(|| result__)
                             }
                         }
+                        pub fn SetHorizontalAlignment(&self, value: super::super::HorizontalAlignment) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
                         pub fn VerticalAlignment(&self) -> windows_core::Result<super::super::VerticalAlignment> {
                             let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
                             unsafe {
@@ -10772,6 +12517,14 @@ pub mod Microsoft {
                                 .ok()
                             }
                         }
+                        pub fn Parent(&self) -> windows_core::Result<super::super::DependencyObject> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                    .and_then(|| windows_core::Type::from_abi(result__))
+                            }
+                        }
                         pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
                         where
                             P0: windows_core::Param<super::super::RoutedEventHandler>,
@@ -10790,6 +12543,32 @@ pub mod Microsoft {
                         pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                             let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
                             unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                        }
+                        pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
+                        pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok()
+                            }
+                        }
+                        pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                        where
+                            P0: windows_core::Param<super::super::Vector3Transition>,
+                        {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                    windows_core::Interface::as_raw(this),
+                                    value.param().abi(),
+                                )
+                                .ok()
+                            }
                         }
                         pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                         where
@@ -11193,6 +12972,26 @@ pub mod Microsoft {
                                 .ok()
                             }
                         }
+                        pub fn SetBorderThickness(&self, value: super::super::Thickness) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::IControl>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetBorderThickness)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
+                        pub fn SetBorderBrush<P0>(&self, value: P0) -> windows_core::Result<()>
+                        where
+                            P0: windows_core::Param<super::super::Media::Brush>,
+                        {
+                            let this = &windows_core::Interface::cast::<super::IControl>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetBorderBrush)(
+                                    windows_core::Interface::as_raw(this),
+                                    value.param().abi(),
+                                )
+                                .ok()
+                            }
+                        }
                         pub fn CornerRadius(&self) -> windows_core::Result<super::super::CornerRadius> {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
@@ -11205,6 +13004,14 @@ pub mod Microsoft {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
                                 (windows_core::Interface::vtable(this).SetCornerRadius)(windows_core::Interface::as_raw(this), value).ok()
+                            }
+                        }
+                        pub fn Resources(&self) -> windows_core::Result<super::super::ResourceDictionary> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).Resources)(windows_core::Interface::as_raw(this), &mut result__)
+                                    .and_then(|| windows_core::Type::from_abi(result__))
                             }
                         }
                         pub fn SetResources<P0>(&self, value: P0) -> windows_core::Result<()>
@@ -11261,6 +13068,13 @@ pub mod Microsoft {
                                 .map(|| result__)
                             }
                         }
+                        pub fn SetHorizontalAlignment(&self, value: super::super::HorizontalAlignment) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetHorizontalAlignment)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
                         pub fn VerticalAlignment(&self) -> windows_core::Result<super::super::VerticalAlignment> {
                             let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
                             unsafe {
@@ -11291,6 +13105,14 @@ pub mod Microsoft {
                                     core::mem::transmute_copy(value),
                                 )
                                 .ok()
+                            }
+                        }
+                        pub fn Parent(&self) -> windows_core::Result<super::super::DependencyObject> {
+                            let this = &windows_core::Interface::cast::<super::super::IFrameworkElement>(self)?;
+                            unsafe {
+                                let mut result__ = core::mem::zeroed();
+                                (windows_core::Interface::vtable(this).Parent)(windows_core::Interface::as_raw(this), &mut result__)
+                                    .and_then(|| windows_core::Type::from_abi(result__))
                             }
                         }
                         pub fn Loaded<P0>(&self, handler: P0) -> windows_core::Result<i64>
@@ -11369,6 +13191,32 @@ pub mod Microsoft {
                         pub fn SetOpacity(&self, value: f64) -> windows_core::Result<()> {
                             let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
                             unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
+                        }
+                        pub fn SetIsHitTestVisible(&self, value: bool) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetIsHitTestVisible)(windows_core::Interface::as_raw(this), value)
+                                    .ok()
+                            }
+                        }
+                        pub fn SetTranslation(&self, value: windows_numerics::Vector3) -> windows_core::Result<()> {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetTranslation)(windows_core::Interface::as_raw(this), value).ok()
+                            }
+                        }
+                        pub fn SetTranslationTransition<P0>(&self, value: P0) -> windows_core::Result<()>
+                        where
+                            P0: windows_core::Param<super::super::Vector3Transition>,
+                        {
+                            let this = &windows_core::Interface::cast::<super::super::IUIElement>(self)?;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetTranslationTransition)(
+                                    windows_core::Interface::as_raw(this),
+                                    value.param().abi(),
+                                )
+                                .ok()
+                            }
                         }
                         pub fn LostFocus<P0>(&self, handler: P0) -> windows_core::Result<i64>
                         where
@@ -12551,6 +14399,19 @@ pub mod Microsoft {
                             static SHARED: windows_core::imp::FactoryCache<BitmapImage, windows_core::imp::IGenericFactory> =
                                 windows_core::imp::FactoryCache::new();
                             SHARED.call(callback)
+                        }
+                        pub fn SetUriSource<P0>(&self, value: P0) -> windows_core::Result<()>
+                        where
+                            P0: windows_core::Param<windows::Foundation::Uri>,
+                        {
+                            let this = self;
+                            unsafe {
+                                (windows_core::Interface::vtable(this).SetUriSource)(
+                                    windows_core::Interface::as_raw(this),
+                                    value.param().abi(),
+                                )
+                                .ok()
+                            }
                         }
                         pub fn SetDecodePixelWidth(&self, value: i32) -> windows_core::Result<()> {
                             let this = self;

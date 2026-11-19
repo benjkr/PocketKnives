@@ -3,8 +3,9 @@
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+use quicktooth_core::blade_settings;
 use quicktooth_core::host::IconImage;
-use quicktooth_core::icon::{self, AnimPhase, IconState};
+use quicktooth_core::icon::{self, AnimPhase, Artwork, IconState};
 use quicktooth_core::tunables::{self, T};
 use windows_sys::Win32::Foundation::{CloseHandle, GENERIC_WRITE, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Graphics::Gdi::{
@@ -189,6 +190,22 @@ fn fill(px: &mut [u8], bg: Bg) {
 /// the real HICON path, at 1x and 8x (nearest neighbour); each at 16 px on its own; every frame of
 /// each animation; and 240 px renders of each glyph (black on white) to compare with a browser's
 /// SVG rendering.
+/// Writes `icon.<choice>.ico` for each artwork into `dir`; the files, or why one failed.
+pub fn write_setting_pictures(dir: &str) -> Result<Vec<String>, String> {
+    create_directory(dir);
+    let mut files = Vec::new();
+    for artwork in Artwork::ALL {
+        icon::set_artwork(artwork);
+        let path = combine(dir, &alloc::format!("{}.{}.ico", blade_settings::ICON_KEY, artwork.key()));
+        if !write_file(&path, &icon::setting_picture()) {
+            return Err(alloc::format!("Could not write {path}."));
+        }
+        files.push(path);
+    }
+    icon::set_artwork(Artwork::default());
+    Ok(files)
+}
+
 pub fn write_check_images(dir: &str) -> Vec<String> {
     create_directory(dir);
     let mut files = Vec::new();

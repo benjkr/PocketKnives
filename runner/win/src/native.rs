@@ -15,8 +15,8 @@ use runner_core::settings::{BLADES, BLADES_LABEL, GENERAL_DESCRIPTION, GENERAL_N
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DwmSetWindowAttribute};
 use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, COLOR_WINDOW, CreateBitmap, CreateCompatibleDC, CreateFontIndirectW, DFC_BUTTON, DFCS_CHECKED, DFCS_FLAT, DeleteDC,
-    DeleteObject, DrawFrameControl, FillRect, GetSysColorBrush, HFONT, SelectObject,
+    COLOR_BTNFACE, COLOR_HIGHLIGHT, COLOR_WINDOW, CreateBitmap, CreateCompatibleDC, CreateFontIndirectW, DFC_BUTTON, DFCS_CHECKED,
+    DFCS_FLAT, DeleteDC, DeleteObject, DrawFrameControl, FillRect, GetSysColorBrush, HFONT, MapWindowPoints, SelectObject,
 };
 use windows_sys::Win32::UI::Controls::{
     HIMAGELIST, HKM_GETHOTKEY, HKM_SETHOTKEY, HKM_SETRULES, ICC_LISTVIEW_CLASSES, ILC_COLOR24, ILC_COLOR32, INITCOMMONCONTROLSEX,
@@ -28,9 +28,10 @@ use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForSystem, S
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyWindow, HICON, HMENU, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS, STM_SETICON, SW_HIDE, SW_SHOW, SendMessageW, SetWindowTextW,
-    ShowWindow, WM_CLOSE, WM_COMMAND, WM_NOTIFY, WM_SETFONT, WM_SETICON, WS_BORDER, WS_CAPTION, WS_CHILD, WS_EX_CLIENTEDGE,
-    WS_EX_CONTROLPARENT, WS_EX_DLGMODALFRAME, WS_MINIMIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    DestroyWindow, GetMessageTime, GetWindowRect, HICON, HMENU, HWND_TOP, KillTimer, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
+    STM_SETICON, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SendMessageW, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, WM_CLOSE, WM_COMMAND,
+    WM_CTLCOLORSTATIC, WM_NOTIFY, WM_SETFONT, WM_SETICON, WM_TIMER, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_EX_DLGMODALFRAME, WS_GROUP, WS_MINIMIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 const CLASS_NAME: &str = "PocketKnives.Settings.Win32";
@@ -44,6 +45,10 @@ const PAGES: usize = BLADES.len() + 1;
 // Styles and states as winuser.h and commctrl.h spell them.
 const BS_DEFPUSHBUTTON: u32 = 0x1;
 const BS_AUTOCHECKBOX: u32 = 0x3;
+const BS_AUTORADIOBUTTON: u32 = 0x9;
+const BS_PUSHLIKE: u32 = 0x1000;
+const BCM_SETIMAGELIST: u32 = 0x1602;
+const BUTTON_IMAGELIST_ALIGN_TOP: u32 = 2;
 const BS_FLAT: u32 = 0x8000;
 const CBS_DROPDOWNLIST: u32 = 0x3;
 const SS_ICON: u32 = 0x3;
@@ -66,6 +71,35 @@ const BN_CLICKED: u32 = 0;
 const CBN_SELCHANGE: u32 = 1;
 const EN_CHANGE: u32 = 0x300;
 const DWMWCP_DONOTROUND: i32 = 1;
+const FRAME_TIMER: usize = 1;
+
+// A picture setting (96-DPI pixels): buttons PICTURE_WIDTH x PICTURE_HEIGHT, PICTURE_GAP apart,
+// each with its picture PICTURE_SIZE square above the label; a frame FRAME_WIDTH wide around the
+// chosen one slides to a new pick in FRAME_SLIDE_MS.
+const PICTURE_WIDTH: i32 = 76;
+const PICTURE_HEIGHT: i32 = 56;
+const PICTURE_GAP: i32 = 6;
+const PICTURE_SIZE: i32 = 24;
+const FRAME_WIDTH: i32 = 2;
+const FRAME_SLIDE_MS: u32 = 180;
+
+/// `BUTTON_IMAGELIST` (commctrl.h).
+#[repr(C)]
+struct ButtonImageList {
+    images: HIMAGELIST,
+    margin: RECT,
+    align: u32,
+}
+
+/// A picture setting's buttons and the frame around the chosen one: four thin statics in the
+/// highlight colour, sliding from `from` to `to` (client rectangles) since `started`.
+struct Picker {
+    buttons: Vec<HWND>,
+    edges: [HWND; 4],
+    from: Cell<RECT>,
+    to: Cell<RECT>,
+    started: Cell<u32>,
+}
 
 struct Native {
     suite: &'static Suite,
@@ -88,9 +122,12 @@ struct Native {
     page_icons: RefCell<[HICON; PAGES]>,
     /// Every page's own controls, General's first; `show_page` shows one page's, hides the rest.
     page_controls: RefCell<[Vec<HWND>; PAGES]>,
-    /// One entry per blade setting (blade, index, control), in control ID order from
-    /// `FIRST_SETTING_ID`.
-    setting_controls: RefCell<Vec<(usize, usize, HWND)>>,
+    /// One entry per blade setting (blade, index, controls), in control ID order from
+    /// `FIRST_SETTING_ID`: one control, or a picture setting's buttons (which share its ID).
+    setting_controls: RefCell<Vec<(usize, usize, Vec<HWND>)>>,
+    pickers: RefCell<Vec<Picker>>,
+    /// The picture settings' images, destroyed with the window.
+    picture_lists: RefCell<Vec<HIMAGELIST>>,
     /// Each blade's settings as it printed them, once its answer is in (while `build` runs).
     blade_settings: OnceCell<Vec<Vec<Setting>>>,
     /// What each blade has now: its values when the window opened, then what was applied.
@@ -113,7 +150,10 @@ pub fn handle() -> HWND {
 /// Alt+key belongs to a focused hotkey box, not to the dialog's access keys (&Apply).
 pub fn owns_keyboard(control: HWND) -> bool {
     current().is_some_and(|s| {
-        s.setting_controls.borrow().iter().any(|&(blade, index, c)| c == control && s.blade_settings()[blade][index].kind == Kind::Hotkey)
+        s.setting_controls
+            .borrow()
+            .iter()
+            .any(|(blade, index, c)| c.contains(&control) && s.blade_settings()[*blade][*index].kind == Kind::Hotkey)
     })
 }
 
@@ -146,6 +186,8 @@ pub fn open(suite: &'static Suite, look: Look) -> Result<()> {
         page_icons: RefCell::new([null_mut(); PAGES]),
         page_controls: RefCell::new(Default::default()),
         setting_controls: RefCell::new(Vec::new()),
+        pickers: RefCell::new(Vec::new()),
+        picture_lists: RefCell::new(Vec::new()),
         blade_settings: OnceCell::new(),
         saved: RefCell::new(Vec::new()),
         original: RefCell::new(original),
@@ -178,6 +220,9 @@ pub fn close_window() {
         if s.icon_list.get() != 0 {
             ImageList_Destroy(s.icon_list.get());
         }
+        for &images in s.picture_lists.borrow().iter() {
+            ImageList_Destroy(images);
+        }
         for &icon in s.icons.borrow().iter() {
             DestroyIcon(icon);
         }
@@ -205,7 +250,8 @@ impl Native {
         unsafe { InitCommonControlsEx(&controls) };
         self.create_fonts();
 
-        let style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+        // WS_CLIPCHILDREN: a picture setting's sliding frame doesn't make the window paint over its buttons.
+        let style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
         let extended_style = WS_EX_CONTROLPARENT | WS_EX_DLGMODALFRAME;
         let mut bounds = RECT { left: 0, top: 0, right: self.scale(564), bottom: self.scale(262) };
         unsafe { AdjustWindowRectExForDpi(&mut bounds, style, 0, extended_style, self.dpi) };
@@ -283,7 +329,8 @@ impl Native {
         }
 
         let button_style = WS_TABSTOP | if self.classic { BS_FLAT } else { 0 };
-        self.control("BUTTON", "OK", button_style | BS_DEFPUSHBUTTON, (322, 230, 75, 24), OK_ID, false, 0)?;
+        // WS_GROUP ends the last picture setting's group of buttons.
+        self.control("BUTTON", "OK", button_style | BS_DEFPUSHBUTTON | WS_GROUP, (322, 230, 75, 24), OK_ID, false, 0)?;
         self.control("BUTTON", "Cancel", button_style, (402, 230, 75, 24), CANCEL_ID, false, 0)?;
         let apply = self.control("BUTTON", "&Apply", button_style, (482, 230, 75, 24), APPLY_ID, false, 0)?;
         self.apply_button.set(apply);
@@ -304,6 +351,19 @@ impl Native {
         let mut y = 72;
         for (i, setting) in settings.iter().enumerate() {
             let id = FIRST_SETTING_ID + self.setting_controls.borrow().len();
+            if setting.kind == Kind::Picture
+                && let Some(icons) = self.pictures(blade, setting)
+            {
+                let label = self.control("STATIC", &setting.label, 0, (178, y + 3, 116, 18), 0, false, 0)?;
+                let (buttons, edges) = self.picker(setting, &icons, y, id)?;
+                let mut pages = self.page_controls.borrow_mut();
+                pages[blade + 1].push(label);
+                pages[blade + 1].extend(buttons.iter().chain(&edges));
+                drop(pages);
+                self.setting_controls.borrow_mut().push((blade, i, buttons));
+                y += PICTURE_HEIGHT + PICTURE_GAP;
+                continue;
+            }
             let control = if setting.kind == Kind::Toggle {
                 let c = self.control("BUTTON", &setting.label, WS_TABSTOP | BS_AUTOCHECKBOX | flat, (178, y, 330, 22), id, false, 0)?;
                 send(c, BM_SETCHECK, (setting.value == "1") as usize, 0);
@@ -330,19 +390,116 @@ impl Native {
                 }
             };
             self.page_controls.borrow_mut()[blade + 1].push(control);
-            self.setting_controls.borrow_mut().push((blade, i, control));
+            self.setting_controls.borrow_mut().push((blade, i, alloc::vec![control]));
             y += 30;
         }
         Ok(())
     }
 
+    /// Each choice's picture at its size here; none if one is missing, and the setting is then a
+    /// drop-down like a `choice`.
+    fn pictures(&self, blade: usize, setting: &Setting) -> Option<Vec<HICON>> {
+        let size = self.scale(PICTURE_SIZE);
+        let mut icons = Vec::new();
+        for path in blade_settings::pictures(self.suite, &BLADES[blade], setting)? {
+            let icon = win::file_icon(&path, size);
+            if icon.is_null() {
+                return None;
+            }
+            icons.push(self.own(icon));
+        }
+        Some(icons)
+    }
+
+    /// A picture setting's buttons at `y` (push-like radio buttons, each its picture above its
+    /// label) and the edges of the frame around the chosen one.
+    fn picker(&self, setting: &Setting, icons: &[HICON], y: i32, id: usize) -> Result<(Vec<HWND>, [HWND; 4])> {
+        let flat = if self.classic { BS_FLAT } else { 0 };
+        let size = self.scale(PICTURE_SIZE);
+        let mut buttons = Vec::new();
+        for (i, (choice, &icon)) in setting.choices.iter().zip(icons).enumerate() {
+            let first = if i == 0 { WS_GROUP | WS_TABSTOP } else { 0 };
+            let x = 298 + i as i32 * (PICTURE_WIDTH + PICTURE_GAP);
+            // Clipped so the frame, sliding above them, is never painted over.
+            let style = first | BS_AUTORADIOBUTTON | BS_PUSHLIKE | flat | WS_CLIPSIBLINGS;
+            let button = self.control("BUTTON", &choice.label, style, (x, y, PICTURE_WIDTH, PICTURE_HEIGHT), id, false, 0)?;
+            let images = unsafe { ImageList_Create(size, size, ILC_COLOR32, 1, 0) };
+            unsafe { ImageList_ReplaceIcon(images, -1, icon) };
+            self.picture_lists.borrow_mut().push(images);
+            let margin = RECT { left: 0, top: self.scale(6), right: 0, bottom: 0 };
+            let list = ButtonImageList { images, margin, align: BUTTON_IMAGELIST_ALIGN_TOP };
+            send(button, BCM_SETIMAGELIST, 0, &list as *const ButtonImageList as isize);
+            send(button, BM_SETCHECK, (choice.value == setting.value) as usize, 0);
+            buttons.push(button);
+        }
+        let mut edges = [null_mut(); 4];
+        for edge in &mut edges {
+            *edge = self.control("STATIC", "", 0, (0, 0, 0, 0), 0, false, 0)?;
+        }
+        let chosen = setting.choices.iter().position(|c| c.value == setting.value);
+        let at = chosen.map_or(NO_FRAME, |i| self.frame_around(buttons[i]));
+        let picker = Picker { buttons: buttons.clone(), edges, from: Cell::new(at), to: Cell::new(at), started: Cell::new(0) };
+        place_frame(&picker, at, self.scale(FRAME_WIDTH));
+        self.pickers.borrow_mut().push(picker);
+        Ok((buttons, edges))
+    }
+
+    /// The frame's rectangle around `button`, in the window's client coordinates.
+    fn frame_around(&self, button: HWND) -> RECT {
+        let mut r = NO_FRAME;
+        unsafe {
+            GetWindowRect(button, &mut r);
+            MapWindowPoints(null_mut(), self.window.get(), (&mut r as *mut RECT).cast(), 2);
+        }
+        let w = self.scale(FRAME_WIDTH);
+        RECT { left: r.left - w, top: r.top - w, right: r.right + w, bottom: r.bottom + w }
+    }
+
+    /// A picture button was clicked (or chosen with the arrow keys): its frame slides to it.
+    fn picked(&self, button: HWND) {
+        let pickers = self.pickers.borrow();
+        let Some(picker) = pickers.iter().find(|p| p.buttons.contains(&button)) else { return };
+        let to = self.frame_around(button);
+        if rect_eq(picker.to.get(), to) {
+            return;
+        }
+        picker.from.set(frame_now(picker));
+        picker.to.set(to);
+        picker.started.set(unsafe { GetMessageTime() } as u32);
+        unsafe { SetTimer(self.window.get(), FRAME_TIMER, 15, None) };
+    }
+
+    /// Moves the sliding frames on; stops the timer once they've all arrived.
+    fn slide_frames(&self) {
+        let mut moving = false;
+        for picker in self.pickers.borrow().iter() {
+            place_frame(picker, frame_now(picker), self.scale(FRAME_WIDTH));
+            moving |= !rect_eq(frame_now(picker), picker.to.get());
+        }
+        if !moving {
+            unsafe { KillTimer(self.window.get(), FRAME_TIMER) };
+        }
+    }
+
+    fn is_frame_edge(&self, control: HWND) -> bool {
+        self.pickers.borrow().iter().any(|p| p.edges.contains(&control))
+    }
+
     /// The blade's value for what a setting's control holds now.
-    fn read_setting(&self, blade: usize, index: usize, control: HWND) -> String {
+    fn read_setting(&self, blade: usize, index: usize, controls: &[HWND]) -> String {
         let setting = &self.blade_settings()[blade][index];
         let before = self.saved.borrow()[blade][index].clone();
+        let control = controls[0];
+        if setting.kind == Kind::Picture && controls.len() > 1 {
+            // Buttons; a single control is the drop-down shown when a picture was missing.
+            return match controls.iter().position(|&b| send(b, BM_GETCHECK, 0, 0) == 1) {
+                Some(i) => setting.choices[i].value.clone(),
+                None => before,
+            };
+        }
         match setting.kind {
             Kind::Toggle => String::from(if send(control, BM_GETCHECK, 0, 0) == 1 { "1" } else { "0" }),
-            Kind::Choice => {
+            Kind::Choice | Kind::Picture => {
                 let selected = send(control, CB_GETCURSEL, 0, 0);
                 match usize::try_from(selected).ok().and_then(|i| setting.choices.get(i)) {
                     Some(choice) => choice.value.clone(),
@@ -358,7 +515,7 @@ impl Native {
         let mut changes: Vec<Vec<(String, String)>> = BLADES.iter().map(|_| Vec::new()).collect();
         let controls = self.setting_controls.borrow().clone();
         for (blade, index, control) in controls {
-            let value = self.read_setting(blade, index, control);
+            let value = self.read_setting(blade, index, &control);
             if value != self.saved.borrow()[blade][index] {
                 changes[blade].push((self.blade_settings()[blade][index].key.clone(), value));
             }
@@ -549,7 +706,7 @@ impl Native {
         Ok(())
     }
 
-    fn execute(&self, id: usize, notification: u32) {
+    fn execute(&self, id: usize, notification: u32, control: HWND) {
         let result = match id {
             OK_ID => self.apply().map(|()| close_window()),
             CANCEL_ID => {
@@ -562,6 +719,9 @@ impl Native {
                 && id - FIRST_SETTING_ID < self.setting_controls.borrow().len()
                 && matches!(notification, BN_CLICKED | CBN_SELCHANGE | EN_CHANGE) =>
             {
+                if notification == BN_CLICKED {
+                    self.picked(control);
+                }
                 self.update_apply();
                 Ok(())
             }
@@ -610,6 +770,46 @@ impl Native {
     }
 }
 
+const NO_FRAME: RECT = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+
+fn rect_eq(a: RECT, b: RECT) -> bool {
+    (a.left, a.top, a.right, a.bottom) == (b.left, b.top, b.right, b.bottom)
+}
+
+/// Where a picker's frame is now: partway from `from` to `to`, easing out. With nothing chosen
+/// before, it appears where it's going.
+fn frame_now(picker: &Picker) -> RECT {
+    let (from, to) = (picker.from.get(), picker.to.get());
+    if rect_eq(from, NO_FRAME) {
+        return to;
+    }
+    let elapsed = (unsafe { GetMessageTime() } as u32).wrapping_sub(picker.started.get()).min(FRAME_SLIDE_MS);
+    let u = 1.0 - elapsed as f64 / FRAME_SLIDE_MS as f64;
+    let eased = 1.0 - u * u * u;
+    let mix = |a: i32, b: i32| a + ((b - a) as f64 * eased) as i32;
+    RECT {
+        left: mix(from.left, to.left),
+        top: mix(from.top, to.top),
+        right: mix(from.right, to.right),
+        bottom: mix(from.bottom, to.bottom),
+    }
+}
+
+/// Puts a picker's four edges on the outline of `at`, `width` thick, above the buttons.
+fn place_frame(picker: &Picker, at: RECT, width: i32) {
+    let (w, h) = (at.right - at.left, at.bottom - at.top);
+    let width = if w == 0 { 0 } else { width };
+    let sides = [
+        (at.left, at.top, w, width),
+        (at.left, at.bottom - width, w, width),
+        (at.left, at.top, width, h),
+        (at.right - width, at.top, width, h),
+    ];
+    for (&edge, (x, y, cx, cy)) in picker.edges.iter().zip(sides) {
+        unsafe { SetWindowPos(edge, HWND_TOP, x, y, cx, cy, SWP_NOACTIVATE) };
+    }
+}
+
 fn add_choice(combo: HWND, text: &str) {
     send(combo, CB_ADDSTRING, 0, to_wide(text).as_ptr() as isize);
 }
@@ -643,8 +843,15 @@ unsafe extern "system" fn window_procedure(window: HWND, message: u32, wparam: W
             return 0;
         }
         WM_COMMAND => {
-            settings.execute(wparam & 0xffff, (wparam >> 16 & 0xffff) as u32);
+            settings.execute(wparam & 0xffff, (wparam >> 16 & 0xffff) as u32, lparam as HWND);
             return 0;
+        }
+        WM_TIMER if wparam == FRAME_TIMER => {
+            settings.slide_frames();
+            return 0;
+        }
+        WM_CTLCOLORSTATIC if settings.is_frame_edge(lparam as HWND) => {
+            return unsafe { GetSysColorBrush(COLOR_HIGHLIGHT) } as LRESULT;
         }
         WM_NOTIFY if !settings.apply_button.get().is_null() => {
             if settings.item_changed(unsafe { &*(lparam as *const NMHDR) }) {

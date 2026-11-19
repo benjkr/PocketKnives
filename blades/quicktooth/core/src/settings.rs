@@ -5,6 +5,7 @@
 use crate::Guid;
 use crate::blade_settings;
 use crate::devices::{BtDevice, contains_ignore_case};
+use crate::icon::Artwork;
 use crate::json::{self, Value};
 use crate::log::SaveHook;
 use crate::tunables::{self, T};
@@ -21,6 +22,8 @@ pub struct Settings {
     pub tray_promoted_once: bool,
     /// The low-battery warning picked in Settings; `None` means the default in [`tunables`].
     pub low_battery_percent: Option<i32>,
+    /// The tray icon's artwork picked in Settings ([`Artwork`] key); `None` means the default.
+    pub icon: Option<String>,
 }
 
 static SAVE: SaveHook = SaveHook::new();
@@ -38,6 +41,11 @@ impl Settings {
             Some(p) if blade_settings::is_low_battery_choice(p) => p,
             _ => tunables::int(T::LowBatteryPercent),
         }
+    }
+
+    /// The artwork the tray draws: the picked one if it's known, else the default.
+    pub fn artwork(&self) -> Artwork {
+        self.icon.as_deref().and_then(Artwork::from_key).unwrap_or_default()
     }
 
     pub fn target_guid(&self) -> Option<Guid> {
@@ -63,7 +71,7 @@ impl Settings {
         for (key, v) in members {
             let bad = || alloc::format!("The JSON value could not be converted for '{key}'.");
             match key.as_str() {
-                "targetContainerId" | "targetMac" | "targetName" => {
+                "targetContainerId" | "targetMac" | "targetName" | "icon" => {
                     let value = match v {
                         Value::Null => None,
                         Value::Str(s) => Some(s),
@@ -72,6 +80,7 @@ impl Settings {
                     match key.as_str() {
                         "targetContainerId" => s.target_container_id = value,
                         "targetMac" => s.target_mac = value,
+                        "icon" => s.icon = value,
                         _ => s.target_name = value,
                     }
                 }
@@ -113,6 +122,10 @@ impl Settings {
         if let Some(p) = self.low_battery_percent {
             member(&mut out, "lowBatteryPercent");
             out.push_str(&alloc::format!("{p}"));
+        }
+        if let Some(v) = &self.icon {
+            member(&mut out, "icon");
+            json::write_str_relaxed(&mut out, v);
         }
         out.push_str(newline);
         out.push('}');
@@ -186,6 +199,17 @@ mod tests {
         assert_eq!(s.low_battery_percent, None);
         let with_low = Settings { low_battery_percent: Some(15), ..s };
         assert!(with_low.to_json("\n").ends_with("\"trayPromotedOnce\": true,\n  \"lowBatteryPercent\": 15\n}"));
+        assert_eq!(with_low.artwork(), Artwork::AirPodsPro);
+    }
+
+    #[test]
+    fn icon_round_trips_and_unknown_means_the_default() {
+        let text = "{\n  \"trayPromotedOnce\": false,\n  \"icon\": \"airpods\"\n}";
+        let s = Settings::from_json(text).unwrap();
+        assert_eq!((s.to_json("\n").as_str(), s.artwork()), (text, Artwork::AirPods));
+        let unknown = Settings::from_json("{\"icon\": \"beats\"}").unwrap();
+        assert_eq!((unknown.icon.as_deref(), unknown.artwork()), (Some("beats"), Artwork::AirPodsPro));
+        assert!(Settings::from_json("{\"icon\": 1}").is_err());
     }
 
     #[test]

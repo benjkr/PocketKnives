@@ -6,17 +6,17 @@ use crate::bindings::Microsoft::UI::Colors;
 use crate::bindings::Microsoft::UI::Text::FontWeights;
 use crate::bindings::Microsoft::UI::Xaml::Automation::AutomationProperties;
 use crate::bindings::Microsoft::UI::Xaml::Controls::{
-    Border, Button, ColumnDefinition, ComboBox, ContentControl, Grid, Image, ImageIcon, InfoBar, InfoBarSeverity, NavigationView,
-    NavigationViewBackButtonVisible, NavigationViewItem, NavigationViewItemHeader, NavigationViewPaneDisplayMode,
+    BitmapIcon, Border, Button, ColumnDefinition, ComboBox, ContentControl, Grid, Image, ImageIcon, InfoBar, InfoBarSeverity,
+    NavigationView, NavigationViewBackButtonVisible, NavigationViewItem, NavigationViewItemHeader, NavigationViewPaneDisplayMode,
     NavigationViewSelectionChangedEventArgs, ScrollViewer, SelectionChangedEventHandler, StackPanel, TextBlock, ToggleSwitch,
     XamlControlsResources,
 };
 use crate::bindings::Microsoft::UI::Xaml::Input::{KeyEventHandler, KeyRoutedEventArgs};
 use crate::bindings::Microsoft::UI::Xaml::Media::Imaging::BitmapImage;
-use crate::bindings::Microsoft::UI::Xaml::Media::{MicaBackdrop, SolidColorBrush};
+use crate::bindings::Microsoft::UI::Xaml::Media::{Brush, MicaBackdrop, SolidColorBrush};
 use crate::bindings::Microsoft::UI::Xaml::{
     Application, CornerRadius, FrameworkElement, GridLength, GridUnitType, HorizontalAlignment, ResourceDictionary, RoutedEventArgs,
-    RoutedEventHandler, TextWrapping, Thickness, UIElement, VerticalAlignment, Window,
+    RoutedEventHandler, TextWrapping, Thickness, UIElement, Vector3Transition, VerticalAlignment, Window,
 };
 use alloc::format;
 use alloc::rc::Rc;
@@ -279,6 +279,7 @@ fn setting_card(blade: usize, index: usize) -> Result<Border> {
     let control: FrameworkElement = match setting.kind {
         Kind::Toggle => toggle_control(blade, index)?.cast()?,
         Kind::Choice => choice_control(blade, index)?.cast()?,
+        Kind::Picture => picture_control(blade, index)?,
         Kind::Hotkey => hotkey_control(blade, index)?.cast()?,
     };
     AutomationProperties::SetName(&control, &HSTRING::from(&setting.label))?;
@@ -364,6 +365,85 @@ fn choice_control(blade: usize, index: usize) -> Result<ComboBox> {
         put_back(|| combo.SetSelectedIndex(saved_choice(blade, index)))
     }))?;
     Ok(combo)
+}
+
+// A picture setting (effective pixels): buttons PICTURE_WIDTH x PICTURE_HEIGHT, PICTURE_GAP
+// apart, each with its picture PICTURE_SIZE square above the label, and an accent frame
+// FRAME_WIDTH wide around the chosen one, which slides to a new pick.
+const PICTURE_WIDTH: f64 = 96.0;
+const PICTURE_HEIGHT: f64 = 64.0;
+const PICTURE_GAP: f64 = 6.0;
+const PICTURE_SIZE: f64 = 24.0;
+const FRAME_WIDTH: f64 = 2.0;
+
+/// A button per choice, its picture (tinted like the text, so it shows in dark mode too) above
+/// its label, and a frame around the chosen one. A drop-down, as for a `choice`, if a picture is
+/// missing.
+fn picture_control(blade: usize, index: usize) -> Result<FrameworkElement> {
+    let setting = &ui().settings[blade][index];
+    let Some(pictures) = blade_settings::pictures(&ui().suite, &BLADES[blade], setting) else {
+        return choice_control(blade, index)?.cast();
+    };
+    let row = Grid::new()?;
+    row.SetColumnSpacing(PICTURE_GAP)?;
+    row.SetHorizontalAlignment(HorizontalAlignment::Right)?;
+    let frame = Border::new()?;
+    frame.SetWidth(PICTURE_WIDTH)?;
+    frame.SetHeight(PICTURE_HEIGHT)?;
+    frame.SetBorderThickness(uniform(FRAME_WIDTH))?;
+    frame.SetCornerRadius(CornerRadius { TopLeft: 4.0, TopRight: 4.0, BottomRight: 4.0, BottomLeft: 4.0 })?;
+    frame.SetBorderBrush(&accent()?)?;
+    frame.SetIsHitTestVisible(false)?;
+    frame.SetHorizontalAlignment(HorizontalAlignment::Left)?;
+    for (i, (choice, path)) in setting.choices.iter().zip(&pictures).enumerate() {
+        row.ColumnDefinitions()?.Append(&ColumnDefinition::new()?)?;
+        let icon = BitmapIcon::new()?;
+        icon.SetUriSource(&Uri::CreateUri(&HSTRING::from(format!("file:///{}", path.replace('\\', "/"))))?)?;
+        icon.SetShowAsMonochrome(true)?;
+        icon.SetWidth(PICTURE_SIZE)?;
+        icon.SetHeight(PICTURE_SIZE)?;
+        let content = StackPanel::new()?; // vertical
+        content.SetSpacing(4.0)?;
+        content.Children()?.Append(&icon)?;
+        let label = text(&choice.label)?;
+        label.SetHorizontalAlignment(HorizontalAlignment::Center)?;
+        content.Children()?.Append(&label)?;
+        let button = Button::new()?;
+        button.SetContent(&content)?;
+        button.SetWidth(PICTURE_WIDTH)?;
+        button.SetHeight(PICTURE_HEIGHT)?;
+        button.SetPadding(uniform(4.0))?;
+        AutomationProperties::SetName(&button, &HSTRING::from(&choice.label))?;
+        Grid::SetColumn(&button, i as i32)?;
+        button.Click(&RoutedEventHandler::new(move |sender, _: Ref<RoutedEventArgs>| {
+            let value = ui().settings[blade][index].choices[i].value.clone();
+            let Some(button) = sender.as_ref() else { return Ok(()) };
+            if change(blade, index, value)? {
+                let row: Grid = button.cast::<FrameworkElement>()?.Parent()?.cast()?;
+                let frame: Border = row.Children()?.GetAt(row.Children()?.Size()? - 1)?.cast()?;
+                place_frame(&frame, i as i32)?;
+            }
+            Ok(())
+        }))?;
+        row.Children()?.Append(&button)?;
+    }
+    place_frame(&frame, saved_choice(blade, index))?;
+    frame.SetTranslationTransition(&Vector3Transition::new()?)?; // after the first place: no slide on opening
+    row.Children()?.Append(&frame)?;
+    row.cast()
+}
+
+/// Puts a picture setting's frame (the last child of its row) around choice `chosen`; hidden
+/// when nothing is chosen.
+fn place_frame(frame: &Border, chosen: i32) -> Result<()> {
+    frame.SetOpacity(if chosen < 0 { 0.0 } else { 1.0 })?;
+    let x = chosen.max(0) as f64 * (PICTURE_WIDTH + PICTURE_GAP);
+    frame.SetTranslation(windows_numerics::Vector3 { X: x as f32, Y: 0.0, Z: 0.0 })
+}
+
+/// The theme's accent brush, as WinUI's own controls use it.
+fn accent() -> Result<Brush> {
+    Application::Current()?.Resources()?.Lookup(&boxed("AccentFillColorDefaultBrush")?)?.cast()
 }
 
 /// WinUI has no hotkey box: click, then press the keys. Esc cancels.

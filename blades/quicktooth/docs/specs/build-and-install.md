@@ -6,7 +6,8 @@ and lean.
 ## The build
 
 - One exe for win-x64, `QuickTooth.exe`, built from the repo root with
-  `cargo build --release -p quicktooth` into `targetelease`. It needs no runtime and no VC++
+  `cargo build --release -p quicktooth` into `target
+elease`. It needs no runtime and no VC++
   redistributable: it imports only Windows DLLs and the universal C runtime's maths
   (`sin`/`cos`/`pow`, as .NET did).
 - `no_std` on the suite's `crates/pk`, with the workspace's release profile (size-optimised, LTO,
@@ -31,7 +32,8 @@ and lean.
     keeps `%APPDATA%\QuickTooth`.
   - Unsigned, so Windows SmartScreen warns on download.
 - **What goes on the user's PC**: QuickTooth from the
-  [PocketKnives installer](../../../../docs/specs/installer.md), from `master`. `publish.ps1` and
+  [PocketKnives installer](../../../../docs/specs/installer.md), from `master`, with the Tray icon
+  pictures its build writes (`--write-setting-pictures`). `publish.ps1` and
   this installer make the stand-alone QuickTooth, for people without the suite; on the user's PC
   it would run beside the suite's copy, so they aren't used there.
 

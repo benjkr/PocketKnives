@@ -27,7 +27,13 @@ blade's own decisions are in its `docs/working/decisions.md`.
   ([blade settings](../specs/blade-settings.md)), so a setting is defined once, in the blade's
   code. The `blade.json` manifest proposed in the runner design was not built. The settings
   offered are the runner design's list: SnipSnap's three hotkeys and its flash, QuickTooth's
-  headset and low-battery level.
+  headset and low-battery level, and since then QuickTooth's tray icon.
+- **A choice between looks is picked from pictures** (the `picture` kind): buttons with the
+  picture above the label and a frame that slides to the chosen one, chosen by the user from three
+  designs and then made smaller. Not chosen: a strip of taskbar with the
+  icons at real size, and cards showing both states. A drop-down was the first version. The
+  frame is the one thing in the XP and Windows 10 looks that isn't a stock control (four thin
+  statics); the pictures come from the blade, drawn at build time, never copied into the repo.
 - **Blades and the runner are written in Rust**, `no_std`, each its own small exe on the shared
   `crates/pk` (entry point, heap, arguments, console, registry, single instance, threads); COM and
   WinRT through the `windows` crate. QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.2 MB to about

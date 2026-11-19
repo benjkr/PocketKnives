@@ -110,7 +110,7 @@ Simulator options (any command that opens it): `--scale 1|1.25|1.5|1.75|2`, `--s
 
 State paths (see `final-state.json` of any run): `app.pending`, `app.anim`, `app.animT`, `app.tooltip`,
 `app.icon` (`{kind: static, state}`, plus `lowBattery: true` with the orange dot, or `{kind: anim, phase, t}`), `app.timers`, `app.battery`,
-`app.settings` (`targetName`, `lowBatteryWarning`), `cli`,
+`app.settings` (`targetName`, `lowBatteryWarning`, `icon`), `cli`,
 `shell.tooltip`, `shell.menu[i].items/hot/rect`, `shell.iconInOverflow`, `shell.flyoutOpen`,
 `bt[i].a2dp/hfp/link`, `t`.
 

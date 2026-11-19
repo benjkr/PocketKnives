@@ -4,7 +4,7 @@ use super::sort::binary_search;
 use crate::math::{abs, fmod, max, min, pow, sqrt};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicPtr, Ordering};
+use core::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Pt {
@@ -56,13 +56,61 @@ pub struct Glyph {
     pub outline: Option<Polyline>,
 }
 
-const FILL_SVG: &str = include_str!("../../../assets/airpods-pro-fill.svg");
-const LINE_SVG: &str = include_str!("../../../assets/airpods-pro-line.svg");
+/// The tray icon's artwork, picked in Settings (`icon`): its key there, its label, and its two
+/// glyphs (connected, not connected).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Artwork {
+    #[default]
+    AirPodsPro,
+    AirPods,
+}
+
+impl Artwork {
+    pub const ALL: [Artwork; 2] = [Artwork::AirPodsPro, Artwork::AirPods];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Artwork::AirPodsPro => "airpodsPro",
+            Artwork::AirPods => "airpods",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Artwork::AirPodsPro => "AirPods Pro",
+            Artwork::AirPods => "AirPods",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Artwork> {
+        Artwork::ALL.into_iter().find(|a| a.key() == key)
+    }
+
+    fn svg(self) -> (&'static str, &'static str) {
+        match self {
+            Artwork::AirPodsPro => {
+                (include_str!("../../../assets/airpods-pro-fill.svg"), include_str!("../../../assets/airpods-pro-line.svg"))
+            }
+            Artwork::AirPods => (include_str!("../../../assets/airpods-fill.svg"), include_str!("../../../assets/airpods-line.svg")),
+        }
+    }
+}
+
+static ARTWORK: AtomicU8 = AtomicU8::new(0);
+
+/// Draws every icon from now on with `artwork`'s glyphs (the simulator's override still wins).
+pub fn set_artwork(artwork: Artwork) {
+    ARTWORK.store(artwork as u8, Ordering::Release);
+}
+
+pub fn artwork() -> Artwork {
+    Artwork::ALL[ARTWORK.load(Ordering::Acquire) as usize]
+}
 
 // Each slot holds a leaked, never-freed glyph: a reference handed out stays valid for the
 // process. Built-ins are parsed on first use; overrides (simulator only) replace the pointer.
-static FILL_BUILTIN: AtomicPtr<Glyph> = AtomicPtr::new(core::ptr::null_mut());
-static LINE_BUILTIN: AtomicPtr<Glyph> = AtomicPtr::new(core::ptr::null_mut());
+static FILL_BUILTIN: [AtomicPtr<Glyph>; 2] = [const { AtomicPtr::new(core::ptr::null_mut()) }; 2];
+static LINE_BUILTIN: [AtomicPtr<Glyph>; 2] = [const { AtomicPtr::new(core::ptr::null_mut()) }; 2];
 static FILL_OVERRIDE: AtomicPtr<Glyph> = AtomicPtr::new(core::ptr::null_mut());
 static LINE_OVERRIDE: AtomicPtr<Glyph> = AtomicPtr::new(core::ptr::null_mut());
 
@@ -93,11 +141,13 @@ fn slot(override_: &AtomicPtr<Glyph>, builtin: &'static AtomicPtr<Glyph>, svg: &
 }
 
 pub fn fill() -> &'static Glyph {
-    slot(&FILL_OVERRIDE, &FILL_BUILTIN, FILL_SVG)
+    let a = artwork();
+    slot(&FILL_OVERRIDE, &FILL_BUILTIN[a as usize], a.svg().0)
 }
 
 pub fn line() -> &'static Glyph {
-    slot(&LINE_OVERRIDE, &LINE_BUILTIN, LINE_SVG)
+    let a = artwork();
+    slot(&LINE_OVERRIDE, &LINE_BUILTIN[a as usize], a.svg().1)
 }
 
 /// Replaces the override (`None`, or SVG that doesn't parse: the built-in glyph). The previous
@@ -361,8 +411,9 @@ mod tests {
 
     #[test]
     fn built_in_glyphs_parse() {
-        let f = parse_glyph(FILL_SVG).unwrap();
-        let l = parse_glyph(LINE_SVG).unwrap();
+        let (fill_svg, line_svg) = Artwork::AirPodsPro.svg();
+        let f = parse_glyph(fill_svg).unwrap();
+        let l = parse_glyph(line_svg).unwrap();
         assert_eq!(f.layers.len(), 2);
         assert_eq!(l.layers.len(), 2);
         assert_eq!(l.layers[0].opacity, 0.85);
@@ -371,6 +422,23 @@ mod tests {
         assert!(l.outline.is_some());
         let b = f.bounds.union(l.bounds);
         assert!(b.left > 1.0 && b.left < 2.0 && b.right > 22.0 && b.right < 23.0);
+    }
+
+    #[test]
+    fn airpods_glyphs_parse() {
+        let (fill_svg, line_svg) = Artwork::AirPods.svg();
+        let f = parse_glyph(fill_svg).unwrap();
+        let l = parse_glyph(line_svg).unwrap();
+        assert_eq!((f.layers.len(), l.layers.len()), (1, 1));
+        assert_eq!(l.layers[0].opacity, 0.45); // below 1, so the glow can brighten it
+        assert_eq!(l.tracer, Some([6.501, 8.504, 3.999, 3.999]));
+        let outline = l.outline.as_ref().unwrap();
+        assert!(outline.points.iter().all(|p| p.x < 12.0)); // the left bud's outer edge
+        let b = f.bounds.union(l.bounds);
+        assert!(b.left >= 2.0 && b.right <= 22.0 && b.top >= 3.9 && b.bottom <= 20.1);
+        for a in Artwork::ALL {
+            assert_eq!(Artwork::from_key(a.key()), Some(a));
+        }
     }
 
     #[test]

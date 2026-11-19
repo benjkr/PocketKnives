@@ -1,0 +1,38 @@
+{
+  "name": "icon-setting",
+  "description": "the Tray icon setting from PocketKnives Settings: AirPods Pro by default, AirPods redraws the icon at once (connected, connecting, not connected) and survives a restart; a bad value changes nothing",
+  "options": { "profile": "fast" },
+  "region": "icon",
+  "zoom": 8,
+  "steps": [
+    { "expect": { "app.settings.icon": "airpodsPro", "app.icon": { "kind": "static", "state": "disconnected" } }, "label": "AirPods Pro by default" },
+    { "shot": "pro-not-connected" },
+
+    { "cli": "--set icon=airpods" },
+    { "expect": { "cli": "applied", "log": "tray icon set: AirPods", "app.settings.icon": "airpods" } },
+    { "expect": { "log": "icons rebuilt:" }, "label": "redrawn at once" },
+    { "shot": "airpods-not-connected" },
+    { "cli": "--set icon=airpods" },
+    { "expect": { "cli": "applied", "app.settings.icon": "airpods" }, "label": "the same pick is no change" },
+
+    { "cli": "--set icon=beats" },
+    { "expect": { "cli": "Tray icon can be airpodsPro or airpods.", "app.settings.icon": "airpods" } },
+
+    { "click": "icon" },
+    { "move": "200,200" },
+    { "wait": 600 },
+    { "expect": { "app.pending": "Connect", "app.anim": "Connecting" } },
+    { "shot": "airpods-connecting" },
+    { "waitFor": "s.app.pending === null && s.app.anim === null", "timeout": 6000 },
+    { "expect": { "app.icon": { "kind": "static", "state": "connected" } } },
+    { "shot": "airpods-connected" },
+
+    { "eval": "qt.restartApp()" },
+    { "waitFor": "s.app.haveSnapshot", "timeout": 2000 },
+    { "expect": { "app.settings.icon": "airpods" }, "label": "saved" },
+
+    { "cli": "--set icon=airpodsPro" },
+    { "expect": { "cli": "applied", "log": "tray icon set: AirPods Pro", "app.settings.icon": "airpodsPro" } },
+    { "shot": "pro-connected" }
+  ]
+}

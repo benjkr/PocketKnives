@@ -32,12 +32,17 @@ and `USERPROFILE` pointed at a scratch profile: `--battery`, `--watch-endpoints`
 - `--battery`: adverts heard with 0 handler errors (the reading needs the AirPods out of the case).
 - `dumpbin /dependents QuickTooth.exe`: only Windows DLLs and the universal CRT.
 - `--settings-roundtrip` of a copy of the user's `settings.json`, against the previous build's
-  output and against itself: byte-identical (also with `lowBatteryPercent` in the file).
+  output and against itself: byte-identical (also with `lowBatteryPercent` and `icon` in the file).
 - `--settings` and `--set`, only with `POCKETKNIVES_SETTINGS_PREVIEW=1` (the scratch copy's own
   `settings.json`): a recognisable planted file shows up in `--settings`; a valid device, an
-  unknown device, a bad battery value and an unknown key, checking the exit code and the file after
-  each; the real `settings.json` hash and `quicktooth.log` unchanged. The hand-off to a running
-  tray can't be run before install; the `settings-set` scenario covers the tray's side.
+  unknown device, a bad battery value, `icon=airpods`, `icon=beats` and an unknown key, checking
+  the exit code and the file after each; the real `settings.json` hash and `quicktooth.log`
+  unchanged. The hand-off to a running tray can't be run before install; the `settings-set` and
+  `icon-setting` scenarios cover the tray's side.
+- The Tray icon pictures: `--write-setting-pictures` into a scratch suite stage, then
+  `pk --preview settings` there in each look: the pictures show, a pick saves (Apply and OK in XP
+  and Windows 10, at once in Windows 11), and with the pictures removed the setting is a
+  drop-down.
 
 ## The installer
 

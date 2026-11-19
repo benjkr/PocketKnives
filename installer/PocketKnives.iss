@@ -56,7 +56,7 @@ Name: quicktooth; Description: "QuickTooth"; GroupDescription: "Start when I sig
 Source: "{#AppSource}\snipsnap.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\QuickTooth.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\pk.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppSource}\icons\*.ico"; DestDir: "{app}\icons"; Flags: ignoreversion
+Source: "{#AppSource}\icons\*.ico"; DestDir: "{app}\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#AppSource}\winui\*"; DestDir: "{app}\winui"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

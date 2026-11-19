@@ -41,7 +41,7 @@ Two smaller things help as well:
 
 ## What you get
 
-- **An AirPods Pro icon in the taskbar.** Solid with dimmed ear tips when connected; the reverse when not (hollow, dimmed pods with solid ear tips). **Click** it to connect or disconnect.
+- **An AirPods Pro icon in the taskbar.** Solid with dimmed ear tips when connected; the reverse when not (hollow, dimmed pods with solid ear tips). **Click** it to connect or disconnect. Prefer plain AirPods? Pick **Tray icon → AirPods** in PocketKnives Settings: solid when connected, a dimmed outline when not.
 - **A short animation while it works.** A short glow runs around the outline of each earbud; when connected, the earbuds snap together and fill in.
 - **Battery level** in the tooltip, e.g. "AirPods Pro — Connected · 80%", read from the AirPods' own Bluetooth broadcast.
 - **A right-click menu.** Connect/Disconnect, pick which Bluetooth headset the icon controls, and Start with Windows.
@@ -103,7 +103,7 @@ The source is Rust, in three crates:
 
 `core/` has no Windows code: the same Rust runs in the app and, compiled to WebAssembly (`web/`), in the simulator below.
 
-`tools/airpods_glyph.py` regenerates the tray icons (`assets/airpods-pro-*.svg`); it needs `pip install shapely`.
+`tools/airpods_glyph.py` regenerates the tray icons (`assets/airpods-pro-*.svg` and `assets/airpods-*.svg`); it needs `pip install shapely svgpathtools`.
 
 `sim/` is a browser simulator of the Windows 11 taskbar that runs QuickTooth's own code (`core/`) against a mocked Bluetooth stack with tunable delays. It's for previewing and testing changes without a real taskbar. See [`sim/README.md`](sim/README.md).
 
@@ -112,5 +112,6 @@ Working on QuickTooth (people and coding agents alike): start with the suite's [
 ## Credits
 
 - **AirPods Pro icons:** built from the shapes of one earbud in the "AirPods Pro" line drawing on [SVG Repo](https://www.svgrepo.com/svg/324521/airpods-pro) (#324521), traced into `tools/airpods_pro_shapes.json` and laid out for the 16 px tray icon by `tools/airpods_glyph.py`.
+- **AirPods icons:** from [MingCute Icon](https://github.com/mingcute-design/mingcute-icons), licensed under the Apache License 2.0 (copy in [`assets/MingCute-LICENSE.txt`](assets/MingCute-LICENSE.txt)); their path data is in `tools/airpods_shapes.json`, flattened into straight lines by `tools/airpods_glyph.py`.
 - **Connect/disconnect commands:** the driver commands were first used this way by [ToothTray](https://github.com/m2jean/ToothTray).
 - **Battery format:** the AirPods status broadcast follows community reverse engineering, e.g. OpenPods and furiousMAC/continuity.

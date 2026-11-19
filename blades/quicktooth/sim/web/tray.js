@@ -69,12 +69,14 @@ export class SimSettings {
     this.targetName = init.targetName ?? null;
     this.trayPromotedOnce = init.trayPromotedOnce ?? false;
     this.lowBatteryPercent = init.lowBatteryPercent ?? null; // optional: absent = the default
+    this.icon = init.icon ?? null; // optional: absent = the default artwork
     this.saves = 0;
   }
   get hasTarget() { return !!this.targetContainerId || !!this.targetMac; }
   toJSON() {
     const o = { targetContainerId: this.targetContainerId, targetMac: this.targetMac, targetName: this.targetName, trayPromotedOnce: this.trayPromotedOnce };
     if (this.lowBatteryPercent != null) o.lowBatteryPercent = this.lowBatteryPercent;
+    if (this.icon != null) o.icon = this.icon;
     return o;
   }
   save() { this.saves++; }
@@ -187,6 +189,7 @@ export class TrayAppModel {
     Object.assign(this.settings, {
       targetContainerId: o.targetContainerId ?? null, targetMac: o.targetMac ?? null,
       targetName: o.targetName ?? null, trayPromotedOnce: !!o.trayPromotedOnce, lowBatteryPercent: o.lowBatteryPercent ?? null,
+      icon: o.icon ?? null,
     });
     this.settings.save();
   }

@@ -13,7 +13,9 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
 
 ## Look and animation
 
-- **MingCute icons** were replaced by the two-tone AirPods Pro glyphs.
+- **MingCute icons** were replaced by the two-tone AirPods Pro glyphs as the default; at the
+  user's request they came back as the second choice of the Tray icon setting ("AirPods"), drawn
+  as published with their original 0.45 dimming when not connected.
 - **A 0.45 px outline** on the not-connected glyph was too faint to see in the taskbar: now 0.7 px.
   Making the buds bigger instead was tried and rejected by the user. Stretching them 1.3× taller
   looked thin and distorted; turning the heads 25° tip-down with longer stems (about a quarter

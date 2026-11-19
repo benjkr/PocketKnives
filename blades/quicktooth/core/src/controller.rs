@@ -222,6 +222,7 @@ impl TrayController {
         let light = self.host().light_taskbar();
         self.st_mut().light_taskbar = light;
         self.host().apply_menu_theme(light);
+        icon::set_artwork(self.settings().artwork());
         self.rebuild_icons();
         self.add_icon();
 
@@ -1081,6 +1082,11 @@ impl TrayController {
             return result;
         }
         let result = self.with_settings(|s| blade_settings::apply(change, s, device.as_ref()));
+        let artwork = self.settings().artwork();
+        if artwork != icon::artwork() {
+            icon::set_artwork(artwork);
+            self.rebuild_icons(); // the new artwork shows at once
+        }
         match device {
             Some(d) => self.target_chosen(d),
             None => self.update_icon(false), // a new low-battery warning shows or hides the dot at once
@@ -1181,7 +1187,7 @@ impl TrayController {
         }
         w.push_str(",\"trayPromotedOnce\":");
         w.push_str(if settings.tray_promoted_once { "true" } else { "false" });
-        w.push_str(&format!(",\"lowBatteryWarning\":{}}}", settings.low_battery_warning()));
+        w.push_str(&format!(",\"lowBatteryWarning\":{},\"icon\":\"{}\"}}", settings.low_battery_warning(), settings.artwork().key()));
         w.push_str(&format!(",\"animFrames\":{}}}", st.anim_frames));
         w
     }

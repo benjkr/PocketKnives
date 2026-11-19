@@ -73,6 +73,7 @@ fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
         "--exit" => Ok(exit_tray(out)),
         "--autostart" => Ok(autostart(out, args.get(1).map_or("status", String::as_str))),
         "--render-icons" => render_icons(out, args),
+        "--write-setting-pictures" => write_setting_pictures(out, arg(args, 1)?),
         "--icon-rect" => Ok(icon_rect(out)),
         "--probe" => probe(out, arg(args, 1)?),
         // test hooks: open or close the tray menu without touching the mouse
@@ -575,6 +576,16 @@ fn icon_rect(out: &mut Writer) -> u32 {
         wl!(out, "Shell_NotifyIconGetRect hr=0x{hr:08X}");
         1
     }
+}
+
+/// For the suite's build: each Tray icon choice's picture, `<dir>\icon.<choice>.ico`, as
+/// PocketKnives Settings loads them (docs/specs/blade-settings.md at the repo root).
+fn write_setting_pictures(out: &mut Writer, dir: &str) -> Outcome {
+    let files = icons::write_setting_pictures(dir)?;
+    for file in files {
+        wl!(out, "{file}");
+    }
+    Ok(0)
 }
 
 fn render_icons(out: &mut Writer, args: &[String]) -> Outcome {
