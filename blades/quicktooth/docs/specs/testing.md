@@ -39,6 +39,10 @@ and `USERPROFILE` pointed at a scratch profile: `--battery`, `--watch-endpoints`
   the exit code and the file after each; the real `settings.json` hash and `quicktooth.log`
   unchanged. The hand-off to a running tray can't be run before install; the `settings-set` and
   `icon-setting` scenarios cover the tray's side.
+- The Tray icon pictures: `--write-setting-pictures` into a scratch suite stage, then
+  `pk --preview settings` there in each look: the pictures show, a pick saves (Apply and OK in XP
+  and Windows 10, at once in Windows 11), and with the pictures removed the setting is a
+  drop-down.
 
 ## The installer
 
