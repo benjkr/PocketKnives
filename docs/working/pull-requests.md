@@ -27,7 +27,7 @@ Read before committing, branching, opening or updating a PR, merging, tagging, o
 ## Merging
 
 - Only when the user asks. Use merge commits, one PR at a time, in stack order. Then fast-forward
-  the local `master`.
+  the local `master` and free the build folders ([development](development.md#building)).
 - After merging, nothing gets installed automatically. The user's PC runs only `master`, from a
   tag once releases are tagged ([live testing](live-testing.md)).
 

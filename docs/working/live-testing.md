@@ -24,7 +24,7 @@ the user's screen. Each blade's `docs/working/live-testing.md` adds what's speci
   starts first takes its tray icon and points Startup entries at the scratch folder.
 - Before an install test, record the blade's autostart entry, its settings file's hash and its
   tray state (the blade's doc lists them). Afterwards check they're back, the blade is running,
-  and say so.
+  and say so. Then free the build folders ([development](development.md#building)).
 
 ## The desktop and the clipboard
 

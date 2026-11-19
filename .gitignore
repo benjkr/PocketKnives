@@ -3,3 +3,6 @@ dist/
 
 # Rust build output (the workspace at the repo root)
 /target/
+
+# tools/clean.ps1 renames a build folder before deleting it; a locked leftover waits here
+*.pk-clean/
