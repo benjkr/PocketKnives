@@ -1,7 +1,7 @@
 //! Command-line options for `NowPlaying.exe`.
 use crate::render::{FrameState, Renderer};
 use crate::settings::{self, Settings};
-use crate::smtc::{self, MediaApp, MediaSnapshot};
+use crate::smtc::{self, MediaSnapshot};
 use crate::ipc;
 use alloc::string::String;
 use core::fmt::Write;
@@ -82,7 +82,7 @@ fn status_cmd(out: &mut Writer) -> u32 {
             let pos = m.live_position_sec() as u64;
             let dur = m.duration_sec() as u64;
             wl!(out, "State:    {}", if m.playing { "Playing" } else { "Paused" });
-            wl!(out, "App:      {} ({})", m.app.name(), m.aumid);
+            wl!(out, "App:      {}", m.aumid);
             wl!(out, "Title:    {}", m.title);
             wl!(out, "Artist:   {}", m.artist);
             wl!(out, "Timeline: {}:{:02} / {}:{:02} (seekable={})", pos / 60, pos % 60, dur / 60, dur % 60, m.can_seek);
@@ -164,7 +164,6 @@ fn preview_render_cmd(out: &mut Writer, path: &str) -> u32 {
         playing: true,
         title: String::from("Midnight City"),
         artist: String::from("M83"),
-        app: MediaApp::Spotify,
         aumid: String::from("Spotify.exe"),
         can_seek: true,
         start_100ns: 0,

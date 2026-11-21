@@ -1,8 +1,9 @@
 //! Direct2D + DirectWrite + WIC renderer for NowPlaying (C1 Pure Clear + P1 + White M2 Spectrum).
 //! Draws into a 32-bit premultiplied BGRA DIB for `UpdateLayeredWindow`, and also supports
 //! offline PNG export (`--preview-render`) through WIC.
+use crate::appicon;
 use crate::fft::BANDS;
-use crate::smtc::{MediaApp, MediaSnapshot};
+use crate::smtc::MediaSnapshot;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -14,11 +15,11 @@ use windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_CAP_STYLE_ROUND, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_ELLIPSE,
+    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_ELLIPSE,
     D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT, D2D1_STROKE_STYLE_PROPERTIES,
+    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT,
     D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1Bitmap, ID2D1DCRenderTarget, ID2D1Factory, ID2D1PathGeometry,
-    ID2D1RoundedRectangleGeometry, ID2D1StrokeStyle,
+    ID2D1RoundedRectangleGeometry,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FEATURE, DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, DWRITE_FONT_STRETCH_NORMAL,
@@ -31,7 +32,7 @@ use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Gdi::HDC as WinHdc;
 use windows::Win32::Graphics::Imaging::{
     CLSID_WICImagingFactory, GUID_ContainerFormatPng, GUID_WICPixelFormat32bppPBGRA, IWICImagingFactory,
-    WICBitmapDitherTypeNone, WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
+    IWICBitmapSource, WICBitmapDitherTypeNone, WICBitmapUseAlpha, WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows_core::{GUID, Interface, PCWSTR};
@@ -46,6 +47,10 @@ pub const STRIP_W: f32 = 344.0;
 pub const STRIP_H: f32 = 40.0;
 pub const COVER_SIZE: f32 = 40.0;
 pub const CORNER_R: f32 = 4.0;
+/// The app icon before the title, in DIPs.
+const APP_ICON_SIZE: f32 = 13.0;
+/// Scrubber accent when neither the cover nor the app icon gives one.
+const DEFAULT_ACCENT: D2D1_COLOR_F = D2D1_COLOR_F { r: 1.0, g: 107.0 / 255.0, b: 139.0 / 255.0, a: 1.0 };
 
 // Hit regions in logical DIPs (relative to 344x40 strip)
 pub const PREV_RECT: (f32, f32, f32, f32) = (277.0, 3.0, 296.0, 21.0);
@@ -85,7 +90,6 @@ pub struct Renderer {
     wic: IWICImagingFactory,
     fmt_title: IDWriteTextFormat,
     fmt_time: IDWriteTextFormat,
-    round_stroke: ID2D1StrokeStyle,
     cover_clip: ID2D1RoundedRectangleGeometry,
     mem_dc: HDC,
     dib: HBITMAP,
@@ -97,6 +101,10 @@ pub struct Renderer {
     art_version: u64,
     art_bmp: Option<ID2D1Bitmap>,
     accent: D2D1_COLOR_F,
+    /// `aumid` and DPI the app icon was loaded for, the icon, and its accent for coverless tracks.
+    icon_key: (alloc::string::String, u32),
+    icon_bmp: Option<ID2D1Bitmap>,
+    icon_accent: Option<D2D1_COLOR_F>,
 }
 
 impl Renderer {
@@ -161,13 +169,6 @@ impl Renderer {
         let _ = unsafe { fmt_time.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER) };
         let _ = unsafe { fmt_time.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING) };
 
-        let stroke_props = D2D1_STROKE_STYLE_PROPERTIES {
-            startCap: D2D1_CAP_STYLE_ROUND,
-            endCap: D2D1_CAP_STYLE_ROUND,
-            ..Default::default()
-        };
-        let round_stroke = unsafe { d2d.CreateStrokeStyle(&stroke_props, None) }.ok()?;
-
         let cover_clip = unsafe {
             d2d.CreateRoundedRectangleGeometry(&D2D1_ROUNDED_RECT {
                 rect: D2D_RECT_F { left: 0.0, top: 0.0, right: COVER_SIZE, bottom: COVER_SIZE },
@@ -184,7 +185,6 @@ impl Renderer {
             wic,
             fmt_title,
             fmt_time,
-            round_stroke,
             cover_clip,
             mem_dc: null_mut(),
             dib: null_mut(),
@@ -195,7 +195,10 @@ impl Renderer {
             dpi: 96.0,
             art_version: u64::MAX,
             art_bmp: None,
-            accent: rgba(255, 107, 139, 1.0),
+            accent: DEFAULT_ACCENT,
+            icon_key: (alloc::string::String::new(), 0),
+            icon_bmp: None,
+            icon_accent: None,
         };
         r.set_dpi(dpi);
         Some(r)
@@ -266,32 +269,58 @@ impl Renderer {
     }
 
     fn sync_cover(&mut self, media: &MediaSnapshot) {
+        self.sync_app_icon(&media.aumid);
         if media.art_version == self.art_version {
             return;
         }
         self.art_version = media.art_version;
         self.art_bmp = None;
-        self.accent = default_accent_for_app(media.app);
+        self.accent = self.icon_accent.unwrap_or(DEFAULT_ACCENT);
 
         if media.thumbnail.is_empty() {
             return;
         }
         let target_px = ((COVER_SIZE * (self.dpi / 96.0)) + 0.5) as u32;
-        if let Some((bgra, w, h, accent)) = decode_cover_wic(&self.wic, &media.thumbnail, target_px.max(40)) {
-            let props = D2D1_BITMAP_PROPERTIES {
-                pixelFormat: D2D1_PIXEL_FORMAT {
-                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
-                },
-                dpiX: self.dpi,
-                dpiY: self.dpi,
-            };
-            if let Ok(bmp) = unsafe { self.rt.CreateBitmap(D2D_SIZE_U { width: w, height: h }, Some(bgra.as_ptr().cast()), w * 4, &props) }
-            {
-                self.art_bmp = Some(bmp);
-                self.accent = accent;
-            }
+        let Some(frame) = decode_image(&self.wic, &media.thumbnail) else { return };
+        if let Some((bmp, accent)) = self.d2d_bitmap(&frame, target_px.max(40)) {
+            self.art_bmp = Some(bmp);
+            self.accent = accent;
         }
+    }
+
+    /// Loads the playing app's own icon from the shell once per app and DPI.
+    fn sync_app_icon(&mut self, aumid: &str) {
+        let dpi = self.dpi as u32;
+        if self.icon_key.0 == aumid && self.icon_key.1 == dpi {
+            return;
+        }
+        self.icon_key = (alloc::string::String::from(aumid), dpi);
+        self.icon_bmp = None;
+        self.icon_accent = None;
+        let px = ((APP_ICON_SIZE * (self.dpi / 96.0)) + 0.5) as u32;
+        let Some(hbmp) = appicon::bitmap(aumid, px) else { return };
+        let source = unsafe { self.wic.CreateBitmapFromHBITMAP(hbmp, Default::default(), WICBitmapUseAlpha) };
+        unsafe { DeleteObject(hbmp.0 as HGDIOBJ) };
+        if let Some((bmp, accent)) = source.ok().and_then(|s| self.d2d_bitmap(&s.cast().ok()?, px)) {
+            self.icon_bmp = Some(bmp);
+            self.icon_accent = Some(accent);
+        }
+    }
+
+    /// Scales a WIC image to `size`×`size` and uploads it, with the accent picked from its pixels.
+    fn d2d_bitmap(&self, source: &IWICBitmapSource, size: u32) -> Option<(ID2D1Bitmap, D2D1_COLOR_F)> {
+        let (bgra, accent) = scale_to_pbgra(&self.wic, source, size)?;
+        let props = D2D1_BITMAP_PROPERTIES {
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+            },
+            dpiX: self.dpi,
+            dpiY: self.dpi,
+        };
+        let size_u = D2D_SIZE_U { width: size, height: size };
+        let bmp = unsafe { self.rt.CreateBitmap(size_u, Some(bgra.as_ptr().cast()), size * 4, &props) }.ok()?;
+        Some((bmp, accent))
     }
 
     /// Renders a frame and presents it atomically to the layered window at `(screen_x, screen_y)`.
@@ -513,7 +542,7 @@ impl Renderer {
         let fg_dim = if state.light_taskbar { rgba(20, 23, 29, 0.44) } else { rgba(255, 255, 255, 0.46) };
 
         // App icon at (48, 5.5) size 13x13
-        self.draw_app_icon(state.media.app, 48.0, 5.5, 13.0, state.light_taskbar);
+        self.draw_app_icon(48.0, 5.5, state.light_taskbar);
 
         // Title · Artist text layout spanning from x=66 up to the EQ meter (or controls if EQ hidden)
         let text_left = 66.0f32;
@@ -757,91 +786,27 @@ impl Renderer {
         }
     }
 
-    fn draw_app_icon(&self, app: MediaApp, x: f32, y: f32, size: f32, light: bool) {
-        let cx = x + size * 0.5;
-        let cy = y + size * 0.5;
-        let r = size * 0.48;
-        match app {
-            MediaApp::Spotify => {
-                if let Ok(g) = unsafe { self.rt.CreateSolidColorBrush(&rgba(30, 215, 96, 1.0), None) } {
-                    unsafe { self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx, cy), radiusX: r, radiusY: r }, &g) };
-                }
-                if let Ok(k) = unsafe { self.rt.CreateSolidColorBrush(&rgba(16, 16, 16, 1.0), None) } {
-                    let s = size / 16.0;
-                    for &(x0, y0, x1, y1, x2, y2) in &[
-                        (4.2, 6.3, 8.0, 5.2, 11.6, 6.9),
-                        (4.7, 8.5, 7.8, 7.6, 10.8, 9.0),
-                        (5.3, 10.7, 7.8, 10.0, 10.1, 11.1),
-                    ] {
-                        if let Some(arc) = make_quad_curve(&self.d2d, (x + x0 * s, y + y0 * s), (x + x1 * s, y + y1 * s), (x + x2 * s, y + y2 * s)) {
-                            unsafe { self.rt.DrawGeometry(&arc, &k, 1.2 * s, Some(&self.round_stroke)) };
-                        }
-                    }
-                }
-            }
-            MediaApp::YouTube => {
-                if let Ok(red) = unsafe { self.rt.CreateSolidColorBrush(&rgba(255, 42, 42, 1.0), None) } {
-                    let rr = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F { left: x + 0.5, top: y + 2.0, right: x + size - 0.5, bottom: y + size - 2.0 },
-                        radiusX: 2.6,
-                        radiusY: 2.6,
-                    };
-                    unsafe { self.rt.FillRoundedRectangle(&rr, &red) };
-                }
-                if let Ok(w) = unsafe { self.rt.CreateSolidColorBrush(&rgba(255, 255, 255, 1.0), None) } {
-                    if let Some(tri) = make_polygon(&self.d2d, &[(cx - 1.6, cy - 2.4), (cx - 1.6, cy + 2.4), (cx + 2.6, cy)]) {
-                        unsafe { self.rt.FillGeometry(&tri, &w, None) };
-                    }
-                }
-            }
-            MediaApp::AppleMusic => {
-                if let Ok(pink) = unsafe { self.rt.CreateSolidColorBrush(&rgba(250, 45, 72, 1.0), None) } {
-                    let rr = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F { left: x + 0.5, top: y + 0.5, right: x + size - 0.5, bottom: y + size - 0.5 },
-                        radiusX: 3.0,
-                        radiusY: 3.0,
-                    };
-                    unsafe { self.rt.FillRoundedRectangle(&rr, &pink) };
-                }
-                if let Ok(w) = unsafe { self.rt.CreateSolidColorBrush(&rgba(255, 255, 255, 1.0), None) } {
-                    unsafe {
-                        self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx - 1.2, cy + 2.2), radiusX: 1.7, radiusY: 1.4 }, &w);
-                        self.rt.DrawLine(Vector2::new(cx + 0.3, cy + 2.0), Vector2::new(cx + 0.3, cy - 3.0), &w, 1.3, Some(&self.round_stroke));
-                        self.rt.DrawLine(Vector2::new(cx + 0.3, cy - 3.0), Vector2::new(cx + 3.0, cy - 2.0), &w, 1.3, Some(&self.round_stroke));
-                    }
-                }
-            }
-            MediaApp::Chrome | MediaApp::Edge | MediaApp::Firefox => {
-                let col = match app {
-                    MediaApp::Chrome => rgba(66, 133, 244, 1.0),
-                    MediaApp::Edge => rgba(0, 164, 239, 1.0),
-                    _ => rgba(255, 113, 57, 1.0),
-                };
-                if let Ok(b) = unsafe { self.rt.CreateSolidColorBrush(&col, None) } {
-                    unsafe { self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx, cy), radiusX: r, radiusY: r }, &b) };
-                }
-                if let Ok(w) = unsafe { self.rt.CreateSolidColorBrush(&rgba(255, 255, 255, 0.95), None) } {
-                    unsafe { self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx, cy), radiusX: r * 0.42, radiusY: r * 0.42 }, &w) };
-                }
-            }
-            MediaApp::Vlc | MediaApp::Generic => {
-                let bg = if app == MediaApp::Vlc {
-                    rgba(255, 136, 0, 1.0)
-                } else if light {
-                    rgba(20, 23, 29, 0.16)
-                } else {
-                    rgba(255, 255, 255, 0.16)
-                };
-                let fg = if app == MediaApp::Vlc || !light { rgba(255, 255, 255, 0.95) } else { rgba(20, 23, 29, 0.9) };
-                if let Ok(b) = unsafe { self.rt.CreateSolidColorBrush(&bg, None) } {
-                    unsafe { self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx, cy), radiusX: r, radiusY: r }, &b) };
-                }
-                if let Ok(w) = unsafe { self.rt.CreateSolidColorBrush(&fg, None) } {
-                    if let Some(tri) = make_polygon(&self.d2d, &[(cx - 1.5, cy - 2.5), (cx - 1.5, cy + 2.5), (cx + 2.6, cy)]) {
-                        unsafe { self.rt.FillGeometry(&tri, &w, None) };
-                    }
-                }
-            }
+    /// The playing app's own icon, or a neutral play glyph when the shell has none for it.
+    fn draw_app_icon(&self, x: f32, y: f32, light: bool) {
+        let size = APP_ICON_SIZE;
+        if let Some(bmp) = &self.icon_bmp {
+            let dst = D2D_RECT_F { left: x, top: y, right: x + size, bottom: y + size };
+            unsafe { self.rt.DrawBitmap(bmp, Some(&dst), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None) };
+            return;
+        }
+        let (cx, cy, r) = (x + size * 0.5, y + size * 0.5, size * 0.48);
+        let (bg, fg) = if light {
+            (rgba(20, 23, 29, 0.16), rgba(20, 23, 29, 0.9))
+        } else {
+            (rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.95))
+        };
+        if let Ok(b) = unsafe { self.rt.CreateSolidColorBrush(&bg, None) } {
+            unsafe { self.rt.FillEllipse(&D2D1_ELLIPSE { point: Vector2::new(cx, cy), radiusX: r, radiusY: r }, &b) };
+        }
+        if let Ok(w) = unsafe { self.rt.CreateSolidColorBrush(&fg, None) }
+            && let Some(tri) = make_polygon(&self.d2d, &[(cx - 1.5, cy - 2.5), (cx - 1.5, cy + 2.5), (cx + 2.6, cy)])
+        {
+            unsafe { self.rt.FillGeometry(&tri, &w, None) };
         }
     }
 
@@ -905,14 +870,6 @@ fn lerp_color(a: D2D1_COLOR_F, b: D2D1_COLOR_F, t: f32) -> D2D1_COLOR_F {
     }
 }
 
-fn default_accent_for_app(app: MediaApp) -> D2D1_COLOR_F {
-    match app {
-        MediaApp::Spotify => rgba(30, 215, 96, 1.0),
-        MediaApp::YouTube => rgba(255, 72, 72, 1.0),
-        _ => rgba(255, 107, 139, 1.0),
-    }
-}
-
 fn fmt_time(sec: f64) -> alloc::string::String {
     let s = if sec.is_finite() && sec > 0.0 { sec as u64 } else { 0 };
     format!("{}:{:02}", s / 60, s % 60)
@@ -932,31 +889,19 @@ fn make_polygon(d2d: &ID2D1Factory, pts: &[(f32, f32)]) -> Option<ID2D1PathGeome
     Some(geo)
 }
 
-fn make_quad_curve(d2d: &ID2D1Factory, p0: (f32, f32), ctrl: (f32, f32), p2: (f32, f32)) -> Option<ID2D1PathGeometry> {
-    let geo = unsafe { d2d.CreatePathGeometry() }.ok()?;
-    let sink = unsafe { geo.Open() }.ok()?;
-    unsafe {
-        sink.BeginFigure(Vector2::new(p0.0, p0.1), windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_BEGIN_HOLLOW);
-        sink.AddQuadraticBezier(&windows::Win32::Graphics::Direct2D::D2D1_QUADRATIC_BEZIER_SEGMENT {
-            point1: Vector2::new(ctrl.0, ctrl.1),
-            point2: Vector2::new(p2.0, p2.1),
-        });
-        sink.EndFigure(windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_END_OPEN);
-    }
-    let _ = unsafe { sink.Close() };
-    Some(geo)
-}
-
-/// Decodes raw JPEG/PNG thumbnail bytes via WIC into a crisp `size x size` PBGRA buffer and
-/// extracts a vibrant accent color for the P1 hover scrubber.
-fn decode_cover_wic(wic: &IWICImagingFactory, bytes: &[u8], size: u32) -> Option<(Vec<u8>, u32, u32, D2D1_COLOR_F)> {
+/// The first frame of encoded JPEG/PNG bytes, through WIC.
+fn decode_image(wic: &IWICImagingFactory, bytes: &[u8]) -> Option<IWICBitmapSource> {
     let stream = unsafe { wic.CreateStream() }.ok()?;
     unsafe { stream.InitializeFromMemory(bytes) }.ok()?;
     let decoder = unsafe { wic.CreateDecoderFromStream(&stream, null(), WICDecodeMetadataCacheOnDemand) }.ok()?;
-    let frame = unsafe { decoder.GetFrame(0) }.ok()?;
+    unsafe { decoder.GetFrame(0) }.ok()?.cast().ok()
+}
 
+/// Scales a WIC image into a crisp `size x size` PBGRA buffer and extracts a vibrant accent
+/// color for the P1 hover scrubber.
+fn scale_to_pbgra(wic: &IWICImagingFactory, source: &IWICBitmapSource, size: u32) -> Option<(Vec<u8>, D2D1_COLOR_F)> {
     let scaler = unsafe { wic.CreateBitmapScaler() }.ok()?;
-    unsafe { scaler.Initialize(&frame, size, size, WICBitmapInterpolationModeFant) }.ok()?;
+    unsafe { scaler.Initialize(source, size, size, WICBitmapInterpolationModeFant) }.ok()?;
 
     let conv = unsafe { wic.CreateFormatConverter() }.ok()?;
     unsafe { conv.Initialize(&scaler, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeCustom) }
@@ -967,7 +912,7 @@ fn decode_cover_wic(wic: &IWICImagingFactory, bytes: &[u8], size: u32) -> Option
     unsafe { conv.CopyPixels(null(), stride, &mut buf) }.ok()?;
 
     let accent = extract_accent(&buf);
-    Some((buf, size, size, accent))
+    Some((buf, accent))
 }
 
 /// Picks the most vibrant bright average hue from decoded BGRA pixels so the P1 hover scrub bar

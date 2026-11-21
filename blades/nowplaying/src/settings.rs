@@ -19,38 +19,13 @@ const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE: &str = "NowPlaying";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DockPosition {
-    Left,
-    BeforeTray,
-}
-
-impl DockPosition {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            DockPosition::Left => "left",
-            DockPosition::BeforeTray => "tray",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
-        match s.trim() {
-            "left" => Some(DockPosition::Left),
-            "tray" => Some(DockPosition::BeforeTray),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Settings {
-    pub position: DockPosition,
     pub visualizer: bool,
-    pub hide_when_idle: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { position: DockPosition::Left, visualizer: true, hide_when_idle: true }
+        Self { visualizer: true }
     }
 }
 
@@ -67,23 +42,10 @@ impl Settings {
             }
             if let Some((k, v)) = line.split_once('=') {
                 let (k, v) = (k.trim(), v.trim());
-                match k {
-                    "position" => {
-                        if let Some(p) = DockPosition::parse(v) {
-                            s.position = p;
-                        }
-                    }
-                    "visualizer" => {
-                        if let Some(b) = parse_bool(v) {
-                            s.visualizer = b;
-                        }
-                    }
-                    "hideWhenIdle" => {
-                        if let Some(b) = parse_bool(v) {
-                            s.hide_when_idle = b;
-                        }
-                    }
-                    _ => {}
+                if k == "visualizer"
+                    && let Some(b) = parse_bool(v)
+                {
+                    s.visualizer = b;
                 }
             }
         }
@@ -95,25 +57,13 @@ impl Settings {
         let wdir = to_wide(&dir);
         unsafe { CreateDirectoryW(wdir.as_ptr(), null()) };
 
-        let content = format!(
-            "position={}\r\nvisualizer={}\r\nhideWhenIdle={}\r\n",
-            self.position.as_str(),
-            u8::from(self.visualizer),
-            u8::from(self.hide_when_idle),
-        );
+        let content = format!("visualizer={}\r\n", u8::from(self.visualizer));
         write_file(&settings_path(), content.as_bytes())
     }
 
     /// Prints lines matching `docs/specs/blade-settings.md`.
     pub fn format_blade_settings(&self) -> String {
-        format!(
-            "position\tchoice\t{}\tTaskbar position\tleft=Bottom-left\ttray=Left of system tray\r\n\
-             visualizer\ttoggle\t{}\tShow live audio frequency meter\r\n\
-             hideWhenIdle\ttoggle\t{}\tHide when nothing is playing\r\n",
-            self.position.as_str(),
-            u8::from(self.visualizer),
-            u8::from(self.hide_when_idle),
-        )
+        format!("visualizer\ttoggle\t{}\tShow live audio frequency meter\r\n", u8::from(self.visualizer))
     }
 
     /// Validates all `key=value` pairs before mutating anything.
@@ -124,14 +74,8 @@ impl Settings {
                 return Err(format!("Invalid setting: {pair}"));
             };
             match k {
-                "position" => {
-                    next.position = DockPosition::parse(v).ok_or_else(|| format!("Invalid taskbar position: {v}"))?;
-                }
                 "visualizer" => {
                     next.visualizer = parse_bool(v).ok_or_else(|| format!("Invalid value for visualizer: {v}"))?;
-                }
-                "hideWhenIdle" => {
-                    next.hide_when_idle = parse_bool(v).ok_or_else(|| format!("Invalid value for hideWhenIdle: {v}"))?;
                 }
                 _ => return Err(format!("Unknown setting: {k}")),
             }

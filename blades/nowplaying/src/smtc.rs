@@ -19,61 +19,13 @@ use windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows_sys::Win32::System::Threading::{CreateEventW, INFINITE, SetEvent, WaitForSingleObject};
 use windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum MediaApp {
-    Spotify,
-    YouTube,
-    Chrome,
-    Edge,
-    Firefox,
-    AppleMusic,
-    Vlc,
-    Generic,
-}
-
-impl MediaApp {
-    pub fn from_aumid(aumid: &str) -> Self {
-        let lower = aumid.to_ascii_lowercase();
-        if lower.contains("spotify") {
-            MediaApp::Spotify
-        } else if lower.contains("youtube") {
-            MediaApp::YouTube
-        } else if lower.contains("chrome") || lower.contains("brave") || lower.contains("opera") || lower.contains("vivaldi") {
-            MediaApp::Chrome
-        } else if lower.contains("msedge") || lower.contains("edge") {
-            MediaApp::Edge
-        } else if lower.contains("firefox") || lower.contains("zen") {
-            MediaApp::Firefox
-        } else if lower.contains("applemusic") || lower.contains("itunes") {
-            MediaApp::AppleMusic
-        } else if lower.contains("vlc") {
-            MediaApp::Vlc
-        } else {
-            MediaApp::Generic
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            MediaApp::Spotify => "Spotify",
-            MediaApp::YouTube => "YouTube",
-            MediaApp::Chrome => "Chrome",
-            MediaApp::Edge => "Edge",
-            MediaApp::Firefox => "Firefox",
-            MediaApp::AppleMusic => "Apple Music",
-            MediaApp::Vlc => "VLC",
-            MediaApp::Generic => "Media",
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct MediaSnapshot {
     pub active: bool,
     pub playing: bool,
     pub title: String,
     pub artist: String,
-    pub app: MediaApp,
+    /// The source app's AppUserModelID (its icon comes from the shell, see `appicon`).
     pub aumid: String,
     pub can_seek: bool,
     pub start_100ns: i64,
@@ -93,7 +45,6 @@ impl Default for MediaSnapshot {
             playing: false,
             title: String::new(),
             artist: String::new(),
-            app: MediaApp::Generic,
             aumid: String::new(),
             can_seek: false,
             start_100ns: 0,
@@ -426,19 +377,10 @@ fn read_session(session: &GlobalSystemMediaTransportControlsSession, out: &mut M
         }
     }
 
-    // YouTube in browser: promote app icon to YouTube when title/artist/aumid indicates it
-    let mut app = MediaApp::from_aumid(&aumid);
-    if matches!(app, MediaApp::Chrome | MediaApp::Edge | MediaApp::Firefox)
-        && (title.contains("YouTube") || artist.contains("YouTube"))
-    {
-        app = MediaApp::YouTube;
-    }
-
     out.active = active && !title.is_empty();
     out.playing = playing;
     out.title = title;
     out.artist = artist;
-    out.app = app;
     out.aumid = aumid;
     out.can_seek = can_seek || (end_100ns > start_100ns);
     out.start_100ns = start_100ns;

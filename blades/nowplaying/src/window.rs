@@ -4,10 +4,9 @@
 use crate::audio::AudioMeter;
 use crate::ipc;
 use crate::render::{FrameState, HoverTarget, NEXT_RECT, PLAY_RECT, PREV_RECT, Renderer, SCRUB_RECT, STRIP_H, STRIP_W};
-use crate::settings::{self, DockPosition, Settings};
+use crate::settings::{self, Settings};
 use crate::smtc::{MediaCommand, MediaSnapshot, SmtcClient};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::ptr::{null, null_mut};
 use pk::w;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
@@ -23,7 +22,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 const WM_MOUSELEAVE: u32 = 0x02A3;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
-    EVENT_SYSTEM_FOREGROUND, FindWindowExW, FindWindowW, GWLP_HWNDPARENT, GWLP_USERDATA, GetCursorPos, GetForegroundWindow,
+    EVENT_SYSTEM_FOREGROUND, FindWindowW, GWLP_HWNDPARENT, GWLP_USERDATA, GetCursorPos, GetForegroundWindow,
     GetMessageW, GetShellWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IDC_ARROW, IDC_HAND, KillTimer, LoadCursorW,
     MA_NOACTIVATE, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
     SM_CYSCREEN, SW_HIDE, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SetCursor, SetTimer,
@@ -42,11 +41,7 @@ const MENU_PLAY_PAUSE: usize = 101;
 const MENU_PREV: usize = 102;
 const MENU_NEXT: usize = 103;
 const MENU_VIS_TOGGLE: usize = 104;
-const MENU_DOCK_LEFT: usize = 105;
-const MENU_DOCK_TRAY: usize = 106;
-const MENU_SWITCH_MON: usize = 107;
-const MENU_HIDE_IDLE: usize = 108;
-const MENU_EXIT: usize = 109;
+const MENU_EXIT: usize = 105;
 
 static mut GLOBAL_HWND: HWND = null_mut();
 
@@ -62,7 +57,6 @@ struct AppState {
     exit_msg: u32,
     taskbar_created_msg: u32,
     owned_tray: HWND,
-    tray_index: usize,
     win_x: i32,
     win_y: i32,
     win_w: i32,
@@ -125,7 +119,7 @@ pub fn run() -> u32 {
         return 1;
     }
 
-    let dpi = read_taskbar_dpi(0);
+    let dpi = read_taskbar_dpi();
     let Some(renderer) = Renderer::new(dpi) else {
         unsafe { DestroyWindow(hwnd) };
         return 1;
@@ -150,7 +144,6 @@ pub fn run() -> u32 {
         exit_msg: ipc::exit_message(),
         taskbar_created_msg: unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) },
         owned_tray: null_mut(),
-        tray_index: 0,
         win_x: i32::MIN,
         win_y: i32::MIN,
         win_w: 0,
@@ -523,10 +516,10 @@ impl AppState {
     }
 
     fn dock_to_taskbar(&mut self, force: bool) {
-        let trays = find_taskbars();
-        let hide_for_idle = self.settings.hide_when_idle && !self.media.active;
+        let tray = unsafe { FindWindowW(w!("Shell_TrayWnd"), null()) };
+        let hide_for_idle = !self.media.active;
 
-        if trays.is_empty() {
+        if tray.is_null() {
             // Sandbox fallback (no Shell_TrayWnd)
             let hide = hide_for_idle;
             if hide {
@@ -552,10 +545,6 @@ impl AppState {
             return;
         }
 
-        if self.tray_index >= trays.len() {
-            self.tray_index = 0;
-        }
-        let tray = trays[self.tray_index];
         let owner_changed = tray != self.owned_tray;
         if owner_changed {
             // Win32 owner relationship keeps this strip atomically above Shell_TrayWnd on every frame
@@ -575,18 +564,7 @@ impl AppState {
         // Exact equal left, top, bottom padding inside the taskbar (4 px on standard 48 px bar)
         let equal_pad = ((tb_h - h) / 2).max(0);
 
-        let x = match self.settings.position {
-            DockPosition::Left => tb.left + equal_pad,
-            DockPosition::BeforeTray => {
-                let notify = unsafe { FindWindowExW(tray, null_mut(), w!("TrayNotifyWnd"), null()) };
-                let mut nr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                if !notify.is_null() && unsafe { GetWindowRect(notify, &mut nr) } != 0 {
-                    nr.left - w - equal_pad
-                } else {
-                    tb.right - w - (160.0 * scale) as i32
-                }
-            }
-        };
+        let x = tb.left + equal_pad;
         let y = tb.top + equal_pad;
 
         let should_hide = hide_for_idle || is_monitor_fullscreen(tray);
@@ -615,9 +593,6 @@ impl AppState {
             return;
         }
         let vis_flags = MF_STRING | if self.settings.visualizer { MF_CHECKED } else { 0 };
-        let left_flags = MF_STRING | if self.settings.position == DockPosition::Left { MF_CHECKED } else { 0 };
-        let tray_flags = MF_STRING | if self.settings.position == DockPosition::BeforeTray { MF_CHECKED } else { 0 };
-        let hide_flags = MF_STRING | if self.settings.hide_when_idle { MF_CHECKED } else { 0 };
 
         unsafe {
             AppendMenuW(menu, MF_STRING, MENU_PLAY_PAUSE, if self.media.playing { w!("Pause") } else { w!("Play") });
@@ -625,13 +600,6 @@ impl AppState {
             AppendMenuW(menu, MF_STRING, MENU_NEXT, w!("Next track"));
             AppendMenuW(menu, MF_SEPARATOR, 0, null());
             AppendMenuW(menu, vis_flags, MENU_VIS_TOGGLE, w!("Live audio frequency meter"));
-            AppendMenuW(menu, hide_flags, MENU_HIDE_IDLE, w!("Hide when nothing is playing"));
-            AppendMenuW(menu, MF_SEPARATOR, 0, null());
-            AppendMenuW(menu, left_flags, MENU_DOCK_LEFT, w!("Dock: Bottom-left"));
-            AppendMenuW(menu, tray_flags, MENU_DOCK_TRAY, w!("Dock: Left of system tray"));
-            if find_taskbars().len() > 1 {
-                AppendMenuW(menu, MF_STRING, MENU_SWITCH_MON, w!("Switch monitor"));
-            }
             AppendMenuW(menu, MF_SEPARATOR, 0, null());
             AppendMenuW(menu, MF_STRING, MENU_EXIT, w!("Exit NowPlaying"));
         }
@@ -661,32 +629,6 @@ impl AppState {
                 self.update_audio_active();
                 self.sync_frame_timer();
                 self.render_now();
-            }
-            MENU_HIDE_IDLE => {
-                self.settings.hide_when_idle = !self.settings.hide_when_idle;
-                let _ = self.settings.save();
-                self.dock_to_taskbar(true);
-                self.render_now();
-            }
-            MENU_DOCK_LEFT => {
-                self.settings.position = DockPosition::Left;
-                let _ = self.settings.save();
-                self.dock_to_taskbar(true);
-                self.render_now();
-            }
-            MENU_DOCK_TRAY => {
-                self.settings.position = DockPosition::BeforeTray;
-                let _ = self.settings.save();
-                self.dock_to_taskbar(true);
-                self.render_now();
-            }
-            MENU_SWITCH_MON => {
-                let n = find_taskbars().len();
-                if n > 1 {
-                    self.tray_index = (self.tray_index + 1) % n;
-                    self.dock_to_taskbar(true);
-                    self.render_now();
-                }
             }
             MENU_EXIT => unsafe {
                 DestroyWindow(self.hwnd);
@@ -736,32 +678,9 @@ fn scrub_ratio(x: f32) -> f32 {
     ((x - SCRUB_RECT.0) / (SCRUB_RECT.2 - SCRUB_RECT.0)).clamp(0.0, 1.0)
 }
 
-fn find_taskbars() -> Vec<HWND> {
-    let mut out = Vec::new();
-    let primary = unsafe { FindWindowW(w!("Shell_TrayWnd"), null()) };
-    if !primary.is_null() {
-        out.push(primary);
-    }
-    let mut sec = null_mut();
-    loop {
-        sec = unsafe { FindWindowExW(null_mut(), sec, w!("Shell_SecondaryTrayWnd"), null()) };
-        if sec.is_null() {
-            break;
-        }
-        out.push(sec);
-    }
-    out
-}
-
-fn read_taskbar_dpi(index: usize) -> u32 {
-    let trays = find_taskbars();
-    if let Some(&tray) = trays.get(index) {
-        let d = unsafe { GetDpiForWindow(tray) };
-        if d >= 96 {
-            return d;
-        }
-    }
-    96
+fn read_taskbar_dpi() -> u32 {
+    let tray = unsafe { FindWindowW(w!("Shell_TrayWnd"), null()) };
+    if tray.is_null() { 96 } else { unsafe { GetDpiForWindow(tray) }.max(96) }
 }
 
 fn is_monitor_fullscreen(tray: HWND) -> bool {
