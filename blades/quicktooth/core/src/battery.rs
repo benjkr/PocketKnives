@@ -11,6 +11,9 @@ pub struct BatteryReading {
     pub right: Option<i32>,
     pub case: Option<i32>,
     pub buds_charging: bool,
+    /// Which bud charges, when the advert says (both false otherwise).
+    pub left_charging: bool,
+    pub right_charging: bool,
     pub case_charging: bool,
     pub rssi: i32,
     /// When it was read: the host's wall clock, milliseconds since 1970 (C#'s `DateTime.Now`).
@@ -91,7 +94,10 @@ pub fn parse_apple_status(b: &[u8], model: u16, rssi: i32, now_epoch_ms: f64) ->
     let (hi, lo) = ((b[6] >> 4) as i32, (b[6] & 0x0F) as i32);
     let level = |n: i32| (n <= 10).then_some(n * 10);
     let (left, right) = if flipped { (level(hi), level(lo)) } else { (level(lo), level(hi)) };
+    // Bits 0 and 1 go with the low and high level nibbles; bit 2 is the case.
     let charging = (b[7] >> 4) & 0x07;
+    let (lo_charging, hi_charging) = (charging & 0b001 != 0, charging & 0b010 != 0);
+    let (left_charging, right_charging) = if flipped { (hi_charging, lo_charging) } else { (lo_charging, hi_charging) };
     let case = level((b[7] & 0x0F) as i32);
     if left.is_none() && right.is_none() && case.is_none() {
         return None;
@@ -101,6 +107,8 @@ pub fn parse_apple_status(b: &[u8], model: u16, rssi: i32, now_epoch_ms: f64) ->
         right,
         case,
         buds_charging: charging & 0b011 != 0,
+        left_charging,
+        right_charging,
         case_charging: charging & 0b100 != 0,
         rssi,
         at_epoch_ms: now_epoch_ms,
@@ -163,6 +171,16 @@ mod tests {
     /// Real adverts from AirPods Pro (0x2027), in the order a test run produced them: lid closed,
     /// opened, the left bud taken out and put in an ear, the right one too, both taken out of the
     /// ears, back in the case, lid closed. Two per step where the two buds disagreed in form.
+    /// The same moment from each bud (left out of the case, right charging in it): each says the
+    /// right bud charges.
+    #[test]
+    fn which_bud_charges() {
+        for b in [[0x07, 0x19, 0x01, 0x27, 0x20, 0x51, 0x88, 0x95, 0x32], [0x07, 0x19, 0x01, 0x27, 0x20, 0x33, 0x88, 0xA5, 0x12]] {
+            let r = parse_apple_status(&b, 0x2027, -50, 1.0).unwrap();
+            assert_eq!((r.left_charging, r.right_charging, r.buds_charging), (false, true, true), "{b:02X?}");
+        }
+    }
+
     #[test]
     fn pods_from_real_adverts() {
         let cases: &[(&str, Pods, bool)] = &[

@@ -10,7 +10,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use pk::sync::Mutex;
 use quicktooth_core::battery::{BatteryReading, parse_apple_status};
 use windows::Devices::Bluetooth::Advertisement::{
-    BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementWatcher, BluetoothLEAdvertisementWatcherStoppedEventArgs,
+    BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementWatcher, BluetoothLEManufacturerData, BluetoothLEAdvertisementWatcherStoppedEventArgs,
     BluetoothLEScanningMode,
 };
 use windows::Devices::Bluetooth::BluetoothError;
@@ -196,6 +196,10 @@ pub fn watch(model: u16, deliver: impl Fn(Vec<u8>, i32) + Send + Sync + 'static)
     let start = || -> windows_core::Result<Watch> {
         let watcher = BluetoothLEAdvertisementWatcher::new()?;
         watcher.SetScanningMode(BluetoothLEScanningMode::Passive)?;
+        // Only Apple's adverts reach the handler: the stack drops the rest before our code runs.
+        let apple = BluetoothLEManufacturerData::new()?;
+        apple.SetCompanyId(APPLE)?;
+        watcher.AdvertisementFilter()?.Advertisement()?.ManufacturerData()?.Append(&apple)?;
         watcher.Received(&TypedEventHandler::new(move |_, args: windows_core::Ref<BluetoothLEAdvertisementReceivedEventArgs>| {
             if let Some(a) = args.as_ref() {
                 // A failed read is a dropped advert; the next one comes within a second or two.

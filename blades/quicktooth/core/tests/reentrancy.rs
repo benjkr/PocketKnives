@@ -253,6 +253,8 @@ impl DeviceBackend for Devices {
                 right: Some(20),
                 case: None,
                 buds_charging: false,
+                left_charging: false,
+                right_charging: false,
                 case_charging: false,
                 rssi: -60,
                 at_epoch_ms: w.now.get(),

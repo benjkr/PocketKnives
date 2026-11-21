@@ -723,6 +723,8 @@ fn battery_reading(text: &str, now_epoch_ms: f64) -> OpResult<Option<BatteryRead
         right: level(&r, "right")?,
         case: level(&r, "case")?,
         buds_charging: flag("budsCharging"),
+        left_charging: flag("budsCharging"),
+        right_charging: flag("budsCharging"),
         case_charging: flag("caseCharging"),
         rssi: level(&r, "rssi")?.unwrap_or(0),
         at_epoch_ms: now_epoch_ms,

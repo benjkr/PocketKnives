@@ -363,7 +363,7 @@ impl TrayController {
                 // The next ripple, while the dot shows and nothing else animates.
                 let replay = {
                     let st = self.st();
-                    st.anim.is_none() && st.pending.is_none() && st.low_shown
+                    st.anim.is_none() && st.pending.is_none() && st.low_shown && case::is_plain(st.pods) && st.case_from.is_none()
                 };
                 if replay {
                     self.start_animation(AnimPhase::LowBattery, 0.0);
@@ -521,6 +521,8 @@ impl TrayController {
                     right: None,
                     case: None,
                     buds_charging: false,
+                    left_charging: false,
+                    right_charging: false,
                     case_charging: false,
                     rssi: 0,
                     at_epoch_ms: now,
@@ -1006,7 +1008,12 @@ impl TrayController {
                     } else {
                         self.host().kill_timer(TIMER_LOWBATTERY);
                     }
-                    if low && icon_size > 0 {
+                    // Not over the case icon: the ripple is drawn on the plain icon.
+                    let plain = {
+                        let st = self.st();
+                        case::is_plain(st.pods) && st.case_from.is_none()
+                    };
+                    if low && icon_size > 0 && plain {
                         self.start_animation(AnimPhase::LowBattery, 0.0); // the first ripple
                         return;
                     }
@@ -1249,8 +1256,8 @@ impl TrayController {
             status: format!("{} \u{b7} {}", self.status_text(), popup::pods_phrase(pods, in_ear)),
             pods,
             connected,
-            left: reading.as_ref().and_then(|r| level(r.left, r.buds_charging)),
-            right: reading.as_ref().and_then(|r| level(r.right, r.buds_charging)),
+            left: reading.as_ref().and_then(|r| level(r.left, r.left_charging)),
+            right: reading.as_ref().and_then(|r| level(r.right, r.right_charging)),
             case: reading.as_ref().and_then(|r| level(r.case, r.case_charging)),
             low_warning: self.settings().low_battery_warning(),
         };
