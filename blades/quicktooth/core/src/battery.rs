@@ -108,10 +108,86 @@ pub fn parse_apple_status(b: &[u8], model: u16, rssi: i32, now_epoch_ms: f64) ->
     })
 }
 
+/// Where the buds are, from the same status advert.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pods {
+    /// Both buds in the case, lid closed.
+    Closed,
+    /// Both buds in the case, lid open.
+    Open,
+    /// One bud out of the case (`left`: which one).
+    OneOut { left: bool },
+    /// Both buds out of the case.
+    Out,
+}
+
+impl Pods {
+    /// For the log and the simulator's timeline.
+    pub fn name(self) -> &'static str {
+        match self {
+            Pods::Closed => "closed",
+            Pods::Open => "lid open",
+            Pods::OneOut { left: true } => "left out",
+            Pods::OneOut { left: false } => "right out",
+            Pods::Out => "out",
+        }
+    }
+}
+
+/// The buds' placement in a status advert, and whether a bud is in an ear. Bits measured on
+/// AirPods Pro (0x2027), from both buds' adverts (each bud advertises its own view):
+/// status `[5]`: 0x04 both buds in the case, 0x10 at least one in the case, 0x0A a bud in an ear,
+/// 0x20 the sender is the left bud; lid `[8]`: 0x08 lid closed, 0x20 the sender is in the case.
+pub fn parse_pods(b: &[u8], model: u16) -> Option<(Pods, bool)> {
+    if b.len() < 9 || b[0] != 0x07 || b[1] < 7 || u16::from_le_bytes([b[3], b[4]]) != model {
+        return None;
+    }
+    let (status, lid) = (b[5], b[8]);
+    let pods = if status & 0x04 != 0 {
+        if lid & 0x08 != 0 { Pods::Closed } else { Pods::Open }
+    } else if status & 0x10 != 0 {
+        let sender_left = status & 0x20 != 0;
+        let sender_in_case = lid & 0x20 != 0;
+        Pods::OneOut { left: sender_left != sender_in_case }
+    } else {
+        Pods::Out
+    };
+    Some((pods, status & 0x0A != 0))
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
     use super::*;
+
+    /// Real adverts from AirPods Pro (0x2027), in the order a test run produced them: lid closed,
+    /// opened, the left bud taken out and put in an ear, the right one too, both taken out of the
+    /// ears, back in the case, lid closed. Two per step where the two buds disagreed in form.
+    #[test]
+    fn pods_from_real_adverts() {
+        let cases: &[(&str, Pods, bool)] = &[
+            ("07 19 01 27 20 75 88 B5 39 00 04", Pods::Closed, false),
+            ("07 19 01 27 20 15 88 B5 39 00 04", Pods::Closed, false),
+            ("07 19 01 27 20 15 88 B5 32 00 04", Pods::Open, false),
+            ("07 19 01 27 20 75 88 B5 32 00 04", Pods::Open, false),
+            ("07 19 01 27 20 51 88 95 32 00 04", Pods::OneOut { left: true }, false), // right bud, in the case
+            ("07 19 01 27 20 33 88 A5 12 00 04", Pods::OneOut { left: true }, true),  // left bud, in an ear
+            ("07 19 01 27 20 53 88 95 32 00 04", Pods::OneOut { left: true }, true),
+            ("07 19 01 27 20 23 88 8F 12 00 04", Pods::Out, true),
+            ("07 19 01 27 20 21 88 8F 12 00 04", Pods::Out, false),
+            ("07 19 01 27 20 15 88 BF 12 00 04", Pods::Open, false),
+            ("07 19 01 27 20 75 88 B5 3B 00 04", Pods::Closed, false),
+        ];
+        for &(hex, pods, in_ear) in cases {
+            let b: std::vec::Vec<u8> = hex.split(' ').map(|h| u8::from_str_radix(h, 16).unwrap()).collect();
+            assert_eq!(parse_pods(&b, 0x2027), Some((pods, in_ear)), "{hex}");
+            assert!(parse_pods(&b, 0x2014).is_none());
+        }
+        assert!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x75, 0x88, 0xB5], 0x2027).is_none());
+        // The right bud taken out instead: the senders' left/right bits are the other way round.
+        assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x71, 0x88, 0x95, 0x32], 0x2027), Some((Pods::OneOut { left: false }, false)));
+        assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x13, 0x88, 0xA5, 0x12], 0x2027), Some((Pods::OneOut { left: false }, true)));
+    }
 
     #[test]
     fn apple_status_advert() {
