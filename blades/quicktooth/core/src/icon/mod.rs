@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use glyph::{Polyline, Pt, fill, line, point_at};
 use raster::{Canvas, Clip, Rgb, Xf, over};
 
+pub mod case;
 mod glyph;
 pub use glyph::{Artwork, artwork, set_artwork};
 pub mod png;

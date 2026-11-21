@@ -14,7 +14,7 @@
 //!   delivers messages sent to the window meanwhile (`WM_COPYDATA`, `WM_SETTINGCHANGE`, display
 //!   changes, and a `WM_APP_INVOKE` another process sends, which runs woken tasks there).
 use crate::Guid;
-use crate::battery::BatteryReading;
+use crate::battery::{BatteryReading, Pods};
 use crate::devices::{OneShot, SendResult, Snapshot};
 use crate::exec::Op;
 use crate::icon::AnimPhase;
@@ -117,11 +117,22 @@ pub enum IconDesc {
         t: f64,
         tracer_t: f64,
     },
+    /// Where the buds are ([`crate::icon::case`]): the pose for `pods` (`None` = not known),
+    /// `t` (rounded to 4 places) of the way there; 1 = resting on it.
+    Case {
+        pods: Option<Pods>,
+        t: f64,
+    },
 }
 
 impl IconDesc {
+    /// A frame drawn for one tick (released when the next one is shown).
     pub fn is_anim(&self) -> bool {
-        matches!(self, IconDesc::Anim { .. })
+        match self {
+            IconDesc::Anim { .. } => true,
+            IconDesc::Case { t, .. } => *t < 1.0,
+            _ => false,
+        }
     }
 
     /// e.g. `{"kind":"static","state":"connected"}` or
@@ -134,6 +145,10 @@ impl IconDesc {
             IconDesc::Anim { phase, t, tracer_t } => {
                 alloc::format!("{{\"kind\":\"anim\",\"phase\":\"{}\",\"t\":{},\"tracerT\":{}}}", phase.name(), fmt_r(t), fmt_r(tracer_t))
             }
+            IconDesc::Case { pods, t } => match pods {
+                Some(p) => alloc::format!("{{\"kind\":\"case\",\"pods\":\"{}\",\"t\":{}}}", p.name(), fmt_r(t)),
+                None => alloc::format!("{{\"kind\":\"case\",\"pods\":null,\"t\":{}}}", fmt_r(t)),
+            },
         }
     }
 }

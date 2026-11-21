@@ -17,6 +17,7 @@ use crate::blade_settings::{self, SetResult, SettingsChange};
 use crate::devices::{BtDevice, OneShot};
 use crate::exec::{self, Schedule};
 use crate::host::{DeviceBackend, Event, IconDesc, IconImage, MenuItem, TrayHost, tray_commands};
+use crate::icon::case::{self, Pose};
 use crate::icon::{self, AnimPhase, IconState};
 use crate::json;
 use crate::log;
@@ -43,7 +44,8 @@ pub const TIMER_LOWBATTERY: i32 = 10;
 pub const TIMER_PODS_SCAN: i32 = 11;
 pub const TIMER_PODS_WINDOW: i32 = 12;
 pub const TIMER_PODS_STALE: i32 = 13;
-pub const ALL_TIMERS: [i32; 13] = [
+pub const TIMER_CASE: i32 = 14;
+pub const ALL_TIMERS: [i32; 14] = [
     TIMER_ANIM,
     TIMER_TIMEOUT,
     TIMER_POLL,
@@ -57,6 +59,7 @@ pub const ALL_TIMERS: [i32; 13] = [
     TIMER_PODS_SCAN,
     TIMER_PODS_WINDOW,
     TIMER_PODS_STALE,
+    TIMER_CASE,
 ];
 
 pub const CMD_CONNECT: i32 = 1;
@@ -121,6 +124,13 @@ struct State {
     /// connected).
     watching: Option<u16>,
     pods_window: bool,
+    /// The case icon's move to the pose for `pods`: where it started and when (host ms).
+    case_from: Option<Pose>,
+    case_start: f64,
+    /// The resting case icon, for (pods, connected), and the one it replaced (released once
+    /// the new one is shown).
+    case_icon: Option<(Option<Pods>, bool, Rc<IconImage>)>,
+    case_old: Option<Rc<IconImage>>,
 
     icon_added: bool,
     add_attempts: i32,
@@ -379,6 +389,13 @@ impl TrayController {
                     self.host().kill_timer(TIMER_PODS_STALE);
                     self.forget_pods();
                 }
+            }
+            TIMER_CASE => {
+                if self.case_progress() >= 1.0 {
+                    self.host().kill_timer(TIMER_CASE);
+                    self.st_mut().case_from = None;
+                }
+                self.update_icon(false);
             }
             TIMER_BATTERY => {
                 self.host().set_timer(TIMER_BATTERY, int(T::BatteryCheckMs)); // back to the periodic check
@@ -843,6 +860,8 @@ impl TrayController {
         let Some((pods, in_ear)) = battery::parse_pods(data, model) else { return };
         let now = self.host().now_ms();
         let reading = battery::parse_apple_status(data, model, rssi, self.host().now_epoch_ms());
+        let moved = self.st().pods != Some(pods);
+        let from = self.case_pose_now();
         let (changed, first) = {
             let mut st = self.st_mut();
             let changed = st.pods != Some(pods) || st.pods_in_ear != in_ear;
@@ -863,19 +882,60 @@ impl TrayController {
             log::info(&format!("pods: {}{ear}", pods.name()));
             self.emit(&format!("{{\"type\":\"pods\",\"state\":\"{}\",\"inEar\":{in_ear}}}", pods.name()));
         }
+        if moved {
+            self.start_case_move(from);
+        }
+    }
+
+    /// How far the case icon's move has got (1 = resting).
+    fn case_progress(&self) -> f64 {
+        let (moving, start) = {
+            let st = self.st();
+            (st.case_from.is_some(), st.case_start)
+        };
+        if !moving {
+            return 1.0;
+        }
+        (self.host().now_ms() - start) / (tunables::get(T::CaseAnimSeconds) * 1000.0)
+    }
+
+    /// The pose the case icon shows now.
+    fn case_pose_now(&self) -> Pose {
+        let u = self.case_progress();
+        let st = self.st();
+        let to = case::pose_of(st.pods);
+        match &st.case_from {
+            Some(from) => case::mix(from, &to, u),
+            None => to,
+        }
+    }
+
+    /// The case icon moves from `from` to the pose for the buds' new place.
+    fn start_case_move(&self, from: Pose) {
+        let now = self.host().now_ms();
+        {
+            let mut st = self.st_mut();
+            st.case_from = Some(from);
+            st.case_start = now;
+        }
+        self.host().set_timer(TIMER_CASE, int(T::AnimFrameMs));
+        self.update_icon(false);
     }
 
     /// No advert for `PodsStaleMs`: where the buds are is no longer known.
     fn forget_pods(&self) {
+        if self.st().pods.is_none() {
+            return;
+        }
+        let from = self.case_pose_now();
         {
             let mut st = self.st_mut();
-            if st.pods.take().is_none() {
-                return;
-            }
+            st.pods = None;
             st.pods_reading = None;
         }
         log::info("pods: not heard");
         self.emit("{\"type\":\"pods\",\"state\":null,\"inEar\":false}");
+        self.start_case_move(from);
     }
 
     // ------------------------------------------------------------------ pending animation
@@ -950,14 +1010,32 @@ impl TrayController {
                         return;
                     }
                 }
-                let st = self.st();
-                icon = if !connected {
-                    st.icon_off.clone()
-                } else if low {
-                    st.icon_low.clone()
-                } else {
-                    st.icon_on.clone()
+                let (pods, moving) = {
+                    let st = self.st();
+                    (st.pods, st.case_from.is_some())
                 };
+                if (moving || !case::is_plain(pods)) && icon_size > 0 {
+                    // Where the buds are: a frame of the case icon's move, or its resting pose.
+                    let u = self.case_progress();
+                    if u < 1.0 {
+                        let pose = self.case_pose_now();
+                        let desc = IconDesc::Case { pods, t: round_away(u, 4) };
+                        let img = Rc::new(IconImage::new(case::render(&pose, connected, light, icon_size), icon_size, desc));
+                        icon = Some(img.clone());
+                        anim_icon = Some(img);
+                    } else {
+                        icon = Some(self.resting_case_icon(pods, connected, light, icon_size));
+                    }
+                } else {
+                    let st = self.st();
+                    icon = if !connected {
+                        st.icon_off.clone()
+                    } else if low {
+                        st.icon_low.clone()
+                    } else {
+                        st.icon_on.clone()
+                    };
+                }
             }
         }
         let Some(icon) = icon else { return };
@@ -987,6 +1065,25 @@ impl TrayController {
         if let Some(previous) = previous_frame {
             self.host().release_icon(&previous);
         }
+        let replaced = self.st_mut().case_old.take();
+        if let Some(old) = replaced {
+            self.host().release_icon(&old);
+        }
+    }
+
+    /// The case icon resting on the pose for `pods`, drawn once per (pods, connected, size, theme).
+    /// The one it replaces is released after the new one is shown.
+    fn resting_case_icon(&self, pods: Option<Pods>, connected: bool, light: bool, size: i32) -> Rc<IconImage> {
+        let cached = self.st().case_icon.as_ref().filter(|c| c.0 == pods && c.1 == connected && c.2.size == size).map(|c| c.2.clone());
+        if let Some(img) = cached {
+            return img;
+        }
+        let img = Rc::new(IconImage::new(case::render(&case::pose_of(pods), connected, light, size), size, IconDesc::Case { pods, t: 1.0 }));
+        let old = self.st_mut().case_icon.replace((pods, connected, img.clone()));
+        if let Some(old) = old {
+            self.st_mut().case_old = Some(old.2);
+        }
+        img
     }
 
     fn add_icon(&self) {
@@ -1054,6 +1151,8 @@ impl TrayController {
             let mut st = self.st_mut();
             let old = [st.icon_on.replace(on), st.icon_off.replace(off), st.icon_low.replace(low)];
             st.icon_size = size;
+            // The resting case icon is drawn again too (the theme or size changed).
+            st.case_old = st.case_icon.take().map(|c| c.2);
             old
         };
         if old[0].is_some() {

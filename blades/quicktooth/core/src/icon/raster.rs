@@ -112,6 +112,23 @@ impl Canvas {
         self.fill_polygons(contours, quantize(opacity), xf, Clip::NONE);
     }
 
+    /// Fills closed polygons (nonzero) at `opacity`, inside `clip`.
+    pub fn fill_clipped<C: AsRef<[Pt]>>(&mut self, contours: &[C], opacity: f64, xf: Xf, clip: Clip<'_>) {
+        self.fill_polygons(contours, quantize(opacity), xf, clip);
+    }
+
+    /// Clears this canvas by `amount` where a glyph covers it, inside `clip` (a knock-out).
+    pub fn erase_glyph(&mut self, glyph: &Glyph, amount: f64, xf: Xf, clip: Clip<'_>) {
+        let mut mask = Canvas::new(self.size);
+        for layer in &glyph.layers {
+            mask.fill_polygons(&layer.contours, 1.0, xf, clip);
+        }
+        let amount = quantize(amount);
+        for (a, m) in self.alpha.iter_mut().zip(&mask.alpha) {
+            *a *= 1.0 - min(*m, 1.0) * amount;
+        }
+    }
+
     /// Clears this canvas inside a polygon (a knock-out), anti-aliased at its edge.
     pub fn erase(&mut self, contour: &[Pt], xf: Xf) {
         let mut mask = Canvas::new(self.size);

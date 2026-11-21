@@ -47,6 +47,7 @@ tunables! {
     PodsScanEveryMs = 60000, true;
     PodsScanMs = 6000, true;
     PodsStaleMs = 90000, true;
+    CaseAnimSeconds = 0.52, false;   // the case icon's move from one pose to the next
     // The default low-battery warning: the connected icon gets the orange dot at or below this
     // level (the emptier bud, not while charging). Settings can pick another.
     LowBatteryPercent = 20, true;
