@@ -45,8 +45,27 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{ULW_ALPHA, UpdateLayeredWindow
 
 pub const STRIP_W: f32 = 344.0;
 pub const STRIP_H: f32 = 40.0;
+pub const DEFAULT_TASKBAR_H: f32 = 48.0;
 pub const COVER_SIZE: f32 = 40.0;
 pub const CORNER_R: f32 = 4.0;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct WindowMetrics {
+    pub win_w: i32,
+    pub win_h: i32,
+    pub pad: i32,
+}
+
+/// Computes the layered window size (flush to taskbar left/top/bottom) and the equal left/top
+/// padding that keeps the 344×40 strip content centered at the same taskbar position.
+pub fn window_metrics(dpi: u32, taskbar_h_px: i32) -> WindowMetrics {
+    let scale = (dpi.max(96) as f32) / 96.0;
+    let strip_w = (STRIP_W * scale + 0.5) as i32;
+    let strip_h = (STRIP_H * scale + 0.5) as i32;
+    let win_h = taskbar_h_px.max(strip_h);
+    let pad = ((win_h - strip_h) / 2).max(0);
+    WindowMetrics { win_w: pad + strip_w, win_h, pad }
+}
 /// The app icon before the title, in DIPs.
 const APP_ICON_SIZE: f32 = 13.0;
 /// Scrubber accent when neither the cover nor the app icon gives one.
@@ -101,6 +120,10 @@ pub struct Renderer {
     dib_bits: *mut u8,
     px_w: i32,
     px_h: i32,
+    pad_px: i32,
+    win_w_dip: f32,
+    win_h_dip: f32,
+    pad_dip: f32,
     dpi: f32,
     art_version: u64,
     art_bmp: Option<ID2D1Bitmap>,
@@ -199,6 +222,10 @@ impl Renderer {
             dib_bits: null_mut(),
             px_w: 0,
             px_h: 0,
+            pad_px: 0,
+            win_w_dip: STRIP_W,
+            win_h_dip: STRIP_H,
+            pad_dip: 0.0,
             dpi: 96.0,
             art_version: u64::MAX,
             art_bmp: None,
@@ -209,24 +236,34 @@ impl Renderer {
             time_slot_key: (false, 0, 0),
             time_slot_w: 54.0,
         };
-        r.set_dpi(dpi);
+        let scale = (dpi.max(96) as f32) / 96.0;
+        let default_tb_h = (DEFAULT_TASKBAR_H * scale + 0.5) as i32;
+        r.set_layout(dpi, window_metrics(dpi, default_tb_h));
         Some(r)
     }
 
-    pub fn set_dpi(&mut self, dpi: u32) {
+    pub fn set_layout(&mut self, dpi: u32, m: WindowMetrics) {
         let dpi_f = (dpi.max(96)) as f32;
         let scale = dpi_f / 96.0;
-        let pw = ((STRIP_W * scale) + 0.5) as i32;
-        let ph = ((STRIP_H * scale) + 0.5) as i32;
-        if pw == self.px_w && ph == self.px_h && (dpi_f - self.dpi).abs() < 0.1 {
+        let dpi_changed = (dpi_f - self.dpi).abs() >= 0.1;
+        let size_changed = m.win_w != self.px_w || m.win_h != self.px_h;
+        self.pad_px = m.pad;
+        self.pad_dip = (m.pad as f32) / scale;
+        self.win_w_dip = (m.win_w as f32) / scale;
+        self.win_h_dip = (m.win_h as f32) / scale;
+        if !size_changed && !dpi_changed {
             return;
         }
         self.dpi = dpi_f;
-        self.recreate_dib(pw, ph);
+        if size_changed {
+            self.recreate_dib(m.win_w, m.win_h);
+        }
         unsafe { self.rt.SetDpi(dpi_f, dpi_f) };
-        // Force cover re-decode at the new DPI pixel size
-        self.art_version = u64::MAX;
-        self.time_slot_key = (false, 0, 0);
+        if dpi_changed {
+            // Force cover re-decode at the new DPI pixel size
+            self.art_version = u64::MAX;
+            self.time_slot_key = (false, 0, 0);
+        }
     }
 
     /// Logical DIP bounds of the progress bar for `media`, leaving the exact room needed by the
@@ -419,11 +456,11 @@ impl Renderer {
         }
         self.paint_internal(state);
 
-        // Composite onto a realistic 48-DIP dark Win11 taskbar strip with 4-DIP equal L/T/B padding
-        let scale = self.dpi / 96.0;
-        let pad = (4.0 * scale + 0.5) as usize;
-        let out_w = self.px_w as usize + pad * 2;
-        let out_h = self.px_h as usize + pad * 2;
+        // Composite onto a realistic 48-DIP dark Win11 taskbar strip (DIB already spans full
+        // taskbar height and left edge; add a small right margin to show the taskbar edge).
+        let right_extra = self.pad_px.max(0) as usize;
+        let out_w = self.px_w as usize + right_extra;
+        let out_h = self.px_h as usize;
         let mut out = vec![0u8; out_w * out_h * 4];
 
         for y in 0..out_h {
@@ -448,7 +485,7 @@ impl Renderer {
         for y in 0..(self.px_h as usize) {
             for x in 0..(self.px_w as usize) {
                 let si = (y * (self.px_w as usize) + x) * 4;
-                let di = ((y + pad) * out_w + (x + pad)) * 4;
+                let di = (y * out_w + x) * 4;
                 let sa = src[si + 3] as u32;
                 let inv = 255 - sa;
                 // Source is premultiplied BGRA
@@ -470,15 +507,29 @@ impl Renderer {
             return;
         }
 
+        // Win32 UpdateLayeredWindow passes mouse events through alpha == 0 pixels. Keep a
+        // visually transparent 1/255 alpha floor so the full taskbar-flush hover area catches
+        // pointer entry even at rest.
+        let hit_clear = if state.light_taskbar {
+            D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 1.0 / 255.0 }
+        } else {
+            D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 1.0 / 255.0 }
+        };
+
         unsafe {
             self.rt.BeginDraw();
-            // Clear to fully transparent (alpha = 0.0) for C1 Pure Clear
-            self.rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            self.rt.SetTransform(&Matrix3x2::identity());
+            self.rt.Clear(Some(&hit_clear));
         }
 
-        // 1. Native Windows 11 Fluent animated hover plate (CornerRadius=4, top-lit elevation gradient border)
+        // 1. Native Windows 11 Fluent animated hover plate (flush to taskbar edges, no padding)
         if state.strip_hover_alpha > 0.005 {
             self.draw_win11_hover_plate(state.light_taskbar, state.strip_hover_alpha);
+        }
+
+        // Shift content by the taskbar padding so the actual layout stays in the exact same place
+        unsafe {
+            self.rt.SetTransform(&Matrix3x2::translation(self.pad_dip, self.pad_dip));
         }
 
         // 2. Full-size 40x40 flush album cover (or fallback synthwave/vinyl art)
@@ -490,12 +541,17 @@ impl Renderer {
         // 4. Row 2: P1 Spotify hover-reveal zero-jump progress bar + tabular cur / dur
         self.draw_row_bottom(state);
 
+        unsafe {
+            self.rt.SetTransform(&Matrix3x2::identity());
+        }
         let _ = unsafe { self.rt.EndDraw(None, None) };
     }
 
     fn draw_win11_hover_plate(&self, light: bool, alpha: f32) {
+        let w = self.win_w_dip;
+        let h = self.win_h_dip;
         let rr = D2D1_ROUNDED_RECT {
-            rect: D2D_RECT_F { left: 0.5, top: 0.5, right: STRIP_W - 0.5, bottom: STRIP_H - 0.5 },
+            rect: D2D_RECT_F { left: 0.5, top: 0.5, right: w - 0.5, bottom: h - 0.5 },
             radiusX: CORNER_R,
             radiusY: CORNER_R,
         };
@@ -524,7 +580,7 @@ impl Renderer {
         if let Ok(sc) = unsafe { self.rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) } {
             let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES {
                 startPoint: Vector2::new(0.0, 0.0),
-                endPoint: Vector2::new(0.0, STRIP_H),
+                endPoint: Vector2::new(0.0, h),
             };
             if let Ok(gb) = unsafe { self.rt.CreateLinearGradientBrush(&props, None, &sc) } {
                 unsafe { self.rt.DrawRoundedRectangle(&rr, &gb, 1.0, None) };

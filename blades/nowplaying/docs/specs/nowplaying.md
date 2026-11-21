@@ -4,12 +4,16 @@ What it does now. Keep it current in the same change, and lean.
 
 ## Look and layout
 
-- **C1 Pure Clear**, `344 × 40` DIPs, rendered with Direct2D + DirectWrite + WIC into a
-  premultiplied 32-bit BGRA layered window (`UpdateLayeredWindow`, grayscale text AA).
-- **Docking**: equal padding on left, top, and bottom of the taskbar (`equal_pad = (tb_h - 40) / 2`,
-  4 px on a standard 48 px taskbar). Always at the left end of the main taskbar.
+- **C1 Pure Clear**, `344 × 40` DIP content layout rendered with Direct2D + DirectWrite + WIC into
+  a premultiplied 32-bit BGRA layered window (`UpdateLayeredWindow`, grayscale text AA).
+- **Docking**: always at the left end of the main taskbar. The layered window sits flush against
+  the taskbar's left, top, and bottom edges (full taskbar height, width `equal_pad + 344` DIPs),
+  while the `344 × 40` content layout inside keeps equal left, top, and bottom padding
+  (`equal_pad = (tb_h - 40) / 2`, 4 px on a standard 48 px taskbar).
 - **Hover plate**: native Windows 11 Fluent tile (`CornerRadius = 4`, lifted translucent fill,
-  top-lit vertical gradient elevation border, `85 ms` ease-out in, `167 ms` ease-out out).
+  top-lit vertical gradient elevation border, `85 ms` ease-out in, `167 ms` ease-out out) filling
+  the full taskbar-flush hover area with no taskbar padding. A `1/255` alpha floor keeps the whole
+  area hit-testable at rest while remaining visually clear.
 - **Cover**: `40 × 40` flush on the left (`CornerRadius = 4`, WIC Fant scaling at native DPI, 1 px
   subtle rim). Dominant saturated color is extracted from the cover (or, without one, the app
   icon) for the hover scrub accent.

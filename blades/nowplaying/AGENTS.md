@@ -13,8 +13,9 @@ commands here and in this blade's `docs/` are from `blades/nowplaying/`.
   WIC through the workspace's `windows` crate (no hand-written vtables), plain Win32 through
   `windows-sys`. No new crates without the user's say.
 - **Zero-flicker taskbar docking**: the layered window is owned by `Shell_TrayWnd`
-  (`GWLP_HWNDPARENT`), uses `WS_EX_NOACTIVATE` + `MA_NOACTIVATE` on left-clicks, and uses equal
-  left/top/bottom padding (`(tb_height - 40) / 2`) with a flush `40×40` cover.
+  (`GWLP_HWNDPARENT`), uses `WS_EX_NOACTIVATE` + `MA_NOACTIVATE` on left-clicks, and sits flush to
+  the taskbar's left/top/bottom edges for the hover area while the `344×40` strip content keeps
+  equal left/top/bottom padding (`(tb_height - 40) / 2`) with a flush `40×40` cover.
 - **Zero-jump scrubbing**: the progress bar track stays a fixed `4 px` centered inside its `14 px`
   hit area; hover/drag only animates color, ghost fill and knob opacity/scale.
 - **Budget**: one exe under 0.5 MB importing only Windows DLLs; idle CPU 0% when paused/hidden
