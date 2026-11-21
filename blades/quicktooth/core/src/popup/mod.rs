@@ -89,8 +89,6 @@ const GAUGE_Y: f64 = 83.0;
 const GAUGE_W: f64 = 16.0;
 const GAUGE_H: f64 = 10.0;
 const TEXT_SIZE: f64 = 12.0;
-/// Where the buds out of the case stand (their middles), and the levels under them.
-const SIDE_X: f64 = 40.0;
 
 /// The layers, in drawing order: the line art, the green and orange levels, then the bolts.
 struct Layers {
@@ -121,7 +119,12 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
     // out); a bud that's out stands beside it.
     let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
     let mut paint = Painter { bgra: &mut bgra, canvas: Canvas::rect(w, h), connected: info.connected, light: info.light, led: pose.led };
-    let case = Place::art(CASE_BOUNDS, CASE_W, MID - CASE_W / 2.0, PIC_Y + 4.0 + pose.drop, scale);
+    // How far each bud is out (0 seated, 1 standing beside the case), eased: what the layout follows.
+    let (gl, gr) = (smoothstep(0.35, 1.0, pose.left.0), smoothstep(0.35, 1.0, pose.right.0));
+    // The case is centred while both buds are in; as a bud comes out it slides to the right and the
+    // buds stand on the left.
+    let case_x = lerp(MID, CASE_SIDE_X, gl.max(gr));
+    let case = Place::art(CASE_BOUNDS, CASE_W, case_x - CASE_W / 2.0, PIC_Y + 4.0 + pose.drop, scale);
     // The lid drawing nearest the lid's angle, and where it cuts off seated buds (case units).
     let (back, front, lid_edge) = match pose.lid {
         a if a < 14.0 => (None, CASE_CLOSED, None),
@@ -139,7 +142,7 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
         let travel = smoothstep(0.35, 1.0, u);
         let seated_h = case.k * SEAT_SCALE * (b.3 - b.1);
         let (sx, sy) = (case.at_x(if left { SEAT_X.0 } else { SEAT_X.1 }), case.at_y(SEAT_Y));
-        let out_x = if left { SIDE_X } else { WIDTH - SIDE_X };
+        let out_x = if left { BUD_OUT_X.0 } else { BUD_OUT_X.1 };
         let h = lerp(seated_h, OUT_H, travel);
         let bw = h * aspect;
         let cx = lerp(sx + seated_h * aspect / 2.0, out_x, travel);
@@ -172,11 +175,10 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
     // as a bud comes out its level glides out under it, and the one still in the case is labelled
     // L or R beside the case's; with both out, the case's level moves to the middle. Each level's
     // place is set for the four states and blended by how far each bud is out.
-    let (gl, gr) = (smoothstep(0.35, 1.0, pose.left.0), smoothstep(0.35, 1.0, pose.right.0));
     let blend = |[both_in, left_out, right_out, both_out]: [f64; 4]| {
         both_in * (1.0 - gl) * (1.0 - gr) + left_out * gl * (1.0 - gr) + right_out * (1.0 - gl) * gr + both_out * gl * gr
     };
-    let (xl, xr, xc) = (blend(LEVEL_X_LEFT), blend(LEVEL_X_RIGHT), blend(LEVEL_X_CASE));
+    let (xl, xr) = (blend(LEVEL_X_LEFT), blend(LEVEL_X_RIGHT));
     let mut level = |x: f64, value: Option<(i32, bool)>, label: Option<&str>| {
         gauge(&mut l, xf, x, GAUGE_Y, value, info.low_warning);
         let color = match value {
@@ -192,8 +194,7 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
             text(x - 5.0, baseline, label, false, Align::Right, c.label);
         }
     };
-    let any_in = 1.0 - gl.min(gr);
-    level(xc, info.case, (any_in > 0.5).then_some("Case"));
+    level(blend(LEVEL_X_CASE), info.case, Some("Case"));
     if gl < 0.15 && gr < 0.15 {
         let buds = match (info.left, info.right) {
             (Some(a), Some(b)) => Some((a.0.min(b.0), a.1 || b.1)),
@@ -201,8 +202,9 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
         };
         level(xl, buds, Some("Buds"));
     } else {
-        level(xl, info.left, (gl < 0.5).then_some("L"));
-        level(xr, info.right, (gr < 0.5).then_some("R"));
+        // The bud still in the case says which it is; one that's out stands over its level.
+        level(xl, info.left, (gl < 0.5 && gr >= 0.5).then_some("L"));
+        level(xr, info.right, (gr < 0.5 && gl >= 0.5).then_some("R"));
     }
 
     for (layer, color) in [(&l.ink, c.ink), (&l.ok, c.ok), (&l.warn, c.warn), (&l.top, c.ink)] {
@@ -241,11 +243,16 @@ const CASE_LID_30: &str = include_str!("../../../assets/header-case-lid-30-back.
 const CASE_LID_54: &str = include_str!("../../../assets/header-case-lid-54-back.svg");
 const CASE_LID_78: &str = include_str!("../../../assets/header-case-lid-78-back.svg");
 const LID_30_EDGE: f64 = 56.8;
-/// Where each level's gauge sits (x, header px) with both buds in, the left out, the right out and
-/// both out; spaced so labels and numbers never meet.
-const LEVEL_X_LEFT: [f64; 4] = [66.0, 16.0, 26.0, 16.0];
-const LEVEL_X_RIGHT: [f64; 4] = [66.0, 82.0, 172.0, 172.0];
-const LEVEL_X_CASE: [f64; 4] = [152.0, 168.0, 114.0, 94.0];
+/// Where each bud's level's gauge sits (x, header px) with both buds in, the left out, the right out
+/// and both out, and the case's; spaced so labels and numbers never meet.
+const LEVEL_X_LEFT: [f64; 4] = [66.0, 12.0, 12.0, 12.0];
+const LEVEL_X_RIGHT: [f64; 4] = [66.0, 75.0, 75.0, 75.0];
+// Once the case is on the right, its "Case" level is centred under it (the label, gauge and
+// number span 31 px left of the gauge to 47 px right of it).
+const LEVEL_X_CASE: [f64; 4] = [152.0, CASE_SIDE_X - 8.0, CASE_SIDE_X - 8.0, CASE_SIDE_X - 8.0];
+/// Where the case's middle goes once a bud is out, and where each bud stands then (header px).
+const CASE_SIDE_X: f64 = 172.0;
+const BUD_OUT_X: (f64, f64) = (36.0, 94.0);
 /// The faded case: how far it sinks, how tall its fading bottom is (header px), in how many steps.
 const FADE_SINK: f64 = 8.0;
 const FADE_HEIGHT: f64 = 14.0;
@@ -467,10 +474,10 @@ mod tests {
         let hd = header(&info(Pods::OneOut { left: true }, true, false), 1.0);
         let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
         assert_eq!(t, ["AirPods Pro", "\u{2014}", "Case", "80%", "20%", "R"]);
-        // Both out: no labels.
+        // Both out: the buds' levels under them, unlabelled; the case's still says so.
         let hd = header(&info(Pods::Out, true, false), 1.0);
         let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
-        assert_eq!(t, ["AirPods Pro", "\u{2014}", "80%", "20%"]);
+        assert_eq!(t, ["AirPods Pro", "\u{2014}", "Case", "80%", "20%"]);
         assert_eq!(&hd.bgra[..4], &[0x2C, 0x2C, 0x2C, 0xFF]);
         assert_eq!(header(&info(Pods::Open, true, true), 1.0).background, 0xF9F9F9);
     }
