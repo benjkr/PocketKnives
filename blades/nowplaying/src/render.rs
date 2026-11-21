@@ -15,18 +15,18 @@ use windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_ELLIPSE,
-    D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT,
+    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_DRAW_TEXT_OPTIONS_NONE,
+    D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2,
+    D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT,
     D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1Bitmap, ID2D1DCRenderTarget, ID2D1Factory, ID2D1PathGeometry,
     ID2D1RoundedRectangleGeometry,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FEATURE, DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, DWRITE_FONT_STRETCH_NORMAL,
     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_SEMI_BOLD,
-    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TEXT_RANGE,
-    DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, IDWriteFactory,
-    IDWriteTextFormat,
+    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TEXT_METRICS,
+    DWRITE_TEXT_RANGE, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory,
+    IDWriteFactory, IDWriteTextFormat,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Gdi::HDC as WinHdc;
@@ -56,8 +56,12 @@ const DEFAULT_ACCENT: D2D1_COLOR_F = D2D1_COLOR_F { r: 1.0, g: 107.0 / 255.0, b:
 pub const PREV_RECT: (f32, f32, f32, f32) = (277.0, 3.0, 296.0, 21.0);
 pub const PLAY_RECT: (f32, f32, f32, f32) = (297.0, 3.0, 316.0, 21.0);
 pub const NEXT_RECT: (f32, f32, f32, f32) = (317.0, 3.0, 336.0, 21.0);
-pub const SCRUB_RECT: (f32, f32, f32, f32) = (48.0, 24.0, 276.0, 38.0);
 pub const EQ_RECT: (f32, f32, f32, f32) = (253.0, 4.0, 273.0, 20.0);
+const SCRUB_LEFT: f32 = 48.0;
+const SCRUB_TOP: f32 = 24.0;
+const SCRUB_BOTTOM: f32 = 38.0;
+const TIME_RIGHT: f32 = STRIP_W - 8.0;
+const TIME_GAP: f32 = 8.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum HoverTarget {
@@ -105,6 +109,9 @@ pub struct Renderer {
     icon_key: (alloc::string::String, u32),
     icon_bmp: Option<ID2D1Bitmap>,
     icon_accent: Option<D2D1_COLOR_F>,
+    /// Cached `(is_live, cur_min_digits, dur_min_digits)` and measured width of the worst-case time label.
+    time_slot_key: (bool, u32, u32),
+    time_slot_w: f32,
 }
 
 impl Renderer {
@@ -199,6 +206,8 @@ impl Renderer {
             icon_key: (alloc::string::String::new(), 0),
             icon_bmp: None,
             icon_accent: None,
+            time_slot_key: (false, 0, 0),
+            time_slot_w: 54.0,
         };
         r.set_dpi(dpi);
         Some(r)
@@ -217,6 +226,65 @@ impl Renderer {
         unsafe { self.rt.SetDpi(dpi_f, dpi_f) };
         // Force cover re-decode at the new DPI pixel size
         self.art_version = u64::MAX;
+        self.time_slot_key = (false, 0, 0);
+    }
+
+    /// Logical DIP bounds of the progress bar for `media`, leaving the exact room needed by the
+    /// track's widest bold `cur / dur` readout so timestamps never clip and scrubbing never jumps.
+    pub fn scrub_rect(&mut self, media: &MediaSnapshot) -> (f32, f32, f32, f32) {
+        let dur = media.duration_sec();
+        let is_live = dur <= 0.0 && media.active && media.playing;
+        let cur = media.live_position_sec();
+        let time_w = self.time_slot_width(is_live, dur, cur);
+        let right = (TIME_RIGHT - time_w - TIME_GAP).max(SCRUB_LEFT + 40.0);
+        (SCRUB_LEFT, SCRUB_TOP, right, SCRUB_BOTTOM)
+    }
+
+    fn time_slot_width(&mut self, is_live: bool, dur: f64, cur: f64) -> f32 {
+        let key = if is_live {
+            (true, 0, 0)
+        } else {
+            (false, minute_digits(dur.max(cur)), minute_digits(dur))
+        };
+        if key == self.time_slot_key {
+            return self.time_slot_w;
+        }
+
+        let (sample, bold_len) = if is_live {
+            (alloc::string::String::from("LIVE"), 4u32)
+        } else {
+            let mut s = alloc::string::String::with_capacity((key.1 + key.2 + 9) as usize);
+            for _ in 0..key.1 {
+                s.push('8');
+            }
+            s.push_str(":88");
+            let bold_len = s.len() as u32;
+            s.push_str(" / ");
+            for _ in 0..key.2 {
+                s.push('8');
+            }
+            s.push_str(":88");
+            (s, bold_len)
+        };
+        let wide: Vec<u16> = sample.encode_utf16().collect();
+        let measured = (|| -> Option<f32> {
+            let layout = unsafe { self.dwrite.CreateTextLayout(&wide, &self.fmt_time, 200.0, 14.0) }.ok()?;
+            if let Ok(typo) = unsafe { self.dwrite.CreateTypography() } {
+                let _ = unsafe {
+                    typo.AddFontFeature(DWRITE_FONT_FEATURE { nameTag: DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, parameter: 1 })
+                };
+                let _ = unsafe { layout.SetTypography(&typo, DWRITE_TEXT_RANGE { startPosition: 0, length: wide.len() as u32 }) };
+            }
+            let _ = unsafe { layout.SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, DWRITE_TEXT_RANGE { startPosition: 0, length: bold_len }) };
+            let mut metrics = DWRITE_TEXT_METRICS::default();
+            unsafe { layout.GetMetrics(&mut metrics) }.ok()?;
+            let w = metrics.widthIncludingTrailingWhitespace.max(metrics.width);
+            Some((libm::ceilf(w) + 3.0).clamp(28.0, 120.0))
+        })();
+
+        self.time_slot_key = key;
+        self.time_slot_w = measured.unwrap_or(62.0);
+        self.time_slot_w
     }
 
     fn recreate_dib(&mut self, w: i32, h: i32) {
@@ -647,8 +715,8 @@ impl Renderer {
         }
     }
 
-    fn draw_row_bottom(&self, state: &FrameState) {
-        let (sl, st, sr, sb) = SCRUB_RECT;
+    fn draw_row_bottom(&mut self, state: &FrameState) {
+        let (sl, st, sr, sb) = self.scrub_rect(state.media);
         let cy = (st + sb) * 0.5; // exact integer 31.0 inside 24..38 -> ZERO vertical jump!
         let track_h = 4.0f32;
         let track_top = cy - track_h * 0.5;
@@ -748,8 +816,8 @@ impl Renderer {
         };
         let wide: Vec<u16> = time_text.encode_utf16().collect();
 
-        let time_left = sr + 6.0;
-        let time_w = (STRIP_W - 8.0 - time_left).max(46.0);
+        let time_left = sr + TIME_GAP;
+        let time_w = (TIME_RIGHT - time_left).max(28.0);
         if let Ok(layout) = unsafe { self.dwrite.CreateTextLayout(&wide, &self.fmt_time, time_w, 14.0) } {
             if let Ok(typo) = unsafe { self.dwrite.CreateTypography() } {
                 let _ = unsafe {
@@ -780,7 +848,7 @@ impl Renderer {
             }
             if let Ok(cur_b) = unsafe { self.rt.CreateSolidColorBrush(&cur_col, None) } {
                 unsafe {
-                    self.rt.DrawTextLayout(Vector2::new(time_left, st), &layout, &cur_b, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    self.rt.DrawTextLayout(Vector2::new(time_left, st), &layout, &cur_b, D2D1_DRAW_TEXT_OPTIONS_NONE);
                 }
             }
         }
@@ -873,6 +941,16 @@ fn lerp_color(a: D2D1_COLOR_F, b: D2D1_COLOR_F, t: f32) -> D2D1_COLOR_F {
 fn fmt_time(sec: f64) -> alloc::string::String {
     let s = if sec.is_finite() && sec > 0.0 { sec as u64 } else { 0 };
     format!("{}:{:02}", s / 60, s % 60)
+}
+
+fn minute_digits(sec: f64) -> u32 {
+    let mut mins = if sec.is_finite() && sec > 0.0 { (sec as u64) / 60 } else { 0 };
+    let mut digits = 1u32;
+    while mins >= 10 {
+        mins /= 10;
+        digits += 1;
+    }
+    digits
 }
 
 fn make_polygon(d2d: &ID2D1Factory, pts: &[(f32, f32)]) -> Option<ID2D1PathGeometry> {
