@@ -60,10 +60,13 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 - While the buds' place is known, the status line is a picture instead (its text stays the item's
   text; `core/src/popup`) on the menu's own background (dark or light, with the taskbar): the
   device name centred; the case, open with the buds seated in it while a bud is in it, closed when
-  both are in, closed, faint (35 %) and sunk a little with its bottom fading out in steps when both are out, a bud that's out standing beside it; under the
-  left bud, the case and the right bud a Fluent battery gauge and its level from the last advert
-  (or the connected reading): green with a bolt while charging, orange at or below the
-  low-battery warning, "—" when unknown. The pictures are shaded white AirPods
+  both are in, closed, faint (35 %) and sunk a little with its bottom fading out in steps when
+  both are out; a bud that's out standing beside it. Below, Fluent battery gauges with their
+  levels from the last advert (or the connected reading): with both buds in the case, "Buds" (the
+  emptier, a bolt while either charges) and "Case"; a bud that's out has its level under it, and
+  the one still in the case is labelled L or R beside "Case"; with both out, the case's level is
+  in the middle. The levels glide between these places as the buds move. Green with a bolt while
+  charging, orange at or below the low-battery warning, "—" when unknown. The pictures are shaded white AirPods
   (`assets/header-*.svg`, [icon](icon-and-animation.md)), all grey when not connected.
   236 × 102 px at 100 %. The exe makes it a bitmap item (the core's pixels with Segoe UI text by
   GDI), enabled so Windows doesn't dim it (picking it does nothing): an owner-drawn item would

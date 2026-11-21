@@ -70,14 +70,16 @@ pub struct Header {
 struct Palette {
     bg: u32,
     text: u32,
+    /// A level's label (Buds, Case, L, R).
+    label: u32,
     disabled: u32,
     ink: u32,
     ok: u32,
     warn: u32,
 }
 
-const DARK: Palette = Palette { bg: 0x2C2C2C, text: 0xFFFFFF, disabled: 0x6D6D6D, ink: 0xF2F2F2, ok: 0x6CCB5F, warn: 0xFFA348 };
-const LIGHT: Palette = Palette { bg: 0xF9F9F9, text: 0x000000, disabled: 0x9F9F9F, ink: 0x282828, ok: 0x0F7B0F, warn: 0xC2500A };
+const DARK: Palette = Palette { bg: 0x2C2C2C, text: 0xFFFFFF, label: 0xD2D2D2, disabled: 0x6D6D6D, ink: 0xF2F2F2, ok: 0x6CCB5F, warn: 0xFFA348 };
+const LIGHT: Palette = Palette { bg: 0xF9F9F9, text: 0x000000, label: 0x5F5F5F, disabled: 0x9F9F9F, ink: 0x282828, ok: 0x0F7B0F, warn: 0xC2500A };
 
 const WIDTH: f64 = 236.0;
 const HEIGHT: f64 = 102.0;
@@ -166,18 +168,41 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
         }
     }
 
-    // A gauge and its level under each: left, the case, right.
-    for (cx, level) in [(SIDE_X, info.left), (MID, info.case), (WIDTH - SIDE_X, info.right)] {
-        let gx = cx - 24.0;
-        gauge(&mut l, xf, gx, GAUGE_Y, level, info.low_warning);
-        let color = match level {
+    // The levels: with both buds in the case one "Buds" level (the emptier) beside the case's;
+    // as a bud comes out its level glides out under it, and the one still in the case is labelled
+    // L or R beside the case's; with both out, the case's level moves to the middle. Each level's
+    // place is set for the four states and blended by how far each bud is out.
+    let (gl, gr) = (smoothstep(0.35, 1.0, pose.left.0), smoothstep(0.35, 1.0, pose.right.0));
+    let blend = |[both_in, left_out, right_out, both_out]: [f64; 4]| {
+        both_in * (1.0 - gl) * (1.0 - gr) + left_out * gl * (1.0 - gr) + right_out * (1.0 - gl) * gr + both_out * gl * gr
+    };
+    let (xl, xr, xc) = (blend(LEVEL_X_LEFT), blend(LEVEL_X_RIGHT), blend(LEVEL_X_CASE));
+    let mut level = |x: f64, value: Option<(i32, bool)>, label: Option<&str>| {
+        gauge(&mut l, xf, x, GAUGE_Y, value, info.low_warning);
+        let color = match value {
             None => c.disabled,
             Some((p, _)) if p <= info.low_warning => c.warn,
             _ => c.text,
         };
-        let pct = level.map_or_else(|| String::from("\u{2014}"), |(p, _)| alloc::format!("{p}%"));
+        let pct = value.map_or_else(|| String::from("\u{2014}"), |(p, _)| alloc::format!("{p}%"));
         // Digits centred on the gauge: the baseline a pixel above its bottom.
-        text(gx + GAUGE_W + 7.0, GAUGE_Y + GAUGE_H - 1.0, &pct, false, Align::Left, color);
+        let baseline = GAUGE_Y + GAUGE_H - 1.0;
+        text(x + GAUGE_W + 7.0, baseline, &pct, false, Align::Left, color);
+        if let Some(label) = label {
+            text(x - 5.0, baseline, label, false, Align::Right, c.label);
+        }
+    };
+    let any_in = 1.0 - gl.min(gr);
+    level(xc, info.case, (any_in > 0.5).then_some("Case"));
+    if gl < 0.15 && gr < 0.15 {
+        let buds = match (info.left, info.right) {
+            (Some(a), Some(b)) => Some((a.0.min(b.0), a.1 || b.1)),
+            (a, b) => a.or(b),
+        };
+        level(xl, buds, Some("Buds"));
+    } else {
+        level(xl, info.left, (gl < 0.5).then_some("L"));
+        level(xr, info.right, (gr < 0.5).then_some("R"));
     }
 
     for (layer, color) in [(&l.ink, c.ink), (&l.ok, c.ok), (&l.warn, c.warn), (&l.top, c.ink)] {
@@ -216,6 +241,11 @@ const CASE_LID_30: &str = include_str!("../../../assets/header-case-lid-30-back.
 const CASE_LID_54: &str = include_str!("../../../assets/header-case-lid-54-back.svg");
 const CASE_LID_78: &str = include_str!("../../../assets/header-case-lid-78-back.svg");
 const LID_30_EDGE: f64 = 56.8;
+/// Where each level's gauge sits (x, header px) with both buds in, the left out, the right out and
+/// both out; spaced so labels and numbers never meet.
+const LEVEL_X_LEFT: [f64; 4] = [66.0, 16.0, 26.0, 16.0];
+const LEVEL_X_RIGHT: [f64; 4] = [66.0, 82.0, 172.0, 172.0];
+const LEVEL_X_CASE: [f64; 4] = [152.0, 168.0, 114.0, 94.0];
 /// The faded case: how far it sinks, how tall its fading bottom is (header px), in how many steps.
 const FADE_SINK: f64 = 8.0;
 const FADE_HEIGHT: f64 = 14.0;
@@ -430,8 +460,17 @@ mod tests {
         }
         let hd = header(&info(Pods::Open, true, false), 1.0);
         let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
-        assert_eq!(t, ["AirPods Pro", "80%", "\u{2014}", "20%"]);
-        assert_eq!((hd.texts[2].color, hd.texts[3].color), (DARK.disabled, DARK.warn));
+        // Both in: the case's level and one for the buds (the emptier, so it warns).
+        assert_eq!(t, ["AirPods Pro", "\u{2014}", "Case", "20%", "Buds"]);
+        assert_eq!((hd.texts[1].color, hd.texts[3].color, hd.texts[4].color), (DARK.disabled, DARK.warn, DARK.label));
+        // The left out: its level alone under it; the right, still in, labelled beside the case's.
+        let hd = header(&info(Pods::OneOut { left: true }, true, false), 1.0);
+        let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(t, ["AirPods Pro", "\u{2014}", "Case", "80%", "20%", "R"]);
+        // Both out: no labels.
+        let hd = header(&info(Pods::Out, true, false), 1.0);
+        let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(t, ["AirPods Pro", "\u{2014}", "80%", "20%"]);
         assert_eq!(&hd.bgra[..4], &[0x2C, 0x2C, 0x2C, 0xFF]);
         assert_eq!(header(&info(Pods::Open, true, true), 1.0).background, 0xF9F9F9);
     }

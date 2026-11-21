@@ -26,9 +26,9 @@
     { "wait": 3000 },
     { "shot": "back-closed" },
     { "wait": 6000 },
-    { "expect": { "shell.menuHeaderFrames": 75 } },
+    { "expect": { "shell.menuHeaderFrames": 76 } },
     { "wait": 2000 },
-    { "expect": { "shell.menuHeaderFrames": 75 }, "label": "still: no more redraws" },
+    { "expect": { "shell.menuHeaderFrames": 76 }, "label": "still: no more redraws" },
     { "key": "Escape" },
     { "expect": { "shell.menu": null } }
   ]
