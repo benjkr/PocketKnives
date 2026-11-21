@@ -73,6 +73,7 @@ fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
         "--exit" => Ok(exit_tray(out)),
         "--autostart" => Ok(autostart(out, args.get(1).map_or("status", String::as_str))),
         "--render-icons" => render_icons(out, args),
+        "--preview-menu" => Ok(crate::menu_preview::run(arg(args, 1)?, has("--animate"))),
         "--write-setting-pictures" => write_setting_pictures(out, arg(args, 1)?),
         "--icon-rect" => Ok(icon_rect(out)),
         "--probe" => probe(out, arg(args, 1)?),
@@ -88,6 +89,7 @@ fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
         }
         "--stress-enumerate" => Ok(stress_enumerate(out, parse_int(arg(args, 1)?)?)),
         "--watch-endpoints" => watch_endpoints(out, parse_int(arg(args, 1)?)?),
+        "--watch-pods" => Ok(watch_pods(out, parse_int(arg(args, 1)?)?)),
         "--selftest-icons" => {
             let cycles = if args.len() > 1 { parse_int(&args[1])? } else { 200 };
             Ok(selftest::icons(out, cycles))
@@ -251,6 +253,42 @@ fn battery_cmd(out: &mut Writer) -> u32 {
         Some(r) => wl!(out, "Battery: {}   [{}]", r.text().unwrap_or_default(), r.describe()),
     }
     wl!(out, "Scan: {} Bluetooth LE adverts heard, {} from Apple devices, {} handler errors.", scan.adverts, scan.apple, scan.errors);
+    0
+}
+
+/// Read-only: runs the tray's advert watch for `seconds` and prints each change of where the
+/// target's buds are, as the tray reads it.
+fn watch_pods(out: &mut Writer, seconds: i32) -> u32 {
+    let worker = Worker::start();
+    let snap = worker.call(|a: &mut Audio| a.enumerate(false, false));
+    let mut settings = files::load_settings();
+    let Some(model) = settings.resolve_or_default(&snap.devices, false).as_ref().and_then(battery::model_of) else {
+        wl!(out, "No Apple target device.");
+        return 3;
+    };
+    wl!(out, "Watching status adverts (model 0x{model:04X}) for {seconds} s\u{2026}");
+    let clock = Stopwatch::start();
+    type Heard = (u32, Vec<String>, Option<(battery::Pods, bool)>);
+    let heard: Arc<pk::sync::Mutex<Heard>> = Arc::new(pk::sync::Mutex::new((0, Vec::new(), None)));
+    let h = heard.clone();
+    let watch = ble::watch(model, move |data, rssi| {
+        let Some(now) = battery::parse_pods(&data, model) else { return };
+        let mut h = h.lock();
+        h.0 += 1;
+        if h.2 != Some(now) {
+            h.2 = Some(now);
+            let hex: Vec<String> = data.iter().map(|b| format!("{b:02X}")).collect();
+            let ear = if now.1 { ", in an ear" } else { "" };
+            h.1.push(format!("{:>8} ms  {}{ear}  (rssi {rssi})  {}", clock.elapsed_whole_ms(), now.0.name(), hex.join(" ")));
+        }
+    });
+    unsafe { Sleep(seconds.max(0) as u32 * 1000) };
+    drop(watch);
+    let h = heard.lock();
+    for line in &h.1 {
+        wl!(out, "{line}");
+    }
+    wl!(out, "{} status adverts of the model heard.", h.0);
     0
 }
 

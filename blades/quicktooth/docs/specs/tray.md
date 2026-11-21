@@ -20,6 +20,12 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
   saved device is missing), No device selected, Connecting…, Disconnecting…. Capped at 127
   UTF-16 units (`szTip`; a character the cut would split is dropped whole).
 
+- Where the buds are (from the advert watch, [bluetooth](bluetooth.md)): while it's known and
+  not "both out", the icon is the case icon instead ([icon](icon-and-animation.md)); a connect,
+  disconnect or ripple animation takes over while it runs. Not heard for `PodsStaleMs` (90 s): back
+  to the plain icon. Each change is logged (`pods: lid open`, `pods: left out, in an ear`,
+  `pods: not heard`).
+
 ## Clicks and commands
 
 - Left click or keyboard select (`NIN_SELECT`, `NIN_KEYSELECT`) toggles the target. With no
@@ -51,6 +57,28 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 
 - Order: the status line (grayed), separator, Connect or Disconnect, Device ▸, separator,
   Start with Windows, Exit.
+- While the buds' place is known, the status line is a picture instead (its text stays the item's
+  text; `core/src/popup`) on the menu's own background (dark or light, with the taskbar): the
+  device name centred; the case, centred while both buds are in it (open while a bud is in it,
+  closed when both are in); as a bud comes out the case slides to the right and the buds stand on
+  the left (the left one at the edge, the right one beside it); with both out the case is closed,
+  faint (35 %) and sunk a little with its bottom fading out in steps. Below, Fluent battery gauges
+  with their levels from the last advert (or the connected reading): with both buds in the case,
+  "Buds" (the emptier, a bolt while either charges) and "Case", centred; a bud that's out has its
+  level under it, the one still in the case is labelled L or R, and "Case" is centred under the
+  case. The levels glide between these places as the buds move. Green with a bolt while
+  charging, orange at or below the low-battery warning, "—" when unknown. The pictures are shaded white AirPods
+  (`assets/header-*.svg`, [icon](icon-and-animation.md)), all grey when not connected.
+  236 × 102 px at 100 %. The exe makes it a bitmap item (the core's pixels with Segoe UI text by
+  GDI), enabled so Windows doesn't dim it (picking it does nothing): an owner-drawn item would
+  turn off Windows 11's theme for the whole menu. The rows below stay Windows' own.
+- While the menu is open the header moves with the buds (`core/src/popup/motion.rs`, the approved
+  "B1 alive"): springs for the lid (through three in-between lid drawings), each bud's way out
+  and the case's fade; the lid snaps shut with a small bump; buds hop out on a short arc, the
+  right after the left, and bob a whole pixel while out; the light is green while open and
+  blinks amber for 5.2 s after the case closes. Every animation tick a new frame is drawn and,
+  only if it changed, swapped into the open menu (`ModifyMenu` and a redraw); once still, nothing
+  is redrawn.
 - While an action is pending, the second item is the grayed status (Connecting…) and Device is
   grayed. With no target, the second item is a grayed Connect.
 - Device ▸ lists the paired Bluetooth audio devices (the target checked, `  (connected)` after

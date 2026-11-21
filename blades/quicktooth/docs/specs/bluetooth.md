@@ -40,3 +40,17 @@ battery scan), on the device thread (`worker.rs`), behind the core's `DeviceBack
     is the emptier bud.
   - The scan stops at the first advert with RSSI ≥ −70 (it ignores < −85), otherwise after 12 s.
   - It never connects to anything, and logs `battery scan: N adverts, M Apple, K handler errors, …`.
+
+## Where the buds are: the advert watch
+
+- A passive `BluetoothLEAdvertisementWatcher` (`ble::watch`) that hands each status advert of the
+  target's model (RSSI ≥ −85) to the tray window (`WM_APP_ADVERT`), where the core reads it
+  (`battery::parse_pods`). It runs all the time while the target is connected, and for a
+  `PodsScanMs` (6 s) window every `PodsScanEveryMs` (60 s) while it isn't. It never connects to
+  anything.
+- The bits, measured on AirPods Pro (0x2027) from both buds' adverts (each bud sends its own view):
+  status `[5]` 0x04 both buds in the case, 0x10 at least one in the case, 0x02 / 0x08 a bud in an
+  ear, 0x20 the sender is the left bud; lid `[8]` 0x08 lid closed, 0x20 the sender is in the case.
+  With one bud in the case, the one out is the sender if it's out of the case, else the other.
+- The buds advertise within about 0.1–0.3 s of a change while in or near the case, every 1–2 s
+  from the ears, and stop a few seconds after the lid closes.

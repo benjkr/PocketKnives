@@ -242,6 +242,11 @@ pub fn parse_glyph(svg: &str) -> Option<Glyph> {
     Some(Glyph { layers, bounds, tracer, outline })
 }
 
+/// A layered picture: each `<path data-tone="…" d="…">`, in order; `None` if one can't be read.
+pub(crate) fn parse_tones(svg: &str) -> Option<Vec<(&str, Vec<Vec<Pt>>)>> {
+    path_tags(svg).map(|tag| Some((attr(tag, "data-tone")?, parse_path(attr(tag, "d")?)?))).collect()
+}
+
 /// SVG path data with straight segments only: M/L/H/V/Z, absolute or relative.
 fn parse_path(d: &str) -> Option<Vec<Vec<Pt>>> {
     let b = d.as_bytes();

@@ -1,0 +1,26 @@
+{
+  "name": "pods",
+  "description": "where the buds are, from the advert watch: a scan window once a minute while not connected (lid open heard), the watch all the time while connected (a bud out, in an ear, both out), forgotten 90 s after the last advert",
+  "options": { "profile": "fast" },
+  "steps": [
+    { "bt": ["setPods", "AirPods Pro", { "state": "lid open" }] },
+    { "wait": 2000 },
+    { "expect": { "app.pods": null, "app.watching": false } },
+    { "waitFor": "s.app.pods === 'lid open'", "timeout": 62000, "label": "the once-a-minute scan window hears the open case" },
+    { "expect": { "app.watching": true, "log": "pods: lid open" } },
+    { "waitFor": "!s.app.watching", "timeout": 7000, "label": "the window closes after 6 s" },
+    { "click": "icon" },
+    { "waitFor": "s.app.pending === null", "timeout": 5000 },
+    { "expect": { "app.watching": true } },
+    { "bt": ["setPods", "AirPods Pro", { "state": "left out", "inEar": true }] },
+    { "waitFor": "s.app.pods === 'left out'", "timeout": 100, "label": "heard at once while connected" },
+    { "expect": { "app.podsInEar": true, "log": "pods: left out, in an ear" } },
+    { "bt": ["setPods", "AirPods Pro", { "state": "out", "inEar": true }] },
+    { "waitFor": "s.app.pods === 'out'", "timeout": 1500 },
+    { "bt": ["setPods", "AirPods Pro", null] },
+    { "wait": 89000 },
+    { "expect": { "app.pods": "out" } },
+    { "waitFor": "s.app.pods === null", "timeout": 2000, "label": "forgotten 90 s after the last advert" },
+    { "expect": { "log": "pods: not heard" } }
+  ]
+}

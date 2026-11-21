@@ -36,11 +36,18 @@ use quicktooth_core::controller::{ALL_TIMERS, TrayController};
 use quicktooth_core::devices::{OneShot, SendResult, Snapshot};
 use quicktooth_core::exec::{self, Done, Op, OpResult, Schedule, Task};
 use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
+use quicktooth_core::popup::{Align, Header};
+use windows_sys::Win32::Graphics::Gdi::{
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateDIBSection, CreateFontW,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, HBITMAP, InvalidateRect, OUT_DEFAULT_PRECIS, ReleaseDC,
+    SelectObject,
+    SetBkMode, SetTextAlign, SetTextColor, TA_BASELINE, TA_CENTER, TA_LEFT, TA_RIGHT, TRANSPARENT, TextOutW,
+};
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::Threading::{CreateTimerQueueTimer, DeleteTimerQueueTimer, WT_EXECUTEONLYONCE};
+use windows_sys::Win32::System::Threading::{CreateTimerQueueTimer, DeleteTimerQueueTimer, GetCurrentThreadId, WT_EXECUTEONLYONCE};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi};
 use windows_sys::Win32::UI::Shell::{
     NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_SELECT, NINF_KEY,
@@ -48,7 +55,9 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, HMENU, KillTimer, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR,
+    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, GetWindowThreadProcessId, FindWindowExW, HMENU, KillTimer, MF_BITMAP, MF_BYCOMMAND, MF_CHECKED,
+    MF_GRAYED, ModifyMenuW,
+    MF_POPUP, MF_SEPARATOR,
     MF_STRING, MSG, MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassExW, SM_CXSMICON, SetForegroundWindow, SetTimer,
     TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx, TranslateMessage, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_DESTROY,
     WM_DISPLAYCHANGE, WM_DPICHANGED, WM_NULL, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_POPUP,
@@ -59,6 +68,7 @@ const WM_TRAY: u32 = WM_APP + 1;
 const NIN_KEYSELECT: u32 = NIN_SELECT | NINF_KEY;
 const WM_APP_INVOKE: u32 = WM_APP + 2;
 const WM_APP_DEVCHANGE: u32 = WM_APP + 3;
+const WM_APP_ADVERT: u32 = WM_APP + 4;
 
 type Deliver = Box<dyn FnOnce(Box<dyn Any + Send>)>;
 
@@ -79,6 +89,8 @@ struct Ui {
     msg_taskbar_created: Cell<u32>,
     msg_command: Cell<u32>,
     destroying: Cell<bool>,
+    /// The open menu and its picture header's item ID and bitmap (replaced with each new frame).
+    open_menu: Cell<Option<(HMENU, i32, HBITMAP)>>,
 }
 
 /// The UI state, set before the window exists (null on any other thread's view is never used).
@@ -114,6 +126,10 @@ impl Ui {
 /// Results from the worker and scan threads for the UI thread: (arrival number, the id of the
 /// pending `Done`, the value).
 static RESULTS: pk::sync::Mutex<VecDeque<(u64, usize, Box<dyn Any + Send>)>> = pk::sync::Mutex::new(VecDeque::new());
+/// Status adverts from the advert watch (thread-pool threads) for the UI thread. One
+/// `WM_APP_ADVERT` is posted while it's non-empty; past `ADVERTS_MAX` the oldest are dropped.
+static ADVERTS: pk::sync::Mutex<VecDeque<(Vec<u8>, i32)>> = pk::sync::Mutex::new(VecDeque::new());
+const ADVERTS_MAX: usize = 64;
 /// Arrival numbers for results and woken tasks.
 static ARRIVAL: AtomicU64 = AtomicU64::new(0);
 
@@ -188,6 +204,7 @@ pub fn run() -> u32 {
         msg_taskbar_created: Cell::new(0),
         msg_command: Cell::new(0),
         destroying: Cell::new(false),
+        open_menu: Cell::new(None),
     }));
     UI.store(ui as *const Ui as *mut Ui, Ordering::Release);
 
@@ -233,7 +250,7 @@ pub fn run() -> u32 {
 
     let schedule: Rc<dyn Schedule> = Rc::new(UiSchedule(ui));
     let host: Rc<dyn TrayHost> = Rc::new(WinHost(ui));
-    let devices: Rc<dyn DeviceBackend> = Rc::new(WinDevices { ui, worker: Worker::start() });
+    let devices: Rc<dyn DeviceBackend> = Rc::new(WinDevices { ui, worker: Worker::start(), watch: RefCell::new(None) });
     let controller = TrayController::new(host, devices, files::load_settings(), schedule);
     let _ = ui.controller.set(controller.clone());
     controller.start();
@@ -280,6 +297,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_INVOKE => {
             drain(ui);
+            return 0;
+        }
+        WM_APP_ADVERT => {
+            let adverts = core::mem::take(&mut *ADVERTS.lock());
+            if let Some(c) = c {
+                for (data, rssi) in adverts {
+                    c.on_advert(&data, rssi);
+                }
+            }
             return 0;
         }
         WM_APP_DEVCHANGE => {
@@ -528,12 +554,41 @@ impl TrayHost for WinHost {
     fn track_popup_menu(&self, items: &[MenuItem], x: i32, y: i32, _light: bool) -> Op<i32> {
         let hwnd = self.0.hwnd();
         let menu = unsafe { CreatePopupMenu() };
-        append(menu, items);
+        let bitmaps = append(menu, items);
+        let header = items.iter().find(|i| i.header.is_some()).map(|i| i.id);
+        self.0.open_menu.set(header.zip(bitmaps.first().copied()).map(|(id, bmp)| (menu, id, bmp)));
         unsafe { SetForegroundWindow(hwnd) }; // so the menu closes when clicking elsewhere
         let cmd = unsafe { TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, x, y, hwnd, null()) };
         unsafe { PostMessageW(hwnd, WM_NULL, 0, 0) };
         unsafe { DestroyMenu(menu) }; // also destroys the submenus
+        // The header's current bitmap (the first one was replaced if it moved), and any others.
+        let current = self.0.open_menu.take().map(|m| m.2);
+        for b in current.into_iter().chain(bitmaps.into_iter().skip(1)) {
+            unsafe { DeleteObject(b) };
+        }
         Op::ok(cmd)
+    }
+
+    fn update_menu_header(&self, header: &Header) {
+        let Some((menu, id, old)) = self.0.open_menu.get() else { return };
+        let bmp = header_bitmap(header);
+        if unsafe { ModifyMenuW(menu, id as u32, MF_BYCOMMAND | MF_BITMAP, id as usize, bmp as *const u16) } == 0 {
+            unsafe { DeleteObject(bmp) };
+            return;
+        }
+        self.0.open_menu.set(Some((menu, id, bmp)));
+        unsafe { DeleteObject(old) };
+        // Redraw the open menu windows (ours are the only ones on this thread).
+        let mut w: HWND = null_mut();
+        loop {
+            w = unsafe { FindWindowExW(null_mut(), w, pk::w!("#32768"), null()) };
+            if w.is_null() {
+                break;
+            }
+            if unsafe { GetWindowThreadProcessId(w, null_mut()) } == unsafe { GetCurrentThreadId() } {
+                unsafe { InvalidateRect(w, null(), 0) };
+            }
+        }
     }
 
     fn end_menu(&self) {
@@ -561,22 +616,103 @@ impl TrayHost for WinHost {
     fn emit(&self, _event: &quicktooth_core::host::Event<'_>) {} // the simulator's timeline only
 }
 
-fn append(menu: HMENU, items: &[MenuItem]) {
+fn round_i32(v: f64) -> i32 {
+    quicktooth_core::math::round(v) as i32
+}
+
+/// A Windows 11 menu puts a bitmap item where text goes, 38 px in, and ends 60 px past the widest
+/// item (measured at 96 DPI; sim/web/menu.js has the same). The picture starts this much further
+/// in, so it sits in the middle of the menu.
+const MENU_TEXT_X: f64 = 38.0;
+const MENU_RIGHT_PAD: f64 = 60.0;
+
+/// The menu's picture header as a bitmap: the core's pixels, then its text in Segoe UI. A bitmap
+/// item, not an owner-drawn one: one owner-drawn item turns off Windows' theme for the whole menu.
+pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
+    let colorref = |c: u32| ((c & 0xFF) << 16) | (c & 0xFF00) | (c >> 16);
+    let pad = round_i32((MENU_RIGHT_PAD - MENU_TEXT_X) * h.scale);
+    let width = h.width + pad;
+    let mut bmi: BITMAPINFO = unsafe { core::mem::zeroed() };
+    bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
+    bmi.bmiHeader.biWidth = width;
+    bmi.bmiHeader.biHeight = -h.height; // top-down
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    unsafe {
+        let screen = GetDC(null_mut());
+        let dc = CreateCompatibleDC(screen);
+        ReleaseDC(null_mut(), screen);
+        let mut bits = null_mut();
+        let bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
+        if bmp.is_null() || bits.is_null() {
+            DeleteDC(dc);
+            return bmp;
+        }
+        let px = core::slice::from_raw_parts_mut(bits as *mut u32, (width * h.height) as usize);
+        px.fill(h.background);
+        for y in 0..h.height as usize {
+            for x in 0..h.width as usize {
+                let i = (y * h.width as usize + x) * 4;
+                px[y * width as usize + pad as usize + x] = u32::from_le_bytes([h.bgra[i], h.bgra[i + 1], h.bgra[i + 2], h.bgra[i + 3]]);
+            }
+        }
+        let old_bmp = SelectObject(dc, bmp);
+        SetBkMode(dc, TRANSPARENT as i32);
+        for t in &h.texts {
+            let font = CreateFontW(
+                -t.size, 0, 0, 0, if t.bold { 600 } else { 400 }, 0, 0, 0, DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32,
+                CLIP_DEFAULT_PRECIS as u32, CLEARTYPE_QUALITY as u32, DEFAULT_PITCH as u32, pk::w!("Segoe UI"),
+            );
+            let old = SelectObject(dc, font);
+            let align = match t.align {
+                Align::Left => TA_LEFT,
+                Align::Center => TA_CENTER,
+                Align::Right => TA_RIGHT,
+            };
+            SetTextAlign(dc, align | TA_BASELINE);
+            let text = to_wide(&t.text);
+            SetTextColor(dc, colorref(t.color));
+            TextOutW(dc, pad + t.x, t.y, text.as_ptr(), (text.len() - 1) as i32); // without the terminating null
+            SelectObject(dc, old);
+            DeleteObject(font);
+        }
+        SelectObject(dc, old_bmp);
+        DeleteDC(dc);
+        // GDI's text leaves alpha at 0, and the themed menu blends 32-bit bitmaps by alpha: the
+        // picture is opaque.
+        let px = core::slice::from_raw_parts_mut(bits as *mut u8, (width * h.height * 4) as usize);
+        for p in px.chunks_exact_mut(4) {
+            p[3] = 0xFF;
+        }
+        bmp
+    }
+}
+
+/// Fills `menu`; returns the header bitmaps, to delete once the menu is destroyed.
+pub(crate) fn append(menu: HMENU, items: &[MenuItem]) -> Vec<HBITMAP> {
+    let mut bitmaps = Vec::new();
     for item in items {
         let grayed = if item.grayed { MF_GRAYED } else { 0 };
         let text = item.text.as_deref().map(to_wide);
         let text_ptr = text.as_ref().map_or(null(), |t| t.as_ptr());
         if item.separator {
             unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, null()) };
+        } else if let Some(h) = &item.header {
+            let bmp = header_bitmap(h);
+            // Enabled: Windows dims a disabled bitmap. Picking it does nothing.
+            unsafe { AppendMenuW(menu, MF_BITMAP, item.id as usize, bmp as *const u16) };
+            bitmaps.push(bmp);
         } else if let Some(children) = &item.submenu {
             let sub = unsafe { CreatePopupMenu() };
-            append(sub, children);
+            bitmaps.extend(append(sub, children));
             unsafe { AppendMenuW(menu, MF_POPUP | grayed, sub as usize, text_ptr) };
         } else {
             let checked = if item.checked { MF_CHECKED } else { 0 };
             unsafe { AppendMenuW(menu, MF_STRING | grayed | checked, item.id as usize, text_ptr) };
         }
     }
+    bitmaps
 }
 
 // ---------------------------------------------------------------------------- DeviceBackend
@@ -584,6 +720,7 @@ fn append(menu: HMENU, items: &[MenuItem]) {
 struct WinDevices {
     ui: &'static Ui,
     worker: Worker,
+    watch: RefCell<Option<ble::Watch>>,
 }
 
 impl WinDevices {
@@ -627,5 +764,29 @@ impl DeviceBackend for WinDevices {
         let hwnd = self.ui.hwnd() as isize;
         ble::scan_async(model, window_ms.max(0) as u32, move |scan| post_result(hwnd, id, Ok(scan.reading)));
         op
+    }
+
+    fn start_advert_watch(&self, model: u16) {
+        let hwnd = self.ui.hwnd() as isize;
+        let watch = ble::watch(model, move |data, rssi| {
+            let first = {
+                let mut q = ADVERTS.lock();
+                if q.len() >= ADVERTS_MAX {
+                    q.pop_front();
+                }
+                q.push_back((data, rssi));
+                q.len() == 1
+            };
+            if first {
+                unsafe { PostMessageW(hwnd as HWND, WM_APP_ADVERT, 0, 0) };
+            }
+        });
+        let old = self.watch.replace(watch);
+        drop(old); // stopped outside the borrow
+    }
+
+    fn stop_advert_watch(&self) {
+        let old = self.watch.take();
+        drop(old);
     }
 }

@@ -12,14 +12,17 @@
 //! Each C# `async` method is a future started with [`exec::spawn`] (runs synchronously up to its
 //! first pending wait, as `_ = M()` did); an exception the C# caught is an `Err` from an [`Op`].
 use crate::Guid;
-use crate::battery::{self, BatteryReading};
+use crate::battery::{self, BatteryReading, Pods};
 use crate::blade_settings::{self, SetResult, SettingsChange};
 use crate::devices::{BtDevice, OneShot};
 use crate::exec::{self, Schedule};
 use crate::host::{DeviceBackend, Event, IconDesc, IconImage, MenuItem, TrayHost, tray_commands};
+use crate::icon::case::{self, Pose};
 use crate::icon::{self, AnimPhase, IconState};
 use crate::json;
+use crate::popup;
 use crate::log;
+use crate::math::ceil;
 use crate::num::{round_away, trunc_i64, write_r};
 use crate::settings::Settings;
 use crate::tunables::{self, T};
@@ -39,7 +42,12 @@ pub const TIMER_PROMOTE: i32 = 7;
 pub const TIMER_RESEND: i32 = 8;
 pub const TIMER_BATTERY: i32 = 9;
 pub const TIMER_LOWBATTERY: i32 = 10;
-pub const ALL_TIMERS: [i32; 10] = [
+pub const TIMER_PODS_SCAN: i32 = 11;
+pub const TIMER_PODS_WINDOW: i32 = 12;
+pub const TIMER_PODS_STALE: i32 = 13;
+pub const TIMER_CASE: i32 = 14;
+pub const TIMER_HEADER: i32 = 15;
+pub const ALL_TIMERS: [i32; 15] = [
     TIMER_ANIM,
     TIMER_TIMEOUT,
     TIMER_POLL,
@@ -50,6 +58,11 @@ pub const ALL_TIMERS: [i32; 10] = [
     TIMER_RESEND,
     TIMER_BATTERY,
     TIMER_LOWBATTERY,
+    TIMER_PODS_SCAN,
+    TIMER_PODS_WINDOW,
+    TIMER_PODS_STALE,
+    TIMER_CASE,
+    TIMER_HEADER,
 ];
 
 pub const CMD_CONNECT: i32 = 1;
@@ -103,6 +116,29 @@ struct State {
     battery_container: Guid,
     battery_scanning: bool,
     was_connected: bool,
+
+    /// Where the buds are, from the advert watch: the last state heard, a bud in an ear, when
+    /// (host ms), and the levels in that advert (any connection state).
+    pods: Option<Pods>,
+    pods_in_ear: bool,
+    pods_seen_ms: f64,
+    pods_reading: Option<BatteryReading>,
+    /// The model the advert watch is running for, and whether a scan window is open (while not
+    /// connected).
+    watching: Option<u16>,
+    pods_window: bool,
+    /// The case icon's move to the pose for `pods`: where it started and when (host ms).
+    case_from: Option<Pose>,
+    case_start: f64,
+    /// The resting case icon, for (pods, connected), and the one it replaced (released once
+    /// the new one is shown).
+    case_icon: Option<(Option<Pods>, bool, Rc<IconImage>)>,
+    case_old: Option<Rc<IconImage>>,
+    /// While the menu is open with its picture header: the header's motion, when it last moved
+    /// (host ms), and the frame shown.
+    header_motion: Option<popup::Motion>,
+    header_at: f64,
+    header_shown: Option<Vec<u8>>,
 
     icon_added: bool,
     add_attempts: i32,
@@ -236,6 +272,7 @@ impl TrayController {
         self.request_refresh();
         self.host().set_timer(TIMER_POLL, int(T::IdlePollMs));
         self.host().set_timer(TIMER_BATTERY, int(T::BatteryCheckMs));
+        self.host().set_timer(TIMER_PODS_SCAN, int(T::PodsScanEveryMs));
         let promoted = self.settings().tray_promoted_once;
         if !promoted {
             self.host().set_timer(TIMER_PROMOTE, int(T::PromoteRetryMs));
@@ -249,6 +286,9 @@ impl TrayController {
         }
         self.remove_icon();
         self.host().end_menu();
+        if self.st_mut().watching.take().is_some() {
+            self.inner.devices.stop_advert_watch();
+        }
         self.host().kill_all_timers();
         self.st_mut().running = false;
         log::info("tray exit");
@@ -330,12 +370,42 @@ impl TrayController {
                 // The next ripple, while the dot shows and nothing else animates.
                 let replay = {
                     let st = self.st();
-                    st.anim.is_none() && st.pending.is_none() && st.low_shown
+                    st.anim.is_none() && st.pending.is_none() && st.low_shown && case::is_plain(st.pods) && st.case_from.is_none()
                 };
                 if replay {
                     self.start_animation(AnimPhase::LowBattery, 0.0);
                 }
             }
+            TIMER_PODS_SCAN => {
+                // While not connected: one scan window (connected, the watch runs all the time).
+                if !self.target_connected() {
+                    self.st_mut().pods_window = true;
+                    self.host().set_timer(TIMER_PODS_WINDOW, int(T::PodsScanMs));
+                    self.update_watch();
+                }
+            }
+            TIMER_PODS_WINDOW => {
+                self.host().kill_timer(TIMER_PODS_WINDOW);
+                self.st_mut().pods_window = false;
+                self.update_watch();
+            }
+            TIMER_PODS_STALE => {
+                let left = int(T::PodsStaleMs) as f64 - (self.host().now_ms() - self.st().pods_seen_ms);
+                if left > 0.0 {
+                    self.host().set_timer(TIMER_PODS_STALE, ceil(left) as i32);
+                } else {
+                    self.host().kill_timer(TIMER_PODS_STALE);
+                    self.forget_pods();
+                }
+            }
+            TIMER_CASE => {
+                if self.case_progress() >= 1.0 {
+                    self.host().kill_timer(TIMER_CASE);
+                    self.st_mut().case_from = None;
+                }
+                self.update_icon(false);
+            }
+            TIMER_HEADER => self.animate_header(),
             TIMER_BATTERY => {
                 self.host().set_timer(TIMER_BATTERY, int(T::BatteryCheckMs)); // back to the periodic check
                 self.maybe_scan_battery(int(T::BatteryMaxAgeMin) as f64 * MS_PER_MINUTE);
@@ -459,6 +529,8 @@ impl TrayController {
                     right: None,
                     case: None,
                     buds_charging: false,
+                    left_charging: false,
+                    right_charging: false,
                     case_charging: false,
                     rssi: 0,
                     at_epoch_ms: now,
@@ -472,6 +544,7 @@ impl TrayController {
             }
         }
         self.st_mut().was_connected = connected;
+        self.update_watch();
 
         let state_log = match &target {
             Some(t) => format!("{}: {} ({})", t.name, if t.connected() { "connected" } else { "not connected" }, t.state_signature()),
@@ -771,6 +844,111 @@ impl TrayController {
         self.st_mut().battery_scanning = false;
     }
 
+    // ------------------------------------------------------------------ where the buds are
+
+    /// Runs the advert watch while the target (an Apple headset) is connected or a scan window is
+    /// open; stops it otherwise.
+    fn update_watch(&self) {
+        let (want, watching) = {
+            let st = self.st();
+            let model = st.target.as_ref().and_then(battery::model_of);
+            let on = st.running && (st.target.as_ref().is_some_and(BtDevice::connected) || st.pods_window);
+            (model.filter(|_| on), st.watching)
+        };
+        if want == watching {
+            return;
+        }
+        self.st_mut().watching = want;
+        match want {
+            Some(model) => self.inner.devices.start_advert_watch(model),
+            None => self.inner.devices.stop_advert_watch(),
+        }
+    }
+
+    /// An Apple status advert from the watch (manufacturer data, company 0x004C).
+    pub fn on_advert(&self, data: &[u8], rssi: i32) {
+        let Some(model) = self.st().watching.filter(|_| self.running()) else { return };
+        let Some((pods, in_ear)) = battery::parse_pods(data, model) else { return };
+        let now = self.host().now_ms();
+        let reading = battery::parse_apple_status(data, model, rssi, self.host().now_epoch_ms());
+        let moved = self.st().pods != Some(pods);
+        let from = self.case_pose_now();
+        let (changed, first) = {
+            let mut st = self.st_mut();
+            let changed = st.pods != Some(pods) || st.pods_in_ear != in_ear;
+            let first = st.pods.is_none();
+            st.pods = Some(pods);
+            st.pods_in_ear = in_ear;
+            st.pods_seen_ms = now;
+            if reading.is_some() {
+                st.pods_reading = reading;
+            }
+            (changed, first)
+        };
+        if first {
+            self.host().set_timer(TIMER_PODS_STALE, int(T::PodsStaleMs));
+        }
+        if changed {
+            let ear = if in_ear { ", in an ear" } else { "" };
+            log::info(&format!("pods: {}{ear}", pods.name()));
+            self.emit(&format!("{{\"type\":\"pods\",\"state\":\"{}\",\"inEar\":{in_ear}}}", pods.name()));
+        }
+        if moved {
+            self.start_case_move(from);
+        }
+    }
+
+    /// How far the case icon's move has got (1 = resting).
+    fn case_progress(&self) -> f64 {
+        let (moving, start) = {
+            let st = self.st();
+            (st.case_from.is_some(), st.case_start)
+        };
+        if !moving {
+            return 1.0;
+        }
+        (self.host().now_ms() - start) / (tunables::get(T::CaseAnimSeconds) * 1000.0)
+    }
+
+    /// The pose the case icon shows now.
+    fn case_pose_now(&self) -> Pose {
+        let u = self.case_progress();
+        let st = self.st();
+        let to = case::pose_of(st.pods);
+        match &st.case_from {
+            Some(from) => case::mix(from, &to, u),
+            None => to,
+        }
+    }
+
+    /// The case icon moves from `from` to the pose for the buds' new place.
+    fn start_case_move(&self, from: Pose) {
+        let now = self.host().now_ms();
+        {
+            let mut st = self.st_mut();
+            st.case_from = Some(from);
+            st.case_start = now;
+        }
+        self.host().set_timer(TIMER_CASE, int(T::AnimFrameMs));
+        self.update_icon(false);
+    }
+
+    /// No advert for `PodsStaleMs`: where the buds are is no longer known.
+    fn forget_pods(&self) {
+        if self.st().pods.is_none() {
+            return;
+        }
+        let from = self.case_pose_now();
+        {
+            let mut st = self.st_mut();
+            st.pods = None;
+            st.pods_reading = None;
+        }
+        log::info("pods: not heard");
+        self.emit("{\"type\":\"pods\",\"state\":null,\"inEar\":false}");
+        self.start_case_move(from);
+    }
+
     // ------------------------------------------------------------------ pending animation
 
     fn start_animation(&self, phase: AnimPhase, tracer_offset: f64) {
@@ -838,19 +1016,42 @@ impl TrayController {
                     } else {
                         self.host().kill_timer(TIMER_LOWBATTERY);
                     }
-                    if low && icon_size > 0 {
+                    // Not over the case icon: the ripple is drawn on the plain icon.
+                    let plain = {
+                        let st = self.st();
+                        case::is_plain(st.pods) && st.case_from.is_none()
+                    };
+                    if low && icon_size > 0 && plain {
                         self.start_animation(AnimPhase::LowBattery, 0.0); // the first ripple
                         return;
                     }
                 }
-                let st = self.st();
-                icon = if !connected {
-                    st.icon_off.clone()
-                } else if low {
-                    st.icon_low.clone()
-                } else {
-                    st.icon_on.clone()
+                let (pods, moving) = {
+                    let st = self.st();
+                    (st.pods, st.case_from.is_some())
                 };
+                if (moving || !case::is_plain(pods)) && icon_size > 0 {
+                    // Where the buds are: a frame of the case icon's move, or its resting pose.
+                    let u = self.case_progress();
+                    if u < 1.0 {
+                        let pose = self.case_pose_now();
+                        let desc = IconDesc::Case { pods, t: round_away(u, 4) };
+                        let img = Rc::new(IconImage::new(case::render(&pose, connected, light, icon_size), icon_size, desc));
+                        icon = Some(img.clone());
+                        anim_icon = Some(img);
+                    } else {
+                        icon = Some(self.resting_case_icon(pods, connected, light, icon_size));
+                    }
+                } else {
+                    let st = self.st();
+                    icon = if !connected {
+                        st.icon_off.clone()
+                    } else if low {
+                        st.icon_low.clone()
+                    } else {
+                        st.icon_on.clone()
+                    };
+                }
             }
         }
         let Some(icon) = icon else { return };
@@ -880,6 +1081,25 @@ impl TrayController {
         if let Some(previous) = previous_frame {
             self.host().release_icon(&previous);
         }
+        let replaced = self.st_mut().case_old.take();
+        if let Some(old) = replaced {
+            self.host().release_icon(&old);
+        }
+    }
+
+    /// The case icon resting on the pose for `pods`, drawn once per (pods, connected, size, theme).
+    /// The one it replaces is released after the new one is shown.
+    fn resting_case_icon(&self, pods: Option<Pods>, connected: bool, light: bool, size: i32) -> Rc<IconImage> {
+        let cached = self.st().case_icon.as_ref().filter(|c| c.0 == pods && c.1 == connected && c.2.size == size).map(|c| c.2.clone());
+        if let Some(img) = cached {
+            return img;
+        }
+        let img = Rc::new(IconImage::new(case::render(&case::pose_of(pods), connected, light, size), size, IconDesc::Case { pods, t: 1.0 }));
+        let old = self.st_mut().case_icon.replace((pods, connected, img.clone()));
+        if let Some(old) = old {
+            self.st_mut().case_old = Some(old.2);
+        }
+        img
     }
 
     fn add_icon(&self) {
@@ -947,6 +1167,8 @@ impl TrayController {
             let mut st = self.st_mut();
             let old = [st.icon_on.replace(on), st.icon_off.replace(off), st.icon_low.replace(low)];
             st.icon_size = size;
+            // The resting case icon is drawn again too (the theme or size changed).
+            st.case_old = st.case_icon.take().map(|c| c.2);
             old
         };
         if old[0].is_some() {
@@ -969,7 +1191,11 @@ impl TrayController {
     async fn show_menu_async(&self, x: i32, y: i32) {
         // Refreshes the tooltip if the reading is a bit old.
         self.maybe_scan_battery(int(T::MenuBatteryMaxAgeS) as f64 * 1000.0);
-        let mut items = alloc::vec![MenuItem::command(CMD_STATUS, self.status_line()).grayed(true), MenuItem::divider()];
+        let mut status = MenuItem::command(CMD_STATUS, self.status_line()).grayed(true);
+        if let Some(header) = self.menu_header() {
+            status = status.with_header(Rc::new(header));
+        }
+        let mut items = alloc::vec![status, MenuItem::divider()];
 
         let (pending, target) = {
             let st = self.st();
@@ -1018,10 +1244,81 @@ impl TrayController {
         self.emit("{\"type\":\"menu\",\"open\":true}");
         let light = self.st().light_taskbar;
         let menu = self.host().track_popup_menu(&items, x, y, light);
+        let result = menu.await;
+        {
+            let mut st = self.st_mut();
+            st.header_motion = None;
+            st.header_shown = None;
+        }
+        self.host().kill_timer(TIMER_HEADER);
         // A failed menu ends here, as the C# task's unobserved exception did.
-        let Ok(cmd) = menu.await else { return };
+        let Ok(cmd) = result else { return };
         self.emit(&format!("{{\"type\":\"menu\",\"open\":false,\"cmd\":{cmd}}}"));
         self.on_menu_command(cmd);
+    }
+
+    /// The menu's picture header while the buds' place is known ([`crate::popup`]); it starts
+    /// moving with the buds while the menu is open.
+    fn menu_header(&self) -> Option<popup::Header> {
+        let (info, scale) = self.header_info()?;
+        let motion = popup::Motion::rest(info.pods);
+        let header = popup::header_posed(&info, scale, &motion.pose());
+        let now = self.host().now_ms();
+        {
+            let mut st = self.st_mut();
+            st.header_motion = Some(motion);
+            st.header_at = now;
+            st.header_shown = Some(header.bgra.clone());
+        }
+        self.host().set_timer(TIMER_HEADER, int(T::AnimFrameMs));
+        Some(header)
+    }
+
+    /// The header's next frame, shown if it changed.
+    fn animate_header(&self) {
+        let now = self.host().now_ms();
+        let pods = self.st().pods;
+        let pose = {
+            let mut st = self.st_mut();
+            let at = st.header_at;
+            st.header_at = now;
+            let Some(m) = st.header_motion.as_mut() else { return };
+            if let Some(p) = pods {
+                m.go(p);
+            }
+            m.advance(now - at);
+            m.pose()
+        };
+        let Some((mut info, scale)) = self.header_info() else { return };
+        info.pods = self.st().header_motion.as_ref().map_or(info.pods, popup::Motion::pods);
+        let header = popup::header_posed(&info, scale, &pose);
+        let changed = self.st().header_shown.as_deref() != Some(header.bgra.as_slice());
+        if changed {
+            self.st_mut().header_shown = Some(header.bgra.clone());
+            self.host().update_menu_header(&header);
+        }
+    }
+
+    /// What the header shows now, and its scale.
+    fn header_info(&self) -> Option<(popup::HeaderInfo, f64)> {
+        let (pods, advert, size) = {
+            let st = self.st();
+            (st.pods?, st.pods_reading.clone(), st.icon_size)
+        };
+        let connected = self.target_connected();
+        let reading = advert.or_else(|| self.battery_shown());
+        let level = |v: Option<i32>, charging: bool| v.map(|v| (v, charging));
+        let info = popup::HeaderInfo {
+            name: self.device_label(),
+            pods,
+            connected,
+            left: reading.as_ref().and_then(|r| level(r.left, r.left_charging)),
+            right: reading.as_ref().and_then(|r| level(r.right, r.right_charging)),
+            case: reading.as_ref().and_then(|r| level(r.case, r.case_charging)),
+            low_warning: self.settings().low_battery_warning(),
+            light: self.st().light_taskbar,
+        };
+        Some((info, size.max(16) as f64 / 16.0))
     }
 
     fn on_menu_command(&self, cmd: i32) {
@@ -1180,6 +1477,16 @@ impl TrayController {
             }
             None => w.push_str("null"),
         }
+        w.push_str(",\"pods\":");
+        match st.pods {
+            Some(p) => {
+                json::write_str(&mut w, p.name());
+                w.push_str(if st.pods_in_ear { ",\"podsInEar\":true" } else { ",\"podsInEar\":false" });
+            }
+            None => w.push_str("null,\"podsInEar\":false"),
+        }
+        w.push_str(",\"watching\":");
+        w.push_str(if st.watching.is_some() { "true" } else { "false" });
         w.push_str(",\"settings\":{\"targetName\":");
         match &settings.target_name {
             Some(n) => json::write_str(&mut w, n),

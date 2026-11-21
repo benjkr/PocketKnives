@@ -83,7 +83,9 @@ impl<'a> Clip<'a> {
 const SUB: i32 = 16; // sub-scanlines per pixel row
 
 pub struct Canvas {
+    /// Width and height in pixels.
     size: i32,
+    height: i32,
     pub alpha: Vec<f64>,
     cov: Vec<f64>,
     xs: Vec<(f64, i32)>,
@@ -97,8 +99,13 @@ fn quantize(opacity: f64) -> f64 {
 
 impl Canvas {
     pub fn new(size: i32) -> Canvas {
-        let n = (size * size) as usize;
-        Canvas { size, alpha: vec![0.0; n], cov: vec![0.0; n], xs: Vec::new(), clip: Vec::new() }
+        Canvas::rect(size, size)
+    }
+
+    /// A `width` × `height` canvas.
+    pub fn rect(width: i32, height: i32) -> Canvas {
+        let n = (width * height) as usize;
+        Canvas { size: width, height, alpha: vec![0.0; n], cov: vec![0.0; n], xs: Vec::new(), clip: Vec::new() }
     }
 
     pub fn draw(&mut self, glyph: &Glyph, opacity: f64, xf: Xf, clip: Clip<'_>) {
@@ -112,9 +119,31 @@ impl Canvas {
         self.fill_polygons(contours, quantize(opacity), xf, Clip::NONE);
     }
 
+    /// Clears the canvas for reuse.
+    pub fn clear(&mut self) {
+        self.alpha.fill(0.0);
+    }
+
+    /// Fills closed polygons (nonzero) at `opacity`, inside `clip`.
+    pub fn fill_clipped<C: AsRef<[Pt]>>(&mut self, contours: &[C], opacity: f64, xf: Xf, clip: Clip<'_>) {
+        self.fill_polygons(contours, quantize(opacity), xf, clip);
+    }
+
+    /// Clears this canvas by `amount` where a glyph covers it, inside `clip` (a knock-out).
+    pub fn erase_glyph(&mut self, glyph: &Glyph, amount: f64, xf: Xf, clip: Clip<'_>) {
+        let mut mask = Canvas::rect(self.size, self.height);
+        for layer in &glyph.layers {
+            mask.fill_polygons(&layer.contours, 1.0, xf, clip);
+        }
+        let amount = quantize(amount);
+        for (a, m) in self.alpha.iter_mut().zip(&mask.alpha) {
+            *a *= 1.0 - min(*m, 1.0) * amount;
+        }
+    }
+
     /// Clears this canvas inside a polygon (a knock-out), anti-aliased at its edge.
     pub fn erase(&mut self, contour: &[Pt], xf: Xf) {
-        let mut mask = Canvas::new(self.size);
+        let mut mask = Canvas::rect(self.size, self.height);
         mask.fill(&[contour], 1.0, xf);
         for (a, m) in self.alpha.iter_mut().zip(&mask.alpha) {
             *a *= 1.0 - min(*m, 1.0);
@@ -150,7 +179,7 @@ impl Canvas {
         }
 
         let row_from = 0.max(floor(max(min_y, cy0)) as i32);
-        let row_to = (size - 1).min(ceil(min(max_y, cy1)) as i32);
+        let row_to = (self.height - 1).min(ceil(min(max_y, cy1)) as i32);
         let mut py = row_from;
         while py <= row_to {
             for s in 0..SUB {

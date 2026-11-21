@@ -9,6 +9,6 @@
     { "wait": 700 },
     { "expect": { "app.pending": null, "log": "Connect timed out after", "app.tooltip": "AirPods Pro — Not connected" } },
     { "waitFor": "s.app.anim === null", "timeout": 1000 },
-    { "expect": { "app.icon.state": "disconnected", "app.timers.length": 2 } }
+    { "expect": { "app.icon.state": "disconnected", "app.timers.length": 3 } }
   ]
 }

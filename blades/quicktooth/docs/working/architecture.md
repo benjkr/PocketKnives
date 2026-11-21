@@ -48,11 +48,13 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
     tray commands. `exec.rs`: the executor.
   - `icon/`: the renderer (`mod.rs` phases, `raster.rs`, `glyph.rs` SVG and outline, `png.rs`,
     `sort.rs` .NET's sort). `tunables.rs`, `math.rs`, `num.rs`.
+  - `popup/`: the menu's picture header (its pictures: `assets/header-*.svg`);
+    `icon/case.rs`: the case icon.
   - `settings.rs` (settings.json), `blade_settings.rs` (`--settings` lines, `--set` checks),
     `devices.rs`, `battery.rs` (readings, the Apple advert), `log.rs`, `json.rs`, `guid.rs`.
 - `win/src` (`QuickTooth.exe`, `no_std` on `pk`): `main.rs`, `tray.rs` (window, notify icon,
   timers, menus, the hosts and scheduler), `cli.rs`, `worker.rs` (the device thread), `audio.rs`
-  (Core Audio, KS), `pnp.rs` (cfgmgr32), `ble.rs` (battery scan), `files.rs` (settings folder, log,
+  (Core Audio, KS), `pnp.rs` (cfgmgr32), `ble.rs` (battery scan, advert watch), `files.rs` (settings folder, log,
   saving), `system.rs` (autostart, theme, promotion, dark menus), `ipc.rs` (names other programs
   use), `clock.rs`, `selftest.rs`, `icons.rs` (HICONs and the `--render-icons` sheets). `build.rs`
   and `app.manifest`: resources through `crates/pk-build`.
@@ -60,5 +62,5 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
 - `sim/`: `qt-sim.mjs` (CLI), `lib/` (session, scenarios, checks, parity, core build), `web/` (the
   page: `core.js`, `tray.js`, `icon.js`, `shell.js`, `menu.js`, `bluetooth.js`, `clock.js`,
   `main.js`, `panel.js`), `scenarios/`, `reference/` (measured metrics and probes).
-- `installer/` (Inno Setup script, build script), `publish.ps1`, `tools/` (glyph generator),
+- `installer/` (Inno Setup script, build script), `publish.ps1`, `tools/` (glyph and header-art generators),
   `assets/`, `docs/`.

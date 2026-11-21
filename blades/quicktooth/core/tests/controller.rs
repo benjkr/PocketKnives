@@ -139,6 +139,7 @@ impl TrayHost for Mock {
         self.menus.borrow_mut().push_back((items.to_vec(), done));
         op
     }
+    fn update_menu_header(&self, _header: &quicktooth_core::popup::Header) {}
     fn end_menu(&self) {
         self.call("end_menu");
     }
@@ -189,6 +190,12 @@ impl DeviceBackend for Devices {
     fn scan_battery(&self, _model: u16, _window_ms: i32) -> Op<Option<BatteryReading>> {
         Op::ok(None)
     }
+    fn start_advert_watch(&self, model: u16) {
+        self.0.call(format!("watch {model:04x}"));
+    }
+    fn stop_advert_watch(&self) {
+        self.0.call("watch off");
+    }
 }
 
 fn setup(settings: Settings) -> (Rc<Mock>, TrayController) {
@@ -217,7 +224,7 @@ fn start_logs_adds_the_icon_and_finds_the_default_target() {
     c.start();
     assert!(c.running());
     assert_eq!(take_log(), ["tray start: C:\\QuickTooth.exe", "tooltip: QuickTooth — Checking…", "tray icon added (16 px, dark taskbar)"]);
-    assert_eq!(*mock.timers.borrow(), [TIMER_POLL, TIMER_BATTERY, TIMER_PROMOTE]);
+    assert_eq!(*mock.timers.borrow(), [TIMER_POLL, TIMER_BATTERY, TIMER_PODS_SCAN, TIMER_PROMOTE]);
     refresh(&mock, vec![airpods(false, "AirPods Pro")]);
     let log = take_log();
     assert!(log[0].starts_with("default target chosen: AirPods Pro {5a1b2c3d-0001-0002-a1b2-0123456789ab}"), "{log:?}");
@@ -310,7 +317,7 @@ fn exit_from_the_menu_reenters_without_a_borrow_panic() {
     assert!(!c.running());
     let calls = mock.took();
     assert_eq!(calls[..2], ["emit {\"type\":\"menu\",\"open\":true}", "menu at 7,8"]);
-    assert_eq!(&calls[calls.len() - 4..], ["remove_icon", "end_menu", "emit {\"type\":\"exit\"}", "exit"]);
+    assert_eq!(&calls[calls.len() - 5..], ["remove_icon", "end_menu", "watch off", "emit {\"type\":\"exit\"}", "exit"]);
     assert!(mock.timers.borrow().is_empty());
 }
 
@@ -344,4 +351,46 @@ fn settings_are_refused_while_pending() {
     let change = SettingsChange { device: None, low_battery: Some(15), icon: None };
     assert_eq!(c.apply_settings(&change), SetResult::Busy);
     assert_eq!(take_log(), ["settings: ignored, Connect still pending"]);
+}
+
+/// An advert from the test run of real AirPods, re-labelled as the mock's model (0x2014).
+fn advert(status: u8, levels: u8, lid: u8) -> [u8; 11] {
+    [0x07, 0x19, 0x01, 0x14, 0x20, status, 0x88, levels, lid, 0x00, 0x04]
+}
+
+#[test]
+fn advert_watch_runs_while_connected_and_in_windows_otherwise() {
+    let (mock, c) = setup(Settings::default());
+    c.start();
+    refresh(&mock, vec![airpods(false, "AirPods Pro")]);
+    take_log();
+    mock.took();
+    // Not connected: nothing until the periodic scan opens a window, which then closes.
+    c.on_timer(TIMER_PODS_SCAN);
+    assert_eq!(mock.took(), ["watch 2014"]);
+    c.on_advert(&advert(0x15, 0xB5, 0x32), -50);
+    c.on_advert(&advert(0x75, 0xB5, 0x32), -55); // the other bud, same state: no new line
+    assert_eq!(take_log(), ["pods: lid open"]);
+    assert!(c.snapshot_json().contains("\"pods\":\"lid open\",\"podsInEar\":false"));
+    c.on_timer(TIMER_PODS_WINDOW);
+    assert_eq!(mock.took(), ["emit {\"type\":\"pods\",\"state\":\"lid open\",\"inEar\":false}", "watch off"]);
+    c.on_advert(&advert(0x33, 0xA5, 0x12), -50); // after the window: ignored
+    assert!(take_log().is_empty());
+    // Connected: the watch runs all the time.
+    c.on_timer(TIMER_POLL);
+    refresh(&mock, vec![airpods(true, "AirPods Pro")]);
+    assert!(mock.took().contains(&"watch 2014".to_string()));
+    take_log();
+    c.on_advert(&advert(0x33, 0xA5, 0x12), -50);
+    assert_eq!(take_log(), ["pods: left out, in an ear"]);
+    c.on_timer(TIMER_PODS_SCAN); // no window while connected
+    assert!(!mock.timers.borrow().contains(&TIMER_PODS_WINDOW));
+    // Nothing heard for PodsStaleMs: forgotten.
+    mock.now.set(mock.now.get() + 90_000.0);
+    c.on_timer(TIMER_PODS_STALE);
+    assert_eq!(take_log(), ["pods: not heard"]);
+    assert!(c.snapshot_json().contains("\"pods\":null"));
+    // Exit stops the watch.
+    c.on_command(4);
+    assert!(mock.took().contains(&"watch off".to_string()));
 }

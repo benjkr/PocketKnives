@@ -11,10 +11,11 @@ use alloc::vec::Vec;
 use glyph::{Polyline, Pt, fill, line, point_at};
 use raster::{Canvas, Clip, Rgb, Xf, over};
 
-mod glyph;
+pub mod case;
+pub(crate) mod glyph;
 pub use glyph::{Artwork, artwork, set_artwork};
 pub mod png;
-mod raster;
+pub(crate) mod raster;
 mod sort;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

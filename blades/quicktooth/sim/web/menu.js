@@ -56,12 +56,17 @@ export function layoutMenu(items, s, M = MENU_METRICS) {
   const r = (v) => Math.round(v * s);
   const fontPx = M.fontPx * s;
   let maxText = 0;
-  for (const it of items) if (!it.separator) maxText = Math.max(maxText, textWidth(it.text, fontPx, M.font));
+  for (const it of items) if (!it.separator && !it.header) maxText = Math.max(maxText, textWidth(it.text, fontPx, M.font));
   const arrow = items.some((it) => it.submenu) ? r(M.arrowExtra) : 0;
+  // An owner-drawn picture item (the app's header) is as wide and tall as its picture.
+  // A picture item sits where text goes; the exe pads it by rightPad − textX on the left, so it
+  // ends up in the middle of the menu.
+  const pad = r(M.rightPad) - r(M.textX);
+  for (const it of items) if (it.header) maxText = Math.max(maxText, it.header.w + pad);
   const width = Math.ceil(r(M.textX) + maxText + r(M.rightPad) + arrow);
   let y = r(M.border + M.pad);
   const rows = items.map((it) => {
-    const h = it.separator ? r(M.sepH) : r(M.itemH);
+    const h = it.separator ? r(M.sepH) : it.header ? it.header.h : r(M.itemH);
     const row = { ...it, top: y, height: h };
     y += h;
     return row;
@@ -105,6 +110,10 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
   ctx.fillRect(b, b, W - 2 * b, H - 2 * b);
 
   lay.rows.forEach((row, i) => {
+    if (row.header) {
+      drawHeader(ctx, row.header, r(M.textX) + r(M.rightPad) - r(M.textX), row.top);
+      return;
+    }
     if (row.separator) {
       ctx.fillStyle = C.sep;
       ctx.fillRect(r(M.sepInset), row.top + r(M.sepLineY), W - 2 * r(M.sepInset), Math.max(1, Math.round(s)));
@@ -140,6 +149,20 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
     }
   });
   ctx.restore();
+}
+
+/** The app's owner-drawn header: its pixels, then its text in Segoe UI, as the exe draws it with GDI. */
+function drawHeader(ctx, h, x0, y0) {
+  const bytes = Uint8ClampedArray.from(atob(h.rgba), (c) => c.charCodeAt(0));
+  ctx.putImageData(new ImageData(bytes, h.w, h.h), x0, y0);
+  ctx.textBaseline = 'alphabetic';
+  for (const t of h.texts) {
+    ctx.font = `${t.bold ? '600 ' : ''}${t.size}px ${MENU_METRICS.font}`;
+    ctx.textAlign = t.align;
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.text, x0 + t.x, y0 + t.y);
+  }
+  ctx.textAlign = 'left';
 }
 
 /** Index of the row at window-relative y, or -1. */

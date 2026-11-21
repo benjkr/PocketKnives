@@ -14,11 +14,13 @@
 //!   delivers messages sent to the window meanwhile (`WM_COPYDATA`, `WM_SETTINGCHANGE`, display
 //!   changes, and a `WM_APP_INVOKE` another process sends, which runs woken tasks there).
 use crate::Guid;
-use crate::battery::BatteryReading;
+use crate::battery::{BatteryReading, Pods};
 use crate::devices::{OneShot, SendResult, Snapshot};
 use crate::exec::Op;
 use crate::icon::AnimPhase;
 use crate::num::fmt_r;
+use crate::popup::Header;
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::Cell;
@@ -54,6 +56,8 @@ pub trait TrayHost {
     fn icon_anchor(&self) -> Option<(i32, i32)>;
     /// Shows the popup menu; completes with the chosen command ID (0 = dismissed).
     fn track_popup_menu(&self, items: &[MenuItem], x: i32, y: i32, light: bool) -> Op<i32>;
+    /// The open menu's picture header has a new frame ([`crate::popup`]): show it in place.
+    fn update_menu_header(&self, header: &Header);
     fn end_menu(&self);
     /// Marks our notification-area entry as promoted; returns the promotion result's name.
     fn promote_self(&self) -> String;
@@ -81,6 +85,11 @@ pub trait DeviceBackend {
     /// The Bluetooth link's connected flag (`None` when the device isn't known).
     fn bluetooth_connected(&self, mac: &str) -> Op<Option<bool>>;
     fn scan_battery(&self, model: u16, window_ms: i32) -> Op<Option<BatteryReading>>;
+    /// Starts a passive BLE watch: each Apple status advert of `model` (its manufacturer data,
+    /// company 0x004C) goes to [`crate::controller::TrayController::on_advert`] on the UI thread,
+    /// until [`Self::stop_advert_watch`]. Never connects to anything. Starting it again replaces it.
+    fn start_advert_watch(&self, model: u16);
+    fn stop_advert_watch(&self);
 }
 
 /// Icon pixels plus what they show. Compared by identity (`Rc::ptr_eq`), as the C# class was.
@@ -112,11 +121,22 @@ pub enum IconDesc {
         t: f64,
         tracer_t: f64,
     },
+    /// Where the buds are ([`crate::icon::case`]): the pose for `pods` (`None` = not known),
+    /// `t` (rounded to 4 places) of the way there; 1 = resting on it.
+    Case {
+        pods: Option<Pods>,
+        t: f64,
+    },
 }
 
 impl IconDesc {
+    /// A frame drawn for one tick (released when the next one is shown).
     pub fn is_anim(&self) -> bool {
-        matches!(self, IconDesc::Anim { .. })
+        match self {
+            IconDesc::Anim { .. } => true,
+            IconDesc::Case { t, .. } => *t < 1.0,
+            _ => false,
+        }
     }
 
     /// e.g. `{"kind":"static","state":"connected"}` or
@@ -129,6 +149,10 @@ impl IconDesc {
             IconDesc::Anim { phase, t, tracer_t } => {
                 alloc::format!("{{\"kind\":\"anim\",\"phase\":\"{}\",\"t\":{},\"tracerT\":{}}}", phase.name(), fmt_r(t), fmt_r(tracer_t))
             }
+            IconDesc::Case { pods, t } => match pods {
+                Some(p) => alloc::format!("{{\"kind\":\"case\",\"pods\":\"{}\",\"t\":{}}}", p.name(), fmt_r(t)),
+                None => alloc::format!("{{\"kind\":\"case\",\"pods\":null,\"t\":{}}}", fmt_r(t)),
+            },
         }
     }
 }
@@ -159,15 +183,23 @@ pub struct MenuItem {
     pub checked: bool,
     pub separator: bool,
     pub submenu: Option<Vec<MenuItem>>,
+    /// Drawn as this picture instead of its text ([`crate::popup`]); the text stays for the log
+    /// and accessibility.
+    pub header: Option<Rc<Header>>,
 }
 
 impl MenuItem {
     pub fn command(id: i32, text: impl Into<String>) -> Self {
-        MenuItem { id, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: None }
+        MenuItem { id, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: None, header: None }
     }
 
     pub fn divider() -> Self {
-        MenuItem { id: 0, text: None, grayed: false, checked: false, separator: true, submenu: None }
+        MenuItem { id: 0, text: None, grayed: false, checked: false, separator: true, submenu: None, header: None }
+    }
+
+    pub fn with_header(mut self, header: Rc<Header>) -> Self {
+        self.header = Some(header);
+        self
     }
 
     pub fn grayed(mut self, grayed: bool) -> Self {
@@ -181,7 +213,7 @@ impl MenuItem {
     }
 
     pub fn submenu(text: impl Into<String>, items: Vec<MenuItem>) -> Self {
-        MenuItem { id: 0, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: Some(items) }
+        MenuItem { id: 0, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: Some(items), header: None }
     }
 }
 

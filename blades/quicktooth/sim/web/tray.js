@@ -11,7 +11,7 @@
 import { stateName } from './bluetooth.js';
 import { setLatestHost } from './core.js';
 
-const TIMER = { ANIM: 1, TIMEOUT: 2, POLL: 3, DEBOUNCE: 4, FASTPOLL: 5, ADD_RETRY: 6, PROMOTE: 7, RESEND: 8, BATTERY: 9, LOWBATTERY: 10 };
+const TIMER = { ANIM: 1, TIMEOUT: 2, POLL: 3, DEBOUNCE: 4, FASTPOLL: 5, ADD_RETRY: 6, PROMOTE: 7, RESEND: 8, BATTERY: 9, LOWBATTERY: 10, PODS_SCAN: 11, PODS_WINDOW: 12, PODS_STALE: 13 };
 const TIMER_NAME = Object.fromEntries(Object.entries(TIMER).map(([k, v]) => [v, `TIMER_${k}`]));
 export const CMD = { CONNECT: 1, DISCONNECT: 2, AUTOSTART: 3, EXIT: 4, DEVICE_BASE: 100 };
 export const IPC = { Toggle: 1, Connect: 2, Disconnect: 3, Exit: 4, ShowMenu: 5, CloseMenu: 6 };
@@ -173,6 +173,7 @@ export class TrayAppModel {
   iconAnchor() { const r = this.shell.iconRect(); return r ? `${Math.trunc((r.left + r.right) / 2)},${Math.trunc(r.top)}` : ''; }
   async trackPopupMenu(itemsJson, x, y, light) { return (await this.shell.trackPopupMenu(JSON.parse(itemsJson), x, y, { light })) ?? 0; }
   endMenu() { this.shell.endMenu(); }
+  updateMenuHeader(header) { this.shell.updateMenuHeader(header); }
   promoteSelf() { return this.shell.notifyIconSettings.promoteSelf(EXE_PATH, (m) => this.log(m)); }
 
   autostartEnabled() { return this.autostart.enabled; }
@@ -205,6 +206,12 @@ export class TrayAppModel {
     return this.worker.run(() => { const r = this.bt.bluetoothConnected(mac); return r == null ? -1 : r ? 1 : 0; }, this.bt._ms('pnpMs'));
   }
   async btScan(model, windowMs) { return JSON.stringify((await this.bt.bleScan(model, windowMs)) ?? null); }
+  // The advert watch: each advert reaches the app as the exe's WM_APP_ADVERT would.
+  btWatchStart(model) {
+    this.btWatchStop();
+    this._watch = this.bt.bleWatch(model, (data, rssi) => { if (this.running) this.core.AppAdvert(this.id, data, rssi); });
+  }
+  btWatchStop() { this._watch?.stop(); this._watch = null; }
 }
 
 export { stateName };

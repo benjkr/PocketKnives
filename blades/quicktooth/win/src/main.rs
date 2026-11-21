@@ -20,6 +20,7 @@ mod clock;
 mod files;
 mod icons;
 mod ipc;
+mod menu_preview;
 mod pnp;
 mod selftest;
 mod system;

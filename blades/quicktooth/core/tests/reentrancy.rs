@@ -188,6 +188,7 @@ impl TrayHost for Win {
         }
         Op::ok(0)
     }
+    fn update_menu_header(&self, _header: &quicktooth_core::popup::Header) {}
     fn end_menu(&self) {}
     fn promote_self(&self) -> String {
         "EntryNotFound".into()
@@ -253,6 +254,8 @@ impl DeviceBackend for Devices {
                 right: Some(20),
                 case: None,
                 buds_charging: false,
+                left_charging: false,
+                right_charging: false,
                 case_charging: false,
                 rssi: -60,
                 at_epoch_ms: w.now.get(),
@@ -261,6 +264,17 @@ impl DeviceBackend for Devices {
         });
         op
     }
+    fn start_advert_watch(&self, _model: u16) {
+        // An advert arrives later, as the exe posts it to its window.
+        let w = self.0.clone();
+        self.0.post(move || {
+            let c = w.controller.borrow().clone();
+            if let Some(c) = c {
+                c.on_advert(&[0x07, 0x19, 0x01, 0x14, 0x20, 0x75, 0x88, 0xB5, 0x32, 0x00, 0x04], -50);
+            }
+        });
+    }
+    fn stop_advert_watch(&self) {}
 }
 
 #[test]
