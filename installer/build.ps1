@@ -32,17 +32,17 @@ $cargoOut = Join-Path $PSScriptRoot 'obj\cargo'
 $release = Join-Path $cargoOut 'release'
 Push-Location $root
 try {
-    foreach ($package in 'quicktooth', 'pocketknives-runner', 'pocketknives-settings') {
+    foreach ($package in 'quicktooth', 'nowplaying', 'pocketknives-runner', 'pocketknives-settings') {
         cargo build --release -p $package --target-dir $cargoOut
         if ($LASTEXITCODE -ne 0) { throw "$package build failed" }
     }
 } finally { Pop-Location }
-Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'pk.exe') $stage
+Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'NowPlaying.exe'), (Join-Path $release 'pk.exe') $stage
 
 # The blade icons the settings windows show, and the pictures of the blades' picture settings
 # (icons\<blade>\<key>.<value>.ico), drawn by the blade itself.
 $icons = New-Item -ItemType Directory (Join-Path $stage 'icons')
-Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico') $icons
+Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico'), (Join-Path $root 'blades\nowplaying\assets\nowplaying.ico') $icons
 & (Join-Path $stage 'QuickTooth.exe') --write-setting-pictures (Join-Path $icons 'QuickTooth') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'QuickTooth could not write its setting pictures' }
 

@@ -9,9 +9,10 @@ the user's screen. Each blade's `docs/working/live-testing.md` adds what's speci
 |---|---|---|
 | SnipSnap | `%LOCALAPPDATA%\Programs\PocketKnives\snipsnap.exe` | a shortcut in `shell:startup` |
 | QuickTooth | `%LOCALAPPDATA%\Programs\PocketKnives\QuickTooth.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\QuickTooth` |
+| NowPlaying | `%LOCALAPPDATA%\Programs\PocketKnives\NowPlaying.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NowPlaying` |
 | [Runner](../specs/runner.md) | `%LOCALAPPDATA%\Programs\PocketKnives\pk.exe` | a `PocketKnives` shortcut in `shell:startup` |
 
-- All three come from the PocketKnives installer ([installer](../specs/installer.md)), and only
+- All of them come from the PocketKnives installer ([installer](../specs/installer.md)), and only
   `master`'s builds go there (`AGENTS.md`). Don't replace, stop or restart them to try a branch.
   Run checks from a build in a scratch folder instead.
 - A running blade is found by its window class or mutex, not its path. So a command run from
