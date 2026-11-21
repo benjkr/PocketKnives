@@ -8,6 +8,7 @@ members = [
     "blades/quicktooth/win",
     "blades/quicktooth/web",
     "blades/snipsnap",
+    "blades/nowplaying",
     "runner/core",
     "runner/win",
     "runner/winui",
@@ -20,6 +21,7 @@ default-members = [
     "blades/quicktooth/core",
     "blades/quicktooth/win",
     "blades/snipsnap",
+    "blades/nowplaying",
     "runner/core",
     "runner/win",
     "runner/winui",
@@ -37,6 +39,7 @@ quicktooth-core = { path = "blades/quicktooth/core" }
 windows-sys = "0.61"
 windows = { version = "0.62", default-features = false }
 windows-core = { version = "0.62", default-features = false }
+windows-numerics = { version = "0.3", default-features = false }
 libm = "0.2"
 
 [workspace.lints.rust]

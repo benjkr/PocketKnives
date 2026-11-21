@@ -26,6 +26,11 @@ native exe that uses 1–2 MB in the background. [Read more](blades/snipsnap/REA
 Connects or disconnects your AirPods with one click on a taskbar icon, in a second or two instead
 of about 16 seconds through Quick Settings. [Read more](blades/quicktooth/README.md)
 
+### <img src="blades/nowplaying/assets/icon.svg" width="32" height="32" alt=""> NowPlaying
+
+Shows the current media's album cover, source app icon, seekable timeline and live 5-band audio
+frequency meter docked cleanly in the Windows 11 taskbar. [Read more](blades/nowplaying/README.md)
+
 ## Install
 
 Windows 11 (or Windows 10 2004+), no admin rights. Build the installer and run it:

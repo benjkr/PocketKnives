@@ -1,0 +1,56 @@
+# NowPlaying
+
+What it does now. Keep it current in the same change, and lean.
+
+## Look and layout
+
+- **C1 Pure Clear**, `344 × 40` DIPs, rendered with Direct2D + DirectWrite + WIC into a
+  premultiplied 32-bit BGRA layered window (`UpdateLayeredWindow`, grayscale text AA).
+- **Docking**: equal padding on left, top, and bottom of the taskbar (`equal_pad = (tb_h - 40) / 2`,
+  4 px on a standard 48 px taskbar). Can dock bottom-left (`left`) or left of the system tray
+  (`tray`), and switch monitors from the right-click menu.
+- **Hover plate**: native Windows 11 Fluent tile (`CornerRadius = 4`, lifted translucent fill,
+  top-lit vertical gradient elevation border, `85 ms` ease-out in, `167 ms` ease-out out).
+- **Cover**: `40 × 40` flush on the left (`CornerRadius = 4`, WIC Fant scaling at native DPI, 1 px
+  subtle rim). Dominant saturated color is extracted from the cover for the hover scrub accent.
+- **Row 1**: source app icon (`Spotify`, `YouTube`, `Chrome`, `Edge`, `Firefox`, `Apple Music`,
+  `VLC`, or generic media), `Title · Artist` with ellipsis trimming, **white M2 5-pill
+  center-expanding frequency meter** (dark ink on Light taskbar, collapses to 5 soft dots when
+  paused), and `Prev / Play-Pause / Next` buttons with animated hover plates.
+- **Row 2**: **P1 Spotify hover-reveal progress bar** — fixed `4 px` track centered in a `14 px`
+  hit target (zero vertical jump), white fill at rest transitioning to album accent on hover/drag,
+  cursor ghost seek fill, `10 px` smooth fade/scale knob, and tabular `cur / dur` with live hover
+  timestamp preview.
+
+## Media and audio
+
+- **SMTC** (`src/smtc.rs`): MTA worker using `GlobalSystemMediaTransportControlsSessionManager`.
+  Subscribes to session, property, playback and timeline changes, interpolates live position while
+  playing (`Position + (now_utc - LastUpdatedTime)`), decodes thumbnails via WIC, and executes
+  play/pause, skip and seek commands asynchronously.
+- **Audio spectrum** (`src/audio.rs`, `src/fft.rs`): WASAPI shared-mode loopback on the default
+  render endpoint, 512-point Hann-windowed radix-2 FFT into 5 log-spaced perceptual frequency
+  buckets (`40–150`, `150–420`, `420–1200`, `1200–3600`, `3600–14000 Hz`) with smooth AGC and
+  fast-attack/slow-decay smoothing. Capture stops automatically when paused, hidden, or disabled,
+  and re-opens automatically after default audio device switches.
+
+## Z-order and window behavior
+
+- Owned by `Shell_TrayWnd` (`GWLP_HWNDPARENT`) so Windows moves it atomically with the taskbar on
+  every frame without flicker, plus an `EVENT_SYSTEM_FOREGROUND` hook and `TaskbarCreated` handler.
+- `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` and `WM_MOUSEACTIVATE -> MA_NOACTIVATE` on left-clicks so
+  clicking controls or scrubbing never steals focus.
+- Hides automatically behind fullscreen windows, and (when `hideWhenIdle=1`) when no media session
+  is active.
+
+## Settings, single instance and CLI
+
+- Single instance via `Local\PocketKnives.NowPlaying.v1` mutex and `PocketKnives.NowPlaying.Strip`
+  window class. Reload message: `PocketKnives.NowPlaying.Reload.v1`; exit message:
+  `PocketKnives.NowPlaying.Exit.v1`.
+- Settings live in `%APPDATA%\NowPlaying\settings.ini` (or `nowplaying-preview.ini` beside the exe
+  when `POCKETKNIVES_SETTINGS_PREVIEW=1`): `position` (`left` | `tray`), `visualizer` (`1` | `0`),
+  `hideWhenIdle` (`1` | `0`).
+- Sign-in autostart uses `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NowPlaying` via
+  `--autostart on|off|status`.
+- Exit codes: `0` ok, `1` no active media (`--status`), `2` invalid arguments or error.
