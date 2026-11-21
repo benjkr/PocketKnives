@@ -152,7 +152,7 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
 function drawHeader(ctx, h, x0, y0) {
   const bytes = Uint8ClampedArray.from(atob(h.rgba), (c) => c.charCodeAt(0));
   ctx.putImageData(new ImageData(bytes, h.w, h.h), x0, y0);
-  ctx.textBaseline = 'top';
+  ctx.textBaseline = 'alphabetic';
   for (const t of h.texts) {
     ctx.font = `${t.bold ? '600 ' : ''}${t.size}px ${MENU_METRICS.font}`;
     ctx.textAlign = t.align;

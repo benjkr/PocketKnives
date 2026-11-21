@@ -7,9 +7,8 @@
 //! Laid out in 96-DPI pixels and drawn at `scale`.
 use crate::battery::Pods;
 use crate::icon::case::{ring, rounded};
-use crate::icon::glyph::Pt;
+use crate::icon::glyph::{Glyph, Pt, parse_glyph};
 use crate::icon::raster::{Canvas, Clip, Rgb, Xf, over};
-use crate::json::{self, Value};
 use crate::math::{max, min};
 use alloc::string::String;
 use alloc::vec;
@@ -38,7 +37,8 @@ pub enum Align {
     Right,
 }
 
-/// A text item for the host to draw: Segoe UI at `size` px, its top at `y`, aligned on `x`.
+/// A text item for the host to draw: Segoe UI at `size` px, its baseline at `y` (both hosts agree
+/// on a baseline; GDI's text top includes the font's internal leading), aligned on `x`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     pub x: i32,
@@ -103,10 +103,10 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     let xf = Xf::new(scale, 0.0, 0.0);
     let mut l = Layers { ink: Canvas::rect(w, h), ok: Canvas::rect(w, h), warn: Canvas::rect(w, h), top: Canvas::rect(w, h) };
     let mut texts = Vec::new();
-    let mut text = |x: f64, top: f64, s: &str, bold: bool, align: Align, color: u32| {
-        texts.push(Text { x: round(x * scale), y: round(top * scale), size: round(TEXT_SIZE * scale), text: s.into(), bold, align, color })
+    let mut text = |x: f64, baseline: f64, s: &str, bold: bool, align: Align, color: u32| {
+        texts.push(Text { x: round(x * scale), y: round(baseline * scale), size: round(TEXT_SIZE * scale), text: s.into(), bold, align, color })
     };
-    text(MID, 3.0, &info.name, true, Align::Center, c.text);
+    text(MID, 16.0, &info.name, true, Align::Center, c.text);
 
     // The case, centred: open while a bud is in it, closed and faint once both are out.
     let solid = info.connected;
@@ -119,17 +119,16 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     let (x0, x1) = (MID - 30.0, MID + 30.0);
     if open {
         let (nest_h, top, hinge) = (30.0, Y0 + 6.0, Y0 + 26.0);
-        let nest_w = bud_width(nest_h);
         let mut nested = Vec::new();
         if in_left {
-            nested.push((MID - 2.0 - nest_w, false));
+            nested.push((MID - 2.0 - bud_width(true, nest_h), true));
         }
         if in_right {
-            nested.push((MID + 2.0, true));
+            nested.push((MID + 2.0, false));
         }
-        draw_case(&mut l.ink, xf, x0, x1, hinge, Y0 + 49.0, Y0 + 1.5, 1.0, 1.0, 0.14, |canvas| {
-            for &(x, mirror) in &nested {
-                draw_bud(canvas, xf, x, top, nest_h, mirror, solid, Clip::NONE.intersect(-1e9, -1e9, 1e9, hinge + 0.6));
+        draw_case(&mut l.ink, xf, x0, x1, hinge, Y0 + 49.0, Y0 + 1.5, 1.0, 1.0, 0.08, |canvas| {
+            for &(x, left) in &nested {
+                draw_bud(canvas, scale, x, top, nest_h, left, solid, hinge + 0.6);
             }
         });
     } else {
@@ -138,12 +137,11 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     }
     // Buds out of the case stand beside it.
     let out_h = 45.0;
-    let out_w = bud_width(out_h);
     if !in_left {
-        draw_bud(&mut l.ink, xf, SIDE_X - out_w / 2.0, Y0 + 2.0, out_h, false, solid, Clip::NONE);
+        draw_bud(&mut l.ink, scale, SIDE_X - bud_width(true, out_h) / 2.0, Y0 + 2.0, out_h, true, solid, f64::INFINITY);
     }
     if !in_right {
-        draw_bud(&mut l.ink, xf, WIDTH - SIDE_X - out_w / 2.0, Y0 + 2.0, out_h, true, solid, Clip::NONE);
+        draw_bud(&mut l.ink, scale, WIDTH - SIDE_X - bud_width(false, out_h) / 2.0, Y0 + 2.0, out_h, false, solid, f64::INFINITY);
     }
 
     // A gauge and its level under each: left, the case, right.
@@ -156,7 +154,8 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
             _ => c.text,
         };
         let pct = level.map_or_else(|| String::from("\u{2014}"), |(p, _)| alloc::format!("{p}%"));
-        text(gx + GAUGE_W + 7.0, GAUGE_Y - 4.0, &pct, false, Align::Left, color);
+        // Digits centred on the gauge: the baseline a pixel above its bottom.
+        text(gx + GAUGE_W + 7.0, GAUGE_Y + GAUGE_H - 1.0, &pct, false, Align::Left, color);
     }
 
     let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
@@ -180,7 +179,7 @@ fn round(v: f64) -> i32 {
 #[allow(clippy::too_many_arguments)]
 fn draw_case(c: &mut Canvas, xf: Xf, x0: f64, x1: f64, hinge: f64, bottom: f64, lid_top: f64, open: f64, alpha: f64, body_fill: f64, inside: impl FnOnce(&mut Canvas)) {
     const R: f64 = 12.0;
-    const SW: f64 = 1.5;
+    const SW: f64 = 1.0; // the line drawing's weight at this size
     let lid_r = min(R, max(R * 0.19, (hinge - lid_top) * 0.72));
     let above = Clip::NONE.intersect(-1e9, -1e9, 1e9, hinge);
     let below = Clip::NONE.intersect(-1e9, hinge, 1e9, 1e9);
@@ -210,65 +209,32 @@ fn disc(cx: f64, cy: f64, r: f64) -> Vec<Pt> {
 
 // ---------------------------------------------------------------- the bud
 
-/// The traced earbud: the regions of a right AirPods Pro bud (ear tip to the left), the same
-/// drawing the tray glyph comes from. The gaps between the regions are the line art.
-const SHAPES: &str = include_str!("../../../tools/airpods_pro_shapes.json");
-/// Its bounding box.
-const BOX: (f64, f64, f64, f64) = (66.96, 36.79, 53.08, 74.42);
+/// The buds as the original line drawing has them ("Airpods Pro" by Alex Martynov, SVG Repo
+/// #324521, CC Attribution), flattened by `tools/airpods_art.py`: the left bud, ear tip to the
+/// right, and the right bud, ear tip to the left.
+const LEFT_ART: &str = include_str!("../../../assets/airpods-pro-art-left.svg");
+const RIGHT_ART: &str = include_str!("../../../assets/airpods-pro-art-right.svg");
 
-struct Bud {
-    /// Body and stem; ear tip, its opening and the vent.
-    shell: Vec<Vec<Pt>>,
-    detail: Vec<Vec<Pt>>,
+fn bud_art(left: bool) -> Option<Glyph> {
+    parse_glyph(if left { LEFT_ART } else { RIGHT_ART })
 }
 
-fn bud_shapes(mirror: bool) -> Bud {
-    let root = json::parse(SHAPES).unwrap_or(Value::Null);
-    let region = |name: &str| -> Vec<Vec<Pt>> {
-        let mut out = Vec::new();
-        for poly in root.get(name).and_then(Value::as_array).unwrap_or(&[]) {
-            for ring in poly.as_array().unwrap_or(&[]) {
-                let pts: Vec<Pt> = ring
-                    .as_array()
-                    .unwrap_or(&[])
-                    .iter()
-                    .filter_map(|p| {
-                        let p = p.as_array()?;
-                        let (x, y) = (p.first()?.as_f64()?, p.get(1)?.as_f64()?);
-                        Some(Pt { x: if mirror { 2.0 * BOX.0 + BOX.2 - x } else { x }, y })
-                    })
-                    .collect();
-                out.push(pts);
-            }
-        }
-        out
-    };
-    let mut shell = region("body");
-    shell.extend(region("stem"));
-    let mut detail = region("tip");
-    detail.extend(region("noz"));
-    detail.extend(region("vent"));
-    Bud { shell, detail }
+/// A bud's width when it's `h` px tall.
+fn bud_width(left: bool, h: f64) -> f64 {
+    bud_art(left).map_or(0.0, |g| h * (g.bounds.right - g.bounds.left) / (g.bounds.bottom - g.bounds.top))
 }
 
-fn bud_width(h: f64) -> f64 {
-    BOX.2 * h / BOX.3
-}
-
-/// A bud `h` px tall with its top-left at (x, y); `mirror`ed it's a left bud. Solid when
-/// connected (the details tinted), dim when not.
+/// A bud `h` px tall with its top-left at (x, y), cut off below `bottom` (header px). Full ink when
+/// connected, dim when not.
 #[allow(clippy::too_many_arguments)]
-fn draw_bud(c: &mut Canvas, xf: Xf, x: f64, y: f64, h: f64, mirror: bool, solid: bool, clip: Clip<'_>) {
-    let s = h / BOX.3;
-    let bud = bud_shapes(mirror);
-    // Bud units to header px, then to pixels: x' = scale·(s·(u − box.x) + x).
-    let place = |v: &Vec<Vec<Pt>>| -> Vec<Vec<Pt>> {
-        v.iter().map(|ring| ring.iter().map(|p| Pt { x: x + s * (p.x - BOX.0), y: y + s * (p.y - BOX.1) }).collect()).collect()
-    };
-    let (shell, detail) = (place(&bud.shell), place(&bud.detail));
-    let (a_shell, a_detail) = if solid { (1.0, 0.55) } else { (0.34, 0.2) };
-    c.fill_clipped(&shell, a_shell, xf, clip);
-    c.fill_clipped(&detail, a_detail, xf, clip);
+fn draw_bud(c: &mut Canvas, scale: f64, x: f64, y: f64, h: f64, left: bool, solid: bool, bottom: f64) {
+    let Some(g) = bud_art(left) else { return };
+    let b = g.bounds;
+    let s = h / (b.bottom - b.top);
+    // Drawing units to pixels: scale·(x + s·(u − left)).
+    let xf = Xf::new(scale * s, scale * (x - s * b.left), scale * (y - s * b.top));
+    let clip = Clip::NONE.intersect(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, b.top + (bottom - y) / s);
+    c.draw(&g, if solid { 1.0 } else { 0.45 }, xf, clip);
 }
 
 // ---------------------------------------------------------------- the gauge
@@ -336,10 +302,12 @@ mod tests {
     }
 
     #[test]
-    fn the_bud_is_read() {
-        let b = bud_shapes(false);
-        assert_eq!((b.shell.len(), b.detail.len()), (2, 3));
-        assert!(b.shell.iter().chain(&b.detail).all(|r| r.len() > 40));
+    fn the_buds_are_read() {
+        for left in [true, false] {
+            let g = bud_art(left).unwrap();
+            assert!(g.layers.iter().map(|l| l.contours.len()).sum::<usize>() > 5);
+            assert!((bud_width(left, 75.0) - 53.5).abs() < 1.0, "{}", bud_width(left, 75.0));
+        }
     }
 
     #[test]

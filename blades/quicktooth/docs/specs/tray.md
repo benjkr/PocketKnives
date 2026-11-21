@@ -61,7 +61,7 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
   the item's text; `core/src/popup`), in the menu's own colours (dark or light, with the taskbar):
   the device name centred; line art of the case, open with the buds nested while a bud is in it,
   closed when both are in, closed and faint when both are out, a bud that's out standing beside it
-  (the traced bud of `tools/airpods_pro_shapes.json`; solid when connected, dim when not); under
+  (the original line drawing, `assets/airpods-pro-art-*.svg` from `tools/airpods_art.py`; full ink when connected, dim when not); under
   the left bud, the case and the right bud a Fluent battery gauge and its level from the last
   advert (or the connected reading): green with a bolt while charging, orange at or below the
   low-battery warning, "—" when unknown. 236 × 102 px at 100 %; the exe draws the core's pixels

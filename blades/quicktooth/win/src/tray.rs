@@ -41,7 +41,7 @@ use windows_sys::Win32::Foundation::RECT;
 use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH,
     DIB_RGB_COLORS, DeleteObject, FillRect, HDC, OUT_DEFAULT_PRECIS, SelectObject, SetBkMode, SetDIBitsToDevice, SetTextAlign, SetTextColor,
-    TA_CENTER, TA_LEFT, TA_RIGHT, TA_TOP, TRANSPARENT, TextOutW,
+    TA_BASELINE, TA_CENTER, TA_LEFT, TA_RIGHT, TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::UI::Controls::{DRAWITEMSTRUCT, MEASUREITEMSTRUCT, ODT_MENU};
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
@@ -641,7 +641,7 @@ fn draw_header(hdc: HDC, rc: &RECT, h: &Header) {
             Align::Center => TA_CENTER,
             Align::Right => TA_RIGHT,
         };
-        unsafe { SetTextAlign(hdc, align | TA_TOP) };
+        unsafe { SetTextAlign(hdc, align | TA_BASELINE) };
         let text = to_wide(&t.text);
         let len = (text.len() - 1) as i32; // without the terminating null
         let (x, y) = (x0 + t.x, y0 + t.y);

@@ -111,7 +111,7 @@ Working on QuickTooth (people and coding agents alike): start with the suite's [
 
 ## Credits
 
-- **AirPods Pro icons:** built from the shapes of one earbud in the "AirPods Pro" line drawing on [SVG Repo](https://www.svgrepo.com/svg/324521/airpods-pro) (#324521), traced into `tools/airpods_pro_shapes.json` and laid out for the 16 px tray icon by `tools/airpods_glyph.py`.
+- **AirPods Pro icons:** built from the shapes of one earbud in the "AirPods Pro" line drawing on [SVG Repo](https://www.svgrepo.com/svg/324521/airpods-pro) (#324521), by Alex Martynov, licensed CC Attribution: traced into `tools/airpods_pro_shapes.json` and laid out for the 16 px tray icon by `tools/airpods_glyph.py`; the menu header's buds are the drawing itself (`tools/airpods_pro_drawing.svg`), flattened by `tools/airpods_art.py`.
 - **AirPods icons:** from [MingCute Icon](https://github.com/mingcute-design/mingcute-icons), licensed under the Apache License 2.0 (copy in [`assets/MingCute-LICENSE.txt`](assets/MingCute-LICENSE.txt)); their path data is in `tools/airpods_shapes.json`, flattened into straight lines by `tools/airpods_glyph.py`.
 - **Connect/disconnect commands:** the driver commands were first used this way by [ToothTray](https://github.com/m2jean/ToothTray).
 - **Battery format:** the AirPods status broadcast follows community reverse engineering, e.g. OpenPods and furiousMAC/continuity.

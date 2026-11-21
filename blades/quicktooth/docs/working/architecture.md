@@ -48,7 +48,7 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
     tray commands. `exec.rs`: the executor.
   - `icon/`: the renderer (`mod.rs` phases, `raster.rs`, `glyph.rs` SVG and outline, `png.rs`,
     `sort.rs` .NET's sort). `tunables.rs`, `math.rs`, `num.rs`.
-  - `popup/`: the menu's picture header (it reads `tools/airpods_pro_shapes.json`);
+  - `popup/`: the menu's picture header (the buds: `assets/airpods-pro-art-*.svg`);
     `icon/case.rs`: the case icon.
   - `settings.rs` (settings.json), `blade_settings.rs` (`--settings` lines, `--set` checks),
     `devices.rs`, `battery.rs` (readings, the Apple advert), `log.rs`, `json.rs`, `guid.rs`.
@@ -62,5 +62,5 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
 - `sim/`: `qt-sim.mjs` (CLI), `lib/` (session, scenarios, checks, parity, core build), `web/` (the
   page: `core.js`, `tray.js`, `icon.js`, `shell.js`, `menu.js`, `bluetooth.js`, `clock.js`,
   `main.js`, `panel.js`), `scenarios/`, `reference/` (measured metrics and probes).
-- `installer/` (Inno Setup script, build script), `publish.ps1`, `tools/` (glyph generator, bud shapes),
+- `installer/` (Inno Setup script, build script), `publish.ps1`, `tools/` (glyph and header-art generators),
   `assets/`, `docs/`.
