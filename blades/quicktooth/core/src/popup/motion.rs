@@ -7,6 +7,8 @@ use crate::math::{PI, cos, max, min};
 
 /// The lid's angle, open.
 pub const OPEN: f64 = 102.0;
+/// The case's opacity once both buds are out (it fades and sinks out of the way).
+pub const FADED: f64 = 0.35;
 /// How long a bud's bob takes (up and down), ms; the right one is half a period behind.
 const BOB_MS: f64 = 1517.0;
 /// The light blinks amber for this long after the case closes, this fast.
@@ -115,7 +117,7 @@ impl Motion {
         m.lid.snap(if w.lid { OPEN } else { 0.0 });
         m.left.snap(if w.left { 1.0 } else { 0.0 });
         m.right.snap(if w.right { 1.0 } else { 0.0 });
-        m.case.snap(if pods == Pods::Out { 0.45 } else { 1.0 });
+        m.case.snap(if pods == Pods::Out { FADED } else { 1.0 });
         m
     }
 
@@ -146,7 +148,7 @@ impl Motion {
         let w = want(self.pods);
         let lid = self.lid.x;
         let both_out = self.left.x > 0.5 && self.right.x > 0.5;
-        self.case.t = if self.pods == Pods::Out && both_out { 0.45 } else { 1.0 };
+        self.case.t = if self.pods == Pods::Out && both_out { FADED } else { 1.0 };
         let away = self.case.x < 0.85;
         let mut needs_open = false;
         let (lx, rx) = (self.left.x, self.right.x);

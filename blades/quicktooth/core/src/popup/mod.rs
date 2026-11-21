@@ -155,7 +155,11 @@ pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
             }
         }
     }
-    paint.art(front, case, None, pose.case);
+    if back.is_none() && pose.case < 1.0 {
+        faded_case(&mut paint, front, case, pose.case);
+    } else {
+        paint.art(front, case, None, pose.case);
+    }
     for &(art, place, up) in &buds {
         if up {
             paint.art(art, place, None, 1.0);
@@ -212,6 +216,10 @@ const CASE_LID_30: &str = include_str!("../../../assets/header-case-lid-30-back.
 const CASE_LID_54: &str = include_str!("../../../assets/header-case-lid-54-back.svg");
 const CASE_LID_78: &str = include_str!("../../../assets/header-case-lid-78-back.svg");
 const LID_30_EDGE: f64 = 56.8;
+/// The faded case: how far it sinks, how tall its fading bottom is (header px), in how many steps.
+const FADE_SINK: f64 = 8.0;
+const FADE_HEIGHT: f64 = 14.0;
+const FADE_STEPS: usize = 10;
 /// How high a bud hops on its way out, header px.
 const ARC: f64 = 4.0;
 /// A seated bud: the bud drawing at this scale, its top-left at (x, y) in the case's units, cut
@@ -301,6 +309,21 @@ impl Painter<'_> {
             Led::Off => 0xC3CAD6,
         };
         if self.connected { c } else { grey(c) }
+    }
+}
+
+/// The closed case once both buds are out: faint, a little lower, its bottom fading out in steps as
+/// if behind a low wall, all by how far it has faded (`opacity` from 1 to [`motion::FADED`]).
+fn faded_case(paint: &mut Painter<'_>, art: &str, case: Place, opacity: f64) {
+    let k = crate::math::clamp((1.0 - opacity) / (1.0 - motion::FADED), 0.0, 1.0);
+    let case = Place { oy: case.oy + FADE_SINK * k, ..case };
+    // The wall's top, header px; above the fade the case is whole, below the wall it's hidden.
+    let wall = PIC_Y + 56.0 + (1.0 - k) * 30.0;
+    let fade_top = wall - FADE_HEIGHT;
+    paint.art(art, case, Some((f64::NEG_INFINITY, fade_top)), opacity);
+    for i in 1..FADE_STEPS {
+        let (top, bottom) = (fade_top + FADE_HEIGHT * (i - 1) as f64 / (FADE_STEPS - 1) as f64, fade_top + FADE_HEIGHT * i as f64 / (FADE_STEPS - 1) as f64);
+        paint.art(art, case, Some((top, bottom)), opacity * (1.0 - k * i as f64 / FADE_STEPS as f64));
     }
 }
 
