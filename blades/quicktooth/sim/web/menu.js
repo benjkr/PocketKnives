@@ -56,12 +56,14 @@ export function layoutMenu(items, s, M = MENU_METRICS) {
   const r = (v) => Math.round(v * s);
   const fontPx = M.fontPx * s;
   let maxText = 0;
-  for (const it of items) if (!it.separator) maxText = Math.max(maxText, textWidth(it.text, fontPx, M.font));
+  for (const it of items) if (!it.separator && !it.header) maxText = Math.max(maxText, textWidth(it.text, fontPx, M.font));
   const arrow = items.some((it) => it.submenu) ? r(M.arrowExtra) : 0;
-  const width = Math.ceil(r(M.textX) + maxText + r(M.rightPad) + arrow);
+  // An owner-drawn picture item (the app's header) is as wide and tall as its picture.
+  const pictures = items.filter((it) => it.header).map((it) => it.header.w + 2 * r(M.border + M.pad));
+  const width = Math.max(Math.ceil(r(M.textX) + maxText + r(M.rightPad) + arrow), ...pictures);
   let y = r(M.border + M.pad);
   const rows = items.map((it) => {
-    const h = it.separator ? r(M.sepH) : r(M.itemH);
+    const h = it.separator ? r(M.sepH) : it.header ? it.header.h : r(M.itemH);
     const row = { ...it, top: y, height: h };
     y += h;
     return row;
@@ -105,6 +107,10 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
   ctx.fillRect(b, b, W - 2 * b, H - 2 * b);
 
   lay.rows.forEach((row, i) => {
+    if (row.header) {
+      drawHeader(ctx, row.header, Math.floor((W - row.header.w) / 2), row.top);
+      return;
+    }
     if (row.separator) {
       ctx.fillStyle = C.sep;
       ctx.fillRect(r(M.sepInset), row.top + r(M.sepLineY), W - 2 * r(M.sepInset), Math.max(1, Math.round(s)));
@@ -140,6 +146,22 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
     }
   });
   ctx.restore();
+}
+
+/** The app's owner-drawn header: its pixels, then its text in Tahoma, as the exe draws it with GDI. */
+function drawHeader(ctx, h, x0, y0) {
+  const bytes = Uint8ClampedArray.from(atob(h.rgba), (c) => c.charCodeAt(0));
+  ctx.putImageData(new ImageData(bytes, h.w, h.h), x0, y0);
+  ctx.textBaseline = 'top';
+  for (const t of h.texts) {
+    ctx.font = `${t.bold ? 'bold ' : ''}${t.size}px Tahoma, Verdana, sans-serif`;
+    ctx.textAlign = t.right ? 'right' : 'left';
+    const x = x0 + t.x;
+    if (t.gray) { ctx.fillStyle = '#FFFFFF'; ctx.fillText(t.text, x + 1, y0 + t.y + 1); }
+    ctx.fillStyle = t.gray ? '#ACA899' : '#000000';
+    ctx.fillText(t.text, x, y0 + t.y);
+  }
+  ctx.textAlign = 'left';
 }
 
 /** Index of the row at window-relative y, or -1. */

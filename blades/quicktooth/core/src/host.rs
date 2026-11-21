@@ -19,6 +19,8 @@ use crate::devices::{OneShot, SendResult, Snapshot};
 use crate::exec::Op;
 use crate::icon::AnimPhase;
 use crate::num::fmt_r;
+use crate::popup::Header;
+use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::Cell;
@@ -179,15 +181,23 @@ pub struct MenuItem {
     pub checked: bool,
     pub separator: bool,
     pub submenu: Option<Vec<MenuItem>>,
+    /// Drawn as this picture instead of its text ([`crate::popup`]); the text stays for the log
+    /// and accessibility.
+    pub header: Option<Rc<Header>>,
 }
 
 impl MenuItem {
     pub fn command(id: i32, text: impl Into<String>) -> Self {
-        MenuItem { id, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: None }
+        MenuItem { id, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: None, header: None }
     }
 
     pub fn divider() -> Self {
-        MenuItem { id: 0, text: None, grayed: false, checked: false, separator: true, submenu: None }
+        MenuItem { id: 0, text: None, grayed: false, checked: false, separator: true, submenu: None, header: None }
+    }
+
+    pub fn with_header(mut self, header: Rc<Header>) -> Self {
+        self.header = Some(header);
+        self
     }
 
     pub fn grayed(mut self, grayed: bool) -> Self {
@@ -201,7 +211,7 @@ impl MenuItem {
     }
 
     pub fn submenu(text: impl Into<String>, items: Vec<MenuItem>) -> Self {
-        MenuItem { id: 0, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: Some(items) }
+        MenuItem { id: 0, text: Some(text.into()), grayed: false, checked: false, separator: false, submenu: Some(items), header: None }
     }
 }
 

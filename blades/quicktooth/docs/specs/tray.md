@@ -20,6 +20,12 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
   saved device is missing), No device selected, Connecting…, Disconnecting…. Capped at 127
   UTF-16 units (`szTip`; a character the cut would split is dropped whole).
 
+- Where the buds are (from the advert watch, [bluetooth](bluetooth.md)): while it's known and
+  not "both out", the icon is the case icon instead ([icon](icon-and-animation.md)); a connect,
+  disconnect or ripple animation takes over while it runs. Not heard for `PodsStaleMs` (90 s): back
+  to the plain icon. Each change is logged (`pods: lid open`, `pods: left out, in an ear`,
+  `pods: not heard`).
+
 ## Clicks and commands
 
 - Left click or keyboard select (`NIN_SELECT`, `NIN_KEYSELECT`) toggles the target. With no
@@ -51,6 +57,13 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 
 - Order: the status line (grayed), separator, Connect or Disconnect, Device ▸, separator,
   Start with Windows, Exit.
+- While the buds' place is known, the status line is an owner-drawn picture instead (its text stays
+  the item's text): Windows XP pixel art (the approved "B1" design, `core/src/popup`) of the case
+  and buds as they are, the tray glyph, the device name and `<status> · <where>` ("lid open",
+  "left in ear", …), and a Battery group with Left, Right and Case bars from the last advert
+  (or the connected reading): 17 blocks, orange at or below the low-battery warning, a bolt while
+  charging, "—" when unknown. Grey when not connected. 216 × 258 px at 100 %, one art pixel = 2 px;
+  the exe draws the core's pixels and Tahoma text with GDI. The rows below stay Windows' own.
 - While an action is pending, the second item is the grayed status (Connecting…) and Device is
   grayed. With no target, the second item is a grayed Connect.
 - Device ▸ lists the paired Bluetooth audio devices (the target checked, `  (connected)` after

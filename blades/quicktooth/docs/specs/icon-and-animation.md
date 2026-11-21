@@ -40,6 +40,18 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the a
   through the same animation timer; a connect or disconnect animation takes over, and the timer
   skips a ripple while one is running.
 
+## Where the buds are (the case icon)
+
+- `core/src/icon/case.rs`, on the 16-unit grid: an outlined case (1.2 px lines) with a lid hinged
+  on the body's top corners. Closed: the case alone with its status light. Lid open: the lid swings
+  up and the buds sit inside at 0.72 of their size. One bud out: the case flows down out of the
+  icon and fades while the buds stay where the plain glyph has them, the one still in the case at
+  0.32. Both out: exactly the plain icon (and so the static icons, low-battery dot included).
+  Connected buds are solid and knock the lid's lines out behind them; not connected, hollow.
+- Each change eases (`CaseAnimSeconds` 0.52 s, in-out cubic) from wherever the icon is to the
+  new pose, on its own timer at the animation frame rate; the case fades out late when it leaves
+  and in early when it comes back, and buds appear only once the lid has started to open.
+
 ## Renderer
 
 - `core/src/icon` (shared): a small scanline rasterizer with nonzero fill, 16 sub-scanlines per

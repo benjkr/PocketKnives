@@ -31,6 +31,15 @@ Check the relevant entries before changing a behaviour or look; don't reintroduc
 - **The glow as a spot circling the head**, then as a disc as wide as the stem (both sides of the
   stem lit at once, so it seemed to bounce): replaced by a thin band running along the outline.
 
+- **Where the buds are**, from five rounds of mockups: the tray icon is "V1", an outlined case with
+  a hinged lid, the buds staying put while the case flows down (not chosen: case and pop-out bud,
+  buds only, a cradle; a 1-bit pixel case was rejected outright). The menu header is "B1", XP
+  pixel art at medium density with coloured outlines (not chosen: Apple glossy, Windows 11 Fluent,
+  denser 1× pixel art). It's drawn over Windows' own menu rather than as a whole XP window, so
+  keyboard, submenu and dismissal stay native.
+- **The advert watch while not connected** runs a 6 s window once a minute (the user's choice, to
+  keep the CPU idle), so a case opened away from the PC shows up to a minute late.
+
 ## Building and shipping
 
 - **WPF to draw the icons**: pulled in the UI framework and ruled out Native AOT. Replaced by the

@@ -120,7 +120,7 @@ Everything the CLI does goes through `window.qt`, which you can also drive from 
 `qt.state()`, `qt.log()`, `qt.timeline()`, `qt.advance(ms)`, `qt.waitFor(fn, timeoutMs)`,
 `qt.setMode('manual'|'realtime', speed)`, `qt.cli('--toggle')`, `qt.cli('--set lowBattery=30')`, `qt.locate('icon')`,
 `qt.profile('slow')` or `qt.profile({ hfpMs: [5000, 6000] })`, `qt.bt.externalConnect('AirPods Pro')`,
-`qt.bt.externalDisconnect(…)`, `qt.bt.setInRange(…, false)`, `qt.bt.setPresent(…, false)`, `qt.bt.setBattery(…, {left: 20})`,
+`qt.bt.externalDisconnect(…)`, `qt.bt.setInRange(…, false)`, `qt.bt.setPresent(…, false)`, `qt.bt.setBattery(…, {left: 20})`, `qt.bt.setPods(…, {state: 'lid open'})`,
 `qt.setTheme('light')`, `qt.setScale(1.5)`, `qt.restartExplorer()`, `qt.setPromoted(false)`,
 `qt.restartApp({ firstRun: true })`, `qt.tune({ Travel: 2.4 })`, `qt.frames({ phase, durationMs, size })`.
 Use `lib/session.mjs` (`Session.open({...})`) to get a page that is set up correctly: manual clock, physical-pixel scale, and host-driven DPI changes.

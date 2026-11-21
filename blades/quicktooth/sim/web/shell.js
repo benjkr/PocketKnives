@@ -753,7 +753,7 @@ export class Shell {
       scale: this.s, dpr: window.devicePixelRatio, screen: this.o.screen, theme: this.o.theme, explorerUp: this.explorerUp,
       icon: this.locate('icon'), iconInOverflow: !!this.appIcon && !this.geom.items.some((i) => i.key === 'icon:quicktooth'),
       hover: this.hover, tooltip: this.tip.state === 'shown' ? { key: this.tip.key, text: this.dom.tooltip.textContent } : null,
-      menu: this.menu ? this.menu.windows.map((w) => ({ rect: [w.pos.left, w.pos.top, w.pos.left + w.lay.width, w.pos.top + w.lay.height], hot: w.hot >= 0 ? w.lay.rows[w.hot].text : null, items: w.lay.rows.map((r) => (r.separator ? '—' : `${r.checked ? '✓ ' : ''}${r.text}${r.grayed ? ' (grayed)' : ''}${r.submenu ? ' ▸' : ''}`)) })) : null,
+      menu: this.menu ? this.menu.windows.map((w) => ({ rect: [w.pos.left, w.pos.top, w.pos.left + w.lay.width, w.pos.top + w.lay.height], hot: w.hot >= 0 ? w.lay.rows[w.hot].text : null, items: w.lay.rows.map((r) => (r.separator ? '—' : `${r.checked ? '✓ ' : ''}${r.text}${r.grayed ? ' (grayed)' : ''}${r.submenu ? ' ▸' : ''}${r.header ? ' (picture)' : ''}`)) })) : null,
       flyoutOpen: this.flyout.open,
       registry: this.registry.entries.map((e) => ({ key: e.key, isPromoted: e.isPromoted, created: !!e.created })),
     };

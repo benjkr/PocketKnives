@@ -25,6 +25,7 @@ pub mod json;
 pub mod log;
 pub mod math;
 pub mod num;
+pub mod popup;
 pub mod settings;
 pub mod tunables;
 

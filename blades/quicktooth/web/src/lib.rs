@@ -477,10 +477,44 @@ fn write_menu(w: &mut String, items: &[MenuItem]) {
                 w.push_str(",\"submenu\":");
                 write_menu(w, sub);
             }
+            if let Some(h) = &item.header {
+                write_header(w, h);
+            }
         }
         w.push('}');
     }
     w.push(']');
+}
+
+/// `,"header":{"w","h","rgba":<base64>,"texts":[{x,y,size,text,bold,right,gray}]}`: the
+/// owner-drawn picture item, as the exe draws it.
+fn write_header(w: &mut String, h: &quicktooth_core::popup::Header) {
+    w.push_str(&format!(",\"header\":{{\"w\":{},\"h\":{},\"rgba\":\"", h.width, h.height));
+    base64(w, &to_rgba(&h.bgra));
+    w.push_str("\",\"texts\":[");
+    for (i, t) in h.texts.iter().enumerate() {
+        if i > 0 {
+            w.push(',');
+        }
+        w.push_str(&format!("{{\"x\":{},\"y\":{},\"size\":{},\"text\":", t.x, t.y, t.size));
+        json::write_str(w, &t.text);
+        w.push_str(&format!(",\"bold\":{},\"right\":{},\"gray\":{}}}", t.bold, t.right, t.gray));
+    }
+    w.push_str("]}");
+}
+
+fn base64(w: &mut String, bytes: &[u8]) {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for k in 0..4 {
+            if k <= c.len() {
+                w.push(A[(n >> (18 - 6 * k) & 63) as usize] as char);
+            } else {
+                w.push('=');
+            }
+        }
+    }
 }
 
 impl WebHost {

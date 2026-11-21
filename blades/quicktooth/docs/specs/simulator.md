@@ -36,7 +36,9 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What it do
 ## Mock Bluetooth
 
 - Separate A2DP and HFP endpoints, the link that lingers after a disconnect, notifications, the
-  KS one-shot, the BLE battery advert and Windows battery.
+  KS one-shot, the BLE battery advert and Windows battery, and the advert watch: `setPods`
+  (`closed`, `lid open`, `left out`, `right out`, `out`, with `inEar`) makes the mock AirPods
+  advertise the real bytes of that state every `advertMs` and at once on a change.
 - Profiles calibrated on real logs: `fast`, `typical`, `real-world`, `slow` (needs the 8 s resend),
   `flaky` (first request lost), `unreachable` (20 s timeout), `rejected`, `long-linger`,
   `hfp-very-slow`.

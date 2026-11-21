@@ -20,6 +20,7 @@ use crate::host::{DeviceBackend, Event, IconDesc, IconImage, MenuItem, TrayHost,
 use crate::icon::case::{self, Pose};
 use crate::icon::{self, AnimPhase, IconState};
 use crate::json;
+use crate::popup;
 use crate::log;
 use crate::math::ceil;
 use crate::num::{round_away, trunc_i64, write_r};
@@ -1175,7 +1176,11 @@ impl TrayController {
     async fn show_menu_async(&self, x: i32, y: i32) {
         // Refreshes the tooltip if the reading is a bit old.
         self.maybe_scan_battery(int(T::MenuBatteryMaxAgeS) as f64 * 1000.0);
-        let mut items = alloc::vec![MenuItem::command(CMD_STATUS, self.status_line()).grayed(true), MenuItem::divider()];
+        let mut status = MenuItem::command(CMD_STATUS, self.status_line()).grayed(true);
+        if let Some(header) = self.menu_header() {
+            status = status.with_header(Rc::new(header));
+        }
+        let mut items = alloc::vec![status, MenuItem::divider()];
 
         let (pending, target) = {
             let st = self.st();
@@ -1228,6 +1233,28 @@ impl TrayController {
         let Ok(cmd) = menu.await else { return };
         self.emit(&format!("{{\"type\":\"menu\",\"open\":false,\"cmd\":{cmd}}}"));
         self.on_menu_command(cmd);
+    }
+
+    /// The menu's picture header while the buds' place is known ([`crate::popup`]).
+    fn menu_header(&self) -> Option<popup::Header> {
+        let (pods, in_ear, advert, size) = {
+            let st = self.st();
+            (st.pods?, st.pods_in_ear, st.pods_reading.clone(), st.icon_size)
+        };
+        let connected = self.target_connected();
+        let reading = advert.or_else(|| self.battery_shown());
+        let level = |v: Option<i32>, charging: bool| v.map(|v| (v, charging));
+        let info = popup::HeaderInfo {
+            name: self.device_label(),
+            status: format!("{} \u{b7} {}", self.status_text(), popup::pods_phrase(pods, in_ear)),
+            pods,
+            connected,
+            left: reading.as_ref().and_then(|r| level(r.left, r.buds_charging)),
+            right: reading.as_ref().and_then(|r| level(r.right, r.buds_charging)),
+            case: reading.as_ref().and_then(|r| level(r.case, r.case_charging)),
+            low_warning: self.settings().low_battery_warning(),
+        };
+        Some(popup::header(&info, size.max(16) as f64 / 16.0))
     }
 
     fn on_menu_command(&self, cmd: i32) {
