@@ -18,11 +18,11 @@
   where Windows supports it. The runner opens the Windows 10 look if WinUI fails to start.
 - The left pane shows General and a Blades list with the name and icon of each blade. Each blade's
   check box or switch controls its existing sign-in entry. The window edits SnipSnap's Startup
-  shortcut and uses QuickTooth's `--autostart` command for its Run entry. Windows launches
+  shortcut and uses QuickTooth's and NowPlaying's `--autostart` commands for their Run entries. Windows launches
   enabled blades at the next sign-in.
 - Each blade's page shows that blade's own settings, read from the blade when Settings opens and
   changed through it ([blade settings](blade-settings.md)): SnipSnap's three hotkeys and the
-  flash, QuickTooth's headset, low-battery level and tray icon. A hotkey is a hotkey box in XP and Windows
+  flash, QuickTooth's headset, low-battery level and tray icon, NowPlaying's frequency meter. A hotkey is a hotkey box in XP and Windows
   10 (Alt+key goes to the box, not to the window's access keys; the box can't take PrtSc or Win,
   and keeps a saved key it can't show). In Windows 11 the hotkey is a button: click it, press the
   keys, Esc cancels; Ctrl, Alt or Win is required. When a blade refuses a change (a hotkey taken
