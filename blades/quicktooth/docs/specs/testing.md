@@ -30,6 +30,9 @@ and `USERPROFILE` pointed at a scratch profile: `--battery`, `--watch-endpoints`
 - `--watch-endpoints 15`: the notification callback works through its COM vtable, and the audio
   service delivers callbacks.
 - `--battery`: adverts heard with 0 handler errors (the reading needs the AirPods out of the case).
+- `--preview-menu <dir>`: opens the real menu with the picture header for each place the buds
+  can be, bottom right for a moment each, and saves a PNG of each menu window as Windows drew it
+  (theme, header, rows). It doesn't touch a running tray.
 - `--watch-pods 20`: the advert watch hears the target and prints each change of where the buds
   are, with the advert's bytes (open the case, take a bud out, …).
 - `dumpbin /dependents QuickTooth.exe`: only Windows DLLs and the universal CRT.

@@ -57,15 +57,17 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 
 - Order: the status line (grayed), separator, Connect or Disconnect, Device ▸, separator,
   Start with Windows, Exit.
-- While the buds' place is known, the status line is an owner-drawn picture instead (its text stays
-  the item's text; `core/src/popup`), in the menu's own colours (dark or light, with the taskbar):
-  the device name centred; line art of the case, open with the buds nested while a bud is in it,
-  closed when both are in, closed and faint when both are out, a bud that's out standing beside it
-  (the original line drawing, `assets/airpods-pro-art-*.svg` from `tools/airpods_art.py`; full ink when connected, dim when not); under
-  the left bud, the case and the right bud a Fluent battery gauge and its level from the last
-  advert (or the connected reading): green with a bolt while charging, orange at or below the
-  low-battery warning, "—" when unknown. 236 × 102 px at 100 %; the exe draws the core's pixels
-  and Segoe UI text with GDI. The rows below stay Windows' own.
+- While the buds' place is known, the status line is a picture instead (its text stays the item's
+  text; `core/src/popup`) on the menu's own background (dark or light, with the taskbar): the
+  device name centred; the case, open with the buds seated in it while a bud is in it, closed when
+  both are in, closed and faint when both are out, a bud that's out standing beside it; under the
+  left bud, the case and the right bud a Fluent battery gauge and its level from the last advert
+  (or the connected reading): green with a bolt while charging, orange at or below the
+  low-battery warning, "—" when unknown. The pictures are shaded white AirPods
+  (`assets/header-*.svg`, [icon](icon-and-animation.md)), all grey when not connected.
+  236 × 102 px at 100 %. The exe makes it a bitmap item (the core's pixels with Segoe UI text by
+  GDI), enabled so Windows doesn't dim it (picking it does nothing): an owner-drawn item would
+  turn off Windows 11's theme for the whole menu. The rows below stay Windows' own.
 - While an action is pending, the second item is the grayed status (Connecting…) and Device is
   grayed. With no target, the second item is a grayed Connect.
 - Device ▸ lists the paired Bluetooth audio devices (the target checked, `  (connected)` after

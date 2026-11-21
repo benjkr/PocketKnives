@@ -48,7 +48,7 @@ Read "Where code goes" and "Rules" before writing code; use the file map to loca
     tray commands. `exec.rs`: the executor.
   - `icon/`: the renderer (`mod.rs` phases, `raster.rs`, `glyph.rs` SVG and outline, `png.rs`,
     `sort.rs` .NET's sort). `tunables.rs`, `math.rs`, `num.rs`.
-  - `popup/`: the menu's picture header (the buds: `assets/airpods-pro-art-*.svg`);
+  - `popup/`: the menu's picture header (its pictures: `assets/header-*.svg`);
     `icon/case.rs`: the case icon.
   - `settings.rs` (settings.json), `blade_settings.rs` (`--settings` lines, `--set` checks),
     `devices.rs`, `battery.rs` (readings, the Apple advert), `log.rs`, `json.rs`, `guid.rs`.

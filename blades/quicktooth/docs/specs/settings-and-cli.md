@@ -63,7 +63,7 @@ in `core/src/blade_settings.rs`:
   build `--write-setting-pictures <dir>`.
 - Read-only checks for agents and tests: `--probe <endpoint id>`, `--render-icons <dir> [--zoom z]`,
   `--icon-rect`, `--show-menu` / `--close-menu`, `--settings-roundtrip <in> <out>`,
-  `--stress-enumerate N`, `--watch-endpoints S`, `--watch-pods S`, `--selftest-icons [cycles]`
+  `--stress-enumerate N`, `--watch-endpoints S`, `--watch-pods S`, `--preview-menu <dir>`, `--selftest-icons [cycles]`
   ([testing](testing.md) says what each proves).
 - Experiments: `--direct` (send without the tray) and `--a2dp-only` (A2DP control only; slow, see
   [decisions](../working/decisions.md)).

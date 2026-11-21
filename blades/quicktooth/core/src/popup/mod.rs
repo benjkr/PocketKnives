@@ -7,11 +7,10 @@
 //! Laid out in 96-DPI pixels and drawn at `scale`.
 use crate::battery::Pods;
 use crate::icon::case::{ring, rounded};
-use crate::icon::glyph::{Glyph, Pt, parse_glyph};
+use crate::icon::glyph::{Pt, parse_tones};
 use crate::icon::raster::{Canvas, Clip, Rgb, Xf, over};
-use crate::math::{max, min};
+use crate::math::max;
 use alloc::string::String;
-use alloc::vec;
 use alloc::vec::Vec;
 
 /// What the header shows.
@@ -78,8 +77,6 @@ const LIGHT: Palette = Palette { bg: 0xF9F9F9, text: 0x000000, disabled: 0x9F9F9
 const WIDTH: f64 = 236.0;
 const HEIGHT: f64 = 102.0;
 const MID: f64 = WIDTH / 2.0;
-/// The picture's top.
-const Y0: f64 = 23.0;
 /// The gauges' row, and each gauge's size.
 const GAUGE_Y: f64 = 83.0;
 const GAUGE_W: f64 = 16.0;
@@ -108,40 +105,38 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     };
     text(MID, 16.0, &info.name, true, Align::Center, c.text);
 
-    // The case, centred: open while a bud is in it, closed and faint once both are out.
-    let solid = info.connected;
+    // The picture: the case, centred (open while a bud is in it, closed and faint once both are
+    // out); a bud that's out stands beside it.
+    let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
+    let mut paint = Painter { bgra: &mut bgra, canvas: Canvas::rect(w, h), connected: info.connected, light: info.light };
     let (in_left, in_right) = match info.pods {
         Pods::Closed | Pods::Open => (true, true),
         Pods::OneOut { left } => (!left, left),
         Pods::Out => (false, false),
     };
-    let open = matches!(info.pods, Pods::Open | Pods::OneOut { .. });
-    let (x0, x1) = (MID - 30.0, MID + 30.0);
-    if open {
-        let (nest_h, top, hinge) = (30.0, Y0 + 6.0, Y0 + 26.0);
-        let mut nested = Vec::new();
-        if in_left {
-            nested.push((MID - 2.0 - bud_width(true, nest_h), true));
-        }
-        if in_right {
-            nested.push((MID + 2.0, false));
-        }
-        draw_case(&mut l.ink, xf, x0, x1, hinge, Y0 + 49.0, Y0 + 1.5, 1.0, 1.0, 0.08, |canvas| {
-            for &(x, left) in &nested {
-                draw_bud(canvas, scale, x, top, nest_h, left, solid, hinge + 0.6);
+    let case = Place::art(CASE_BOUNDS, CASE_W, MID - CASE_W / 2.0, PIC_Y + 4.0, scale);
+    if matches!(info.pods, Pods::Open | Pods::OneOut { .. }) {
+        paint.art(CASE_OPEN_BACK, case, Clip::NONE, 1.0);
+        for (left, seated) in [(true, in_left), (false, in_right)] {
+            if seated {
+                let (art, b) = bud(left);
+                // Seated: the bud drawing at SEAT_SCALE, its top-left at the seat (case units), cut
+                // off at the wells' front edge.
+                let seat = Place { k: case.k * SEAT_SCALE, ox: case.at_x(if left { SEAT_X.0 } else { SEAT_X.1 }), oy: case.at_y(SEAT_Y), u0: b.0, v0: b.1, scale };
+                paint.art(art, seat, Clip::NONE.intersect(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, b.1 + (SEAT_CUT - SEAT_Y) / SEAT_SCALE), 1.0);
             }
-        });
+        }
+        paint.art(CASE_OPEN_FRONT, case, Clip::NONE, 1.0);
     } else {
-        let faint = if info.pods == Pods::Out { 0.4 } else { 1.0 };
-        draw_case(&mut l.ink, xf, x0, x1, Y0 + 24.0, Y0 + 49.0, Y0 + 10.0, 0.0, faint, 0.0, |_| {});
+        paint.art(CASE_CLOSED, case, Clip::NONE, if info.pods == Pods::Out { 0.45 } else { 1.0 });
     }
-    // Buds out of the case stand beside it.
-    let out_h = 45.0;
-    if !in_left {
-        draw_bud(&mut l.ink, scale, SIDE_X - bud_width(true, out_h) / 2.0, Y0 + 2.0, out_h, true, solid, f64::INFINITY);
-    }
-    if !in_right {
-        draw_bud(&mut l.ink, scale, WIDTH - SIDE_X - bud_width(false, out_h) / 2.0, Y0 + 2.0, out_h, false, solid, f64::INFINITY);
+    for (left, out) in [(true, !in_left), (false, !in_right)] {
+        if out {
+            let (art, b) = bud(left);
+            let bw = OUT_H * (b.2 - b.0) / (b.3 - b.1);
+            let x = if left { SIDE_X - bw / 2.0 } else { WIDTH - SIDE_X - bw / 2.0 };
+            paint.art(art, Place::art(b, bw, x, PIC_Y + 4.0, scale), Clip::NONE, 1.0);
+        }
     }
 
     // A gauge and its level under each: left, the case, right.
@@ -158,7 +153,6 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
         text(gx + GAUGE_W + 7.0, GAUGE_Y + GAUGE_H - 1.0, &pct, false, Align::Left, color);
     }
 
-    let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
     for (layer, color) in [(&l.ink, c.ink), (&l.ok, c.ok), (&l.warn, c.warn), (&l.top, c.ink)] {
         bgra = over(bgra, &layer.to_bgra(rgb(color)));
     }
@@ -173,68 +167,122 @@ fn round(v: f64) -> i32 {
     crate::math::round(v) as i32
 }
 
-/// The case as the tray's case icon draws it (`icon::case`), larger: a lid arch over the hinge
-/// line, `inside` (the nested buds) drawn after the lid, then the body's U, the rim and, closed,
-/// the status light.
-#[allow(clippy::too_many_arguments)]
-fn draw_case(c: &mut Canvas, xf: Xf, x0: f64, x1: f64, hinge: f64, bottom: f64, lid_top: f64, open: f64, alpha: f64, body_fill: f64, inside: impl FnOnce(&mut Canvas)) {
-    const R: f64 = 12.0;
-    const SW: f64 = 1.0; // the line drawing's weight at this size
-    let lid_r = min(R, max(R * 0.19, (hinge - lid_top) * 0.72));
-    let above = Clip::NONE.intersect(-1e9, -1e9, 1e9, hinge);
-    let below = Clip::NONE.intersect(-1e9, hinge, 1e9, 1e9);
-    if open > 0.0 {
-        c.fill_clipped(&[rounded(x0, lid_top, x1, hinge + 2.0 * R, lid_r)], 0.09 * open * alpha, xf, above);
+// ---------------------------------------------------------------- the pictures
+
+/// The pictures, generated by `tools/header_art.py`: layered SVGs, one flat tone per path, in
+/// painting order. The buds are "Airpods Pro" by Alex Martynov (SVG Repo #324521, CC Attribution);
+/// the case was drawn for QuickTooth (`tools/airpods_case.py`). All in the drawing's 128-unit box.
+const BUD_LEFT: &str = include_str!("../../../assets/header-bud-left.svg");
+const BUD_RIGHT: &str = include_str!("../../../assets/header-bud-right.svg");
+const CASE_CLOSED: &str = include_str!("../../../assets/header-case-closed.svg");
+const CASE_OPEN_BACK: &str = include_str!("../../../assets/header-case-open-back.svg");
+const CASE_OPEN_FRONT: &str = include_str!("../../../assets/header-case-open-front.svg");
+
+/// Ink bounds (left, top, right, bottom), drawing units: each bud, and the case (closed and open
+/// share its place, so they swap without moving).
+const BUD_LEFT_BOUNDS: (f64, f64, f64, f64) = (7.5, 16.5, 61.03, 91.84);
+const BUD_RIGHT_BOUNDS: (f64, f64, f64, f64) = (66.97, 36.32, 120.5, 111.66);
+const CASE_BOUNDS: (f64, f64, f64, f64) = (9.45, 22.31, 118.55, 117.55);
+/// A seated bud: the bud drawing at this scale, its top-left at (x, y) in the case's units, cut
+/// off below the wells' front edge.
+const SEAT_SCALE: f64 = 0.72;
+const SEAT_X: (f64, f64) = (19.73, 69.73);
+const SEAT_Y: f64 = 45.92;
+const SEAT_CUT: f64 = 72.92;
+/// The picture's top, the case's width and a standing bud's height, header px.
+const PIC_Y: f64 = 20.0;
+const CASE_W: f64 = 60.0;
+const OUT_H: f64 = 45.0;
+
+fn bud(left: bool) -> (&'static str, (f64, f64, f64, f64)) {
+    if left { (BUD_LEFT, BUD_LEFT_BOUNDS) } else { (BUD_RIGHT, BUD_RIGHT_BOUNDS) }
+}
+
+/// Drawing units to pixels: header px = o + k·(u − u0), pixels = scale · header px.
+#[derive(Clone, Copy)]
+struct Place {
+    k: f64,
+    ox: f64,
+    oy: f64,
+    u0: f64,
+    v0: f64,
+    scale: f64,
+}
+
+impl Place {
+    /// `b` drawn `width` px wide with its top-left at (x, y).
+    fn art(b: (f64, f64, f64, f64), width: f64, x: f64, y: f64, scale: f64) -> Place {
+        Place { k: width / (b.2 - b.0), ox: x, oy: y, u0: b.0, v0: b.1, scale }
     }
-    c.fill_clipped(&ring(x0, lid_top, x1, hinge + 2.0 * R, lid_r, SW * (1.0 - 0.2 * open)), alpha * (1.0 - 0.35 * open), xf, above);
-    inside(c);
-    if body_fill > 0.0 {
-        c.fill_clipped(&[rounded(x0, hinge - 2.0 * R, x1, bottom, R)], body_fill * alpha, xf, below);
+
+    fn at_x(&self, u: f64) -> f64 {
+        self.ox + self.k * (u - self.u0)
     }
-    c.fill_clipped(&ring(x0, hinge - 2.0 * R, x1, bottom, R, SW), alpha, xf, below);
-    c.fill_clipped(&[rect(x0 - SW / 2.0, hinge, x1 - x0 + SW, SW * 0.75)], 0.9 * alpha, xf, Clip::NONE);
-    if open == 0.0 {
-        c.fill_clipped(&[disc((x0 + x1) / 2.0, hinge + (bottom - hinge) * 0.4, SW * 0.5)], 0.6 * alpha, xf, Clip::NONE);
+
+    fn at_y(&self, v: f64) -> f64 {
+        self.oy + self.k * (v - self.v0)
+    }
+
+    fn xf(&self) -> Xf {
+        Xf::new(self.scale * self.k, self.scale * (self.ox - self.k * self.u0), self.scale * (self.oy - self.k * self.v0))
     }
 }
 
-fn rect(x: f64, y: f64, w: f64, h: f64) -> Vec<Pt> {
-    vec![Pt { x, y }, Pt { x: x + w, y }, Pt { x: x + w, y: y + h }, Pt { x, y: y + h }]
+/// Paints flat tones onto the header one after another, so later ones cover earlier ones.
+struct Painter<'a> {
+    bgra: &'a mut Vec<u8>,
+    canvas: Canvas,
+    connected: bool,
+    light: bool,
 }
 
-fn disc(cx: f64, cy: f64, r: f64) -> Vec<Pt> {
-    use crate::math::{PI, cos, sin};
-    (0..24).map(|k| Pt { x: cx + r * cos(2.0 * PI * k as f64 / 24.0), y: cy + r * sin(2.0 * PI * k as f64 / 24.0) }).collect()
+impl Painter<'_> {
+    fn art(&mut self, svg: &str, place: Place, clip: Clip<'_>, opacity: f64) {
+        for (name, contours) in parse_tones(svg).unwrap_or_default() {
+            let (color, alpha) = tone(name, self.connected, self.light);
+            self.canvas.clear();
+            self.canvas.fill_clipped(&contours, alpha * opacity, place.xf(), clip);
+            let layer = self.canvas.to_bgra(rgb(color));
+            *self.bgra = over(core::mem::take(self.bgra), &layer);
+        }
+    }
 }
 
-// ---------------------------------------------------------------- the bud
-
-/// The buds as the original line drawing has them ("Airpods Pro" by Alex Martynov, SVG Repo
-/// #324521, CC Attribution), flattened by `tools/airpods_art.py`: the left bud, ear tip to the
-/// right, and the right bud, ear tip to the left.
-const LEFT_ART: &str = include_str!("../../../assets/airpods-pro-art-left.svg");
-const RIGHT_ART: &str = include_str!("../../../assets/airpods-pro-art-right.svg");
-
-fn bud_art(left: bool) -> Option<Glyph> {
-    parse_glyph(if left { LEFT_ART } else { RIGHT_ART })
+/// A tone's colour and opacity: the approved pixel-art design's materials, lit from the top left;
+/// all grey when not connected (as that design greyed them).
+fn tone(name: &str, connected: bool, light: bool) -> (u32, f64) {
+    let color = match name {
+        "shell" => 0xF2F4F8,
+        "shell-hi" => 0xFFFFFF,
+        "shell-lo" => 0xCDD5E0,
+        "shell-lo2" => 0xB6C0CF,
+        "tip" => 0xD5DEEA,
+        "tip-hi" => 0xEEF3F9,
+        "tip-lo" => 0xA7B4C7,
+        "tip-lo2" => 0x8793A7,
+        "mesh" | "vent-in" => 0x39414F,
+        "vent" | "well" => 0x1B1F27,
+        "cap" => 0xE2DACA,
+        "cap-lo" => 0xB5AA93,
+        "lid" => 0xE2E7EF,
+        "lid-hi" => 0xF2F4F8,
+        "lid-lo" => 0xCDD5E0,
+        "hinge" => 0x9AA4B2,
+        "mouth" => 0x343B48,
+        "led" => 0x00C853,
+        "line" => 0x586378,
+        "line-under" => 0x1C2028,
+        "shadow" => return (0x000000, if light { 0.12 } else { 0.35 }),
+        _ => 0xFF00FF,
+    };
+    (if connected { color } else { grey(color) }, 1.0)
 }
 
-/// A bud's width when it's `h` px tall.
-fn bud_width(left: bool, h: f64) -> f64 {
-    bud_art(left).map_or(0.0, |g| h * (g.bounds.right - g.bounds.left) / (g.bounds.bottom - g.bounds.top))
-}
-
-/// A bud `h` px tall with its top-left at (x, y), cut off below `bottom` (header px). Full ink when
-/// connected, dim when not.
-#[allow(clippy::too_many_arguments)]
-fn draw_bud(c: &mut Canvas, scale: f64, x: f64, y: f64, h: f64, left: bool, solid: bool, bottom: f64) {
-    let Some(g) = bud_art(left) else { return };
-    let b = g.bounds;
-    let s = h / (b.bottom - b.top);
-    // Drawing units to pixels: scale·(x + s·(u − left)).
-    let xf = Xf::new(scale * s, scale * (x - s * b.left), scale * (y - s * b.top));
-    let clip = Clip::NONE.intersect(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, b.top + (bottom - y) / s);
-    c.draw(&g, if solid { 1.0 } else { 0.45 }, xf, clip);
+/// The pixel-art design's grey for a colour when not connected.
+fn grey(c: u32) -> u32 {
+    let y = 0.299 * (c >> 16) as f64 + 0.587 * ((c >> 8) & 0xFF) as f64 + 0.114 * (c & 0xFF) as f64;
+    let g = crate::math::round(94.0 + (y - 32.0) * 0.641).clamp(0.0, 255.0) as u32;
+    (g << 16) | (g << 8) | g
 }
 
 // ---------------------------------------------------------------- the gauge
@@ -302,11 +350,14 @@ mod tests {
     }
 
     #[test]
-    fn the_buds_are_read() {
-        for left in [true, false] {
-            let g = bud_art(left).unwrap();
-            assert!(g.layers.iter().map(|l| l.contours.len()).sum::<usize>() > 5);
-            assert!((bud_width(left, 75.0) - 53.5).abs() < 1.0, "{}", bud_width(left, 75.0));
+    fn the_pictures_are_read_and_every_tone_is_known() {
+        for svg in [BUD_LEFT, BUD_RIGHT, CASE_CLOSED, CASE_OPEN_BACK, CASE_OPEN_FRONT] {
+            let tones = parse_tones(svg).unwrap();
+            assert!(tones.len() > 5);
+            for (name, contours) in tones {
+                assert_ne!(tone(name, true, false).0, 0xFF00FF, "{name}");
+                assert!(!contours.is_empty());
+            }
         }
     }
 

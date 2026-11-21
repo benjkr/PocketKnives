@@ -17,8 +17,14 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the a
   flattened into segments at most `FLAT_STEP` 0.3 units long. One layer each: solid when
   connected, the outline at 0.45 when not; its `data-tracer` is the left head's circle at the
   middle of the 1-unit stroke. Laid out as MingCute drew it (no pixel snapping).
-- The menu header's buds (`assets/airpods-pro-art-left.svg`, `-right.svg`) are the original SVG Repo
-  drawing itself, curves flattened into segments at most 0.4 units long (`tools/airpods_art.py`).
+- The menu header's pictures (`assets/header-*.svg`) are layered: one flat tone per path, painted
+  in order. `tools/header_art.py` builds them from the buds of the original SVG Repo drawing
+  (`tools/airpods_pro_drawing.svg`) and the case drawn for QuickTooth (`tools/airpods_case.py`, a
+  small 3D model projected into line art): each enclosed region gets its material (pearl shell,
+  blue-grey ear tip, dark mesh and vent, silver stem tip, light lid, dark case mouth, green light)
+  with a lit band toward the top left and shade bands toward the bottom right, slate lines that
+  darken on the underside, and a soft ground shadow. The open case comes in a back and a front
+  half, so seated buds go between them.
 - Straight-line polygons only (`M`/`L`/`Z`): the renderer refuses curves. Each `<path>`'s
   `fill-opacity` dims its part (AirPods Pro: outline 0.85, ear tips 1); a line glyph's outline
   stays below 1 so the glow can brighten it. The AirPods Pro outline is 0.7 px wide at 16 px

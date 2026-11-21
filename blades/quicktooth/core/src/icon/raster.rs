@@ -119,6 +119,11 @@ impl Canvas {
         self.fill_polygons(contours, quantize(opacity), xf, Clip::NONE);
     }
 
+    /// Clears the canvas for reuse.
+    pub fn clear(&mut self) {
+        self.alpha.fill(0.0);
+    }
+
     /// Fills closed polygons (nonzero) at `opacity`, inside `clip`.
     pub fn fill_clipped<C: AsRef<[Pt]>>(&mut self, contours: &[C], opacity: f64, xf: Xf, clip: Clip<'_>) {
         self.fill_polygons(contours, quantize(opacity), xf, clip);

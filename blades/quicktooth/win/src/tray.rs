@@ -37,13 +37,11 @@ use quicktooth_core::devices::{OneShot, SendResult, Snapshot};
 use quicktooth_core::exec::{self, Done, Op, OpResult, Schedule, Task};
 use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
 use quicktooth_core::popup::{Align, Header};
-use windows_sys::Win32::Foundation::RECT;
 use windows_sys::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH,
-    DIB_RGB_COLORS, DeleteObject, FillRect, HDC, OUT_DEFAULT_PRECIS, SelectObject, SetBkMode, SetDIBitsToDevice, SetTextAlign, SetTextColor,
-    TA_BASELINE, TA_CENTER, TA_LEFT, TA_RIGHT, TRANSPARENT, TextOutW,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateDIBSection, CreateFontW,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, HBITMAP, OUT_DEFAULT_PRECIS, ReleaseDC, SelectObject,
+    SetBkMode, SetTextAlign, SetTextColor, TA_BASELINE, TA_CENTER, TA_LEFT, TA_RIGHT, TRANSPARENT, TextOutW,
 };
-use windows_sys::Win32::UI::Controls::{DRAWITEMSTRUCT, MEASUREITEMSTRUCT, ODT_MENU};
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
@@ -56,8 +54,8 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, GetSystemMetrics, HMENU, KillTimer, MF_CHECKED, MF_DISABLED, MF_GRAYED,
-    MF_OWNERDRAW, MF_POPUP, MF_SEPARATOR, SM_CXMENUCHECK, WM_DRAWITEM, WM_MEASUREITEM,
+    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, HMENU, KillTimer, MF_BITMAP, MF_CHECKED, MF_GRAYED,
+    MF_POPUP, MF_SEPARATOR,
     MF_STRING, MSG, MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassExW, SM_CXSMICON, SetForegroundWindow, SetTimer,
     TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx, TranslateMessage, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_DESTROY,
     WM_DISPLAYCHANGE, WM_DPICHANGED, WM_NULL, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_POPUP,
@@ -89,8 +87,6 @@ struct Ui {
     msg_taskbar_created: Cell<u32>,
     msg_command: Cell<u32>,
     destroying: Cell<bool>,
-    /// The open menu's picture header (owner-drawn: `WM_MEASUREITEM`, `WM_DRAWITEM`).
-    menu_header: RefCell<Option<Rc<Header>>>,
 }
 
 /// The UI state, set before the window exists (null on any other thread's view is never used).
@@ -204,7 +200,6 @@ pub fn run() -> u32 {
         msg_taskbar_created: Cell::new(0),
         msg_command: Cell::new(0),
         destroying: Cell::new(false),
-        menu_header: RefCell::new(None),
     }));
     UI.store(ui as *const Ui as *mut Ui, Ordering::Release);
 
@@ -298,27 +293,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         WM_APP_INVOKE => {
             drain(ui);
             return 0;
-        }
-        WM_MEASUREITEM | WM_DRAWITEM => {
-            let header = ui.menu_header.borrow().clone();
-            if let Some(h) = header {
-                if msg == WM_MEASUREITEM {
-                    let m = unsafe { &mut *(lparam as *mut MEASUREITEMSTRUCT) };
-                    if m.CtlType == ODT_MENU {
-                        // Windows adds room for a check mark to an owner-drawn item's width.
-                        let check = unsafe { GetSystemMetrics(SM_CXMENUCHECK) } - 1;
-                        m.itemWidth = (h.width - check).max(0) as u32;
-                        m.itemHeight = h.height as u32;
-                        return 1;
-                    }
-                } else {
-                    let d = unsafe { &*(lparam as *const DRAWITEMSTRUCT) };
-                    if d.CtlType == ODT_MENU {
-                        draw_header(d.hDC, &d.rcItem, &h);
-                        return 1;
-                    }
-                }
-            }
         }
         WM_APP_ADVERT => {
             let adverts = core::mem::take(&mut *ADVERTS.lock());
@@ -575,13 +549,14 @@ impl TrayHost for WinHost {
     fn track_popup_menu(&self, items: &[MenuItem], x: i32, y: i32, _light: bool) -> Op<i32> {
         let hwnd = self.0.hwnd();
         let menu = unsafe { CreatePopupMenu() };
-        *self.0.menu_header.borrow_mut() = items.iter().find_map(|i| i.header.clone());
-        append(menu, items);
+        let bitmaps = append(menu, items);
         unsafe { SetForegroundWindow(hwnd) }; // so the menu closes when clicking elsewhere
         let cmd = unsafe { TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, x, y, hwnd, null()) };
         unsafe { PostMessageW(hwnd, WM_NULL, 0, 0) };
         unsafe { DestroyMenu(menu) }; // also destroys the submenus
-        *self.0.menu_header.borrow_mut() = None;
+        for b in bitmaps {
+            unsafe { DeleteObject(b) };
+        }
         Op::ok(cmd)
     }
 
@@ -610,16 +585,10 @@ impl TrayHost for WinHost {
     fn emit(&self, _event: &quicktooth_core::host::Event<'_>) {} // the simulator's timeline only
 }
 
-/// The menu's picture header: the menu's background, the core's pixels, then its text in Segoe UI.
-fn draw_header(hdc: HDC, rc: &RECT, h: &Header) {
+/// The menu's picture header as a bitmap: the core's pixels, then its text in Segoe UI. A bitmap
+/// item, not an owner-drawn one: one owner-drawn item turns off Windows' theme for the whole menu.
+pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
     let colorref = |c: u32| ((c & 0xFF) << 16) | (c & 0xFF00) | (c >> 16);
-    unsafe {
-        let brush = CreateSolidBrush(colorref(h.background));
-        FillRect(hdc, rc, brush);
-        DeleteObject(brush);
-    }
-    let x0 = rc.left + ((rc.right - rc.left - h.width) / 2).max(0);
-    let y0 = rc.top;
     let mut bmi: BITMAPINFO = unsafe { core::mem::zeroed() };
     bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
     bmi.bmiHeader.biWidth = h.width;
@@ -628,50 +597,72 @@ fn draw_header(hdc: HDC, rc: &RECT, h: &Header) {
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
     unsafe {
-        SetDIBitsToDevice(hdc, x0, y0, h.width as u32, h.height as u32, 0, 0, 0, h.height as u32, h.bgra.as_ptr().cast(), &bmi, DIB_RGB_COLORS);
-        SetBkMode(hdc, TRANSPARENT as i32);
-    }
-    for t in &h.texts {
-        let font = unsafe {
-            CreateFontW(-t.size, 0, 0, 0, if t.bold { 600 } else { 400 }, 0, 0, 0, DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32, CLIP_DEFAULT_PRECIS as u32, CLEARTYPE_QUALITY as u32, DEFAULT_PITCH as u32, pk::w!("Segoe UI"))
-        };
-        let old = unsafe { SelectObject(hdc, font) };
-        let align = match t.align {
-            Align::Left => TA_LEFT,
-            Align::Center => TA_CENTER,
-            Align::Right => TA_RIGHT,
-        };
-        unsafe { SetTextAlign(hdc, align | TA_BASELINE) };
-        let text = to_wide(&t.text);
-        let len = (text.len() - 1) as i32; // without the terminating null
-        let (x, y) = (x0 + t.x, y0 + t.y);
-        unsafe {
-            SetTextColor(hdc, colorref(t.color));
-            TextOutW(hdc, x, y, text.as_ptr(), len);
-            SelectObject(hdc, old);
+        let screen = GetDC(null_mut());
+        let dc = CreateCompatibleDC(screen);
+        ReleaseDC(null_mut(), screen);
+        let mut bits = null_mut();
+        let bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
+        if bmp.is_null() || bits.is_null() {
+            DeleteDC(dc);
+            return bmp;
+        }
+        core::ptr::copy_nonoverlapping(h.bgra.as_ptr(), bits as *mut u8, h.bgra.len().min((h.width * h.height * 4) as usize));
+        let old_bmp = SelectObject(dc, bmp);
+        SetBkMode(dc, TRANSPARENT as i32);
+        for t in &h.texts {
+            let font = CreateFontW(
+                -t.size, 0, 0, 0, if t.bold { 600 } else { 400 }, 0, 0, 0, DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32,
+                CLIP_DEFAULT_PRECIS as u32, CLEARTYPE_QUALITY as u32, DEFAULT_PITCH as u32, pk::w!("Segoe UI"),
+            );
+            let old = SelectObject(dc, font);
+            let align = match t.align {
+                Align::Left => TA_LEFT,
+                Align::Center => TA_CENTER,
+                Align::Right => TA_RIGHT,
+            };
+            SetTextAlign(dc, align | TA_BASELINE);
+            let text = to_wide(&t.text);
+            SetTextColor(dc, colorref(t.color));
+            TextOutW(dc, t.x, t.y, text.as_ptr(), (text.len() - 1) as i32); // without the terminating null
+            SelectObject(dc, old);
             DeleteObject(font);
         }
+        SelectObject(dc, old_bmp);
+        DeleteDC(dc);
+        // GDI's text leaves alpha at 0, and the themed menu blends 32-bit bitmaps by alpha: the
+        // picture is opaque.
+        let px = core::slice::from_raw_parts_mut(bits as *mut u8, (h.width * h.height * 4) as usize);
+        for p in px.chunks_exact_mut(4) {
+            p[3] = 0xFF;
+        }
+        bmp
     }
 }
 
-fn append(menu: HMENU, items: &[MenuItem]) {
+/// Fills `menu`; returns the header bitmaps, to delete once the menu is destroyed.
+pub(crate) fn append(menu: HMENU, items: &[MenuItem]) -> Vec<HBITMAP> {
+    let mut bitmaps = Vec::new();
     for item in items {
         let grayed = if item.grayed { MF_GRAYED } else { 0 };
         let text = item.text.as_deref().map(to_wide);
         let text_ptr = text.as_ref().map_or(null(), |t| t.as_ptr());
         if item.separator {
             unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, null()) };
-        } else if item.header.is_some() {
-            unsafe { AppendMenuW(menu, MF_OWNERDRAW | MF_DISABLED, item.id as usize, null()) };
+        } else if let Some(h) = &item.header {
+            let bmp = header_bitmap(h);
+            // Enabled: Windows dims a disabled bitmap. Picking it does nothing.
+            unsafe { AppendMenuW(menu, MF_BITMAP, item.id as usize, bmp as *const u16) };
+            bitmaps.push(bmp);
         } else if let Some(children) = &item.submenu {
             let sub = unsafe { CreatePopupMenu() };
-            append(sub, children);
+            bitmaps.extend(append(sub, children));
             unsafe { AppendMenuW(menu, MF_POPUP | grayed, sub as usize, text_ptr) };
         } else {
             let checked = if item.checked { MF_CHECKED } else { 0 };
             unsafe { AppendMenuW(menu, MF_STRING | grayed | checked, item.id as usize, text_ptr) };
         }
     }
+    bitmaps
 }
 
 // ---------------------------------------------------------------------------- DeviceBackend
