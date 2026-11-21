@@ -8,7 +8,7 @@ fn main() {
         &pk_build::Resources {
             icon: Some(&dir.join("../../assets/pocketknives.ico")),
             manifest: Some(&dir.join("app.manifest")),
-            product: "pk",
+            description: "PocketKnives tray icon and settings",
             file_name: "pk.exe",
         },
         32512,
