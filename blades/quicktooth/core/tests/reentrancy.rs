@@ -188,6 +188,7 @@ impl TrayHost for Win {
         }
         Op::ok(0)
     }
+    fn update_menu_header(&self, _header: &quicktooth_core::popup::Header) {}
     fn end_menu(&self) {}
     fn promote_self(&self) -> String {
         "EntryNotFound".into()

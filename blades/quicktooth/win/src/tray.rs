@@ -39,14 +39,15 @@ use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
 use quicktooth_core::popup::{Align, Header};
 use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateDIBSection, CreateFontW,
-    DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, HBITMAP, OUT_DEFAULT_PRECIS, ReleaseDC, SelectObject,
+    DEFAULT_CHARSET, DEFAULT_PITCH, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, HBITMAP, InvalidateRect, OUT_DEFAULT_PRECIS, ReleaseDC,
+    SelectObject,
     SetBkMode, SetTextAlign, SetTextColor, TA_BASELINE, TA_CENTER, TA_LEFT, TA_RIGHT, TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::Threading::{CreateTimerQueueTimer, DeleteTimerQueueTimer, WT_EXECUTEONLYONCE};
+use windows_sys::Win32::System::Threading::{CreateTimerQueueTimer, DeleteTimerQueueTimer, GetCurrentThreadId, WT_EXECUTEONLYONCE};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi};
 use windows_sys::Win32::UI::Shell::{
     NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NIN_SELECT, NINF_KEY,
@@ -54,7 +55,8 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, HMENU, KillTimer, MF_BITMAP, MF_CHECKED, MF_GRAYED,
+    DispatchMessageW, EndMenu, FindWindowW, GetCursorPos, GetMessageW, GetWindowThreadProcessId, FindWindowExW, HMENU, KillTimer, MF_BITMAP, MF_BYCOMMAND, MF_CHECKED,
+    MF_GRAYED, ModifyMenuW,
     MF_POPUP, MF_SEPARATOR,
     MF_STRING, MSG, MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassExW, SM_CXSMICON, SetForegroundWindow, SetTimer,
     TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx, TranslateMessage, WM_APP, WM_CONTEXTMENU, WM_COPYDATA, WM_DESTROY,
@@ -87,6 +89,8 @@ struct Ui {
     msg_taskbar_created: Cell<u32>,
     msg_command: Cell<u32>,
     destroying: Cell<bool>,
+    /// The open menu and its picture header's item ID and bitmap (replaced with each new frame).
+    open_menu: Cell<Option<(HMENU, i32, HBITMAP)>>,
 }
 
 /// The UI state, set before the window exists (null on any other thread's view is never used).
@@ -200,6 +204,7 @@ pub fn run() -> u32 {
         msg_taskbar_created: Cell::new(0),
         msg_command: Cell::new(0),
         destroying: Cell::new(false),
+        open_menu: Cell::new(None),
     }));
     UI.store(ui as *const Ui as *mut Ui, Ordering::Release);
 
@@ -550,14 +555,40 @@ impl TrayHost for WinHost {
         let hwnd = self.0.hwnd();
         let menu = unsafe { CreatePopupMenu() };
         let bitmaps = append(menu, items);
+        let header = items.iter().find(|i| i.header.is_some()).map(|i| i.id);
+        self.0.open_menu.set(header.zip(bitmaps.first().copied()).map(|(id, bmp)| (menu, id, bmp)));
         unsafe { SetForegroundWindow(hwnd) }; // so the menu closes when clicking elsewhere
         let cmd = unsafe { TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, x, y, hwnd, null()) };
         unsafe { PostMessageW(hwnd, WM_NULL, 0, 0) };
         unsafe { DestroyMenu(menu) }; // also destroys the submenus
-        for b in bitmaps {
+        // The header's current bitmap (the first one was replaced if it moved), and any others.
+        let current = self.0.open_menu.take().map(|m| m.2);
+        for b in current.into_iter().chain(bitmaps.into_iter().skip(1)) {
             unsafe { DeleteObject(b) };
         }
         Op::ok(cmd)
+    }
+
+    fn update_menu_header(&self, header: &Header) {
+        let Some((menu, id, old)) = self.0.open_menu.get() else { return };
+        let bmp = header_bitmap(header);
+        if unsafe { ModifyMenuW(menu, id as u32, MF_BYCOMMAND | MF_BITMAP, id as usize, bmp as *const u16) } == 0 {
+            unsafe { DeleteObject(bmp) };
+            return;
+        }
+        self.0.open_menu.set(Some((menu, id, bmp)));
+        unsafe { DeleteObject(old) };
+        // Redraw the open menu windows (ours are the only ones on this thread).
+        let mut w: HWND = null_mut();
+        loop {
+            w = unsafe { FindWindowExW(null_mut(), w, pk::w!("#32768"), null()) };
+            if w.is_null() {
+                break;
+            }
+            if unsafe { GetWindowThreadProcessId(w, null_mut()) } == unsafe { GetCurrentThreadId() } {
+                unsafe { InvalidateRect(w, null(), 0) };
+            }
+        }
     }
 
     fn end_menu(&self) {

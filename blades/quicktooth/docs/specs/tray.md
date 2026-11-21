@@ -68,6 +68,13 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
   236 × 102 px at 100 %. The exe makes it a bitmap item (the core's pixels with Segoe UI text by
   GDI), enabled so Windows doesn't dim it (picking it does nothing): an owner-drawn item would
   turn off Windows 11's theme for the whole menu. The rows below stay Windows' own.
+- While the menu is open the header moves with the buds (`core/src/popup/motion.rs`, the approved
+  "B1 alive"): springs for the lid (through three in-between lid drawings), each bud's way out
+  and the case's fade; the lid snaps shut with a small bump; buds hop out on a short arc, the
+  right after the left, and bob a whole pixel while out; the light is green while open and
+  blinks amber for 5.2 s after the case closes. Every animation tick a new frame is drawn and,
+  only if it changed, swapped into the open menu (`ModifyMenu` and a redraw); once still, nothing
+  is redrawn.
 - While an action is pending, the second item is the grayed status (Connecting…) and Device is
   grayed. With no target, the second item is a grayed Connect.
 - Device ▸ lists the paired Bluetooth audio devices (the target checked, `  (connected)` after

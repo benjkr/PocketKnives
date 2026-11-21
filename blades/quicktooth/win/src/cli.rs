@@ -73,7 +73,7 @@ fn dispatch(out: &mut Writer, args: &[String]) -> Outcome {
         "--exit" => Ok(exit_tray(out)),
         "--autostart" => Ok(autostart(out, args.get(1).map_or("status", String::as_str))),
         "--render-icons" => render_icons(out, args),
-        "--preview-menu" => Ok(crate::menu_preview::run(arg(args, 1)?)),
+        "--preview-menu" => Ok(crate::menu_preview::run(arg(args, 1)?, has("--animate"))),
         "--write-setting-pictures" => write_setting_pictures(out, arg(args, 1)?),
         "--icon-rect" => Ok(icon_rect(out)),
         "--probe" => probe(out, arg(args, 1)?),

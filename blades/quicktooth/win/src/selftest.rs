@@ -145,6 +145,7 @@ impl TrayHost for FakeHost {
     fn track_popup_menu(&self, _: &[MenuItem], _: i32, _: i32, _: bool) -> Op<i32> {
         Op::ok(0)
     }
+    fn update_menu_header(&self, _header: &quicktooth_core::popup::Header) {}
     fn end_menu(&self) {}
     fn promote_self(&self) -> String {
         "AlreadyPromoted".into()

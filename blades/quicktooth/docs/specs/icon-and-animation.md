@@ -24,7 +24,8 @@ Part of QuickTooth's specs (index in [`AGENTS.md`](../../AGENTS.md)). What the a
   blue-grey ear tip, dark mesh and vent, silver stem tip, light lid, dark case mouth, green light)
   with a lit band toward the top left and shade bands toward the bottom right, slate lines that
   darken on the underside, and a soft ground shadow. The open case comes in a back and a front
-  half, so seated buds go between them.
+  half, so seated buds go between them; `tools/header_lid_frames.py` adds the back half with the
+  lid at 30°, 54° and 78° for the lid's swing.
 - Straight-line polygons only (`M`/`L`/`Z`): the renderer refuses curves. Each `<path>`'s
   `fill-opacity` dims its part (AirPods Pro: outline 0.85, ear tips 1); a line glyph's outline
   stays below 1 so the glow can brighten it. The AirPods Pro outline is 0.7 px wide at 16 px

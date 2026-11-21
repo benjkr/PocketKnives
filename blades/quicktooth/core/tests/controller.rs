@@ -139,6 +139,7 @@ impl TrayHost for Mock {
         self.menus.borrow_mut().push_back((items.to_vec(), done));
         op
     }
+    fn update_menu_header(&self, _header: &quicktooth_core::popup::Header) {}
     fn end_menu(&self) {
         self.call("end_menu");
     }

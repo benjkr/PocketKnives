@@ -10,6 +10,9 @@ use crate::icon::case::{ring, rounded};
 use crate::icon::glyph::{Pt, parse_tones};
 use crate::icon::raster::{Canvas, Clip, Rgb, Xf, over};
 use crate::math::max;
+pub use motion::{Led, Motion, Pose};
+
+mod motion;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -95,8 +98,13 @@ struct Layers {
     top: Canvas,
 }
 
-/// The header at `scale` (1 = 96 DPI).
+/// The header at `scale` (1 = 96 DPI), at rest.
 pub fn header(info: &HeaderInfo, scale: f64) -> Header {
+    header_posed(info, scale, &Motion::rest(info.pods).pose())
+}
+
+/// The header at `scale`, one frame of its motion.
+pub fn header_posed(info: &HeaderInfo, scale: f64, pose: &Pose) -> Header {
     let c = if info.light { &LIGHT } else { &DARK };
     let (w, h) = (round(WIDTH * scale), round(HEIGHT * scale));
     let xf = Xf::new(scale, 0.0, 0.0);
@@ -110,34 +118,47 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     // The picture: the case, centred (open while a bud is in it, closed and faint once both are
     // out); a bud that's out stands beside it.
     let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
-    let mut paint = Painter { bgra: &mut bgra, canvas: Canvas::rect(w, h), connected: info.connected, light: info.light };
-    let (in_left, in_right) = match info.pods {
-        Pods::Closed | Pods::Open => (true, true),
-        Pods::OneOut { left } => (!left, left),
-        Pods::Out => (false, false),
+    let mut paint = Painter { bgra: &mut bgra, canvas: Canvas::rect(w, h), connected: info.connected, light: info.light, led: pose.led };
+    let case = Place::art(CASE_BOUNDS, CASE_W, MID - CASE_W / 2.0, PIC_Y + 4.0 + pose.drop, scale);
+    // The lid drawing nearest the lid's angle, and where it cuts off seated buds (case units).
+    let (back, front, lid_edge) = match pose.lid {
+        a if a < 14.0 => (None, CASE_CLOSED, None),
+        a if a < 42.0 => (Some(CASE_LID_30), CASE_OPEN_FRONT, Some(LID_30_EDGE)),
+        a if a < 66.0 => (Some(CASE_LID_54), CASE_OPEN_FRONT, None),
+        a if a < 90.0 => (Some(CASE_LID_78), CASE_OPEN_FRONT, None),
+        _ => (Some(CASE_OPEN_BACK), CASE_OPEN_FRONT, None),
     };
-    let case = Place::art(CASE_BOUNDS, CASE_W, MID - CASE_W / 2.0, PIC_Y + 4.0, scale);
-    if matches!(info.pods, Pods::Open | Pods::OneOut { .. }) {
-        paint.art(CASE_OPEN_BACK, case, Clip::NONE, 1.0);
-        for (left, seated) in [(true, in_left), (false, in_right)] {
-            if seated {
-                let (art, b) = bud(left);
-                // Seated: the bud drawing at SEAT_SCALE, its top-left at the seat (case units), cut
-                // off at the wells' front edge.
-                let seat = Place { k: case.k * SEAT_SCALE, ox: case.at_x(if left { SEAT_X.0 } else { SEAT_X.1 }), oy: case.at_y(SEAT_Y), u0: b.0, v0: b.1, scale };
-                paint.art(art, seat, Clip::NONE.intersect(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, b.1 + (SEAT_CUT - SEAT_Y) / SEAT_SCALE), 1.0);
+    // Each bud on its way from its seat (small, in the case) to its place beside the case: it
+    // lifts first, then travels and grows, on a small arc; out, it bobs a whole pixel.
+    let buds = [(true, pose.left), (false, pose.right)].map(|(left, (u, bob))| {
+        let (art, b) = bud(left);
+        let aspect = (b.2 - b.0) / (b.3 - b.1);
+        let lift = 15.0 * smoothstep(0.0, 0.45, u);
+        let travel = smoothstep(0.35, 1.0, u);
+        let seated_h = case.k * SEAT_SCALE * (b.3 - b.1);
+        let (sx, sy) = (case.at_x(if left { SEAT_X.0 } else { SEAT_X.1 }), case.at_y(SEAT_Y));
+        let out_x = if left { SIDE_X } else { WIDTH - SIDE_X };
+        let h = lerp(seated_h, OUT_H, travel);
+        let bw = h * aspect;
+        let cx = lerp(sx + seated_h * aspect / 2.0, out_x, travel);
+        let y = lerp(sy - lift, PIC_Y + 4.0, travel) - ARC * 4.0 * travel * (1.0 - travel) + crate::math::round(bob * scale) / scale;
+        (art, Place::art(b, bw, cx - bw / 2.0, y, scale), u >= 0.45)
+    });
+    if let Some(back) = back {
+        paint.art(back, case, None, pose.case);
+        // Buds still down in the case go between its back and front, cut off at the wells' front
+        // edge (and above the lid's front edge while it's low).
+        let (top, bottom) = (lid_edge.map_or(f64::NEG_INFINITY, |v| case.at_y(v)), case.at_y(SEAT_CUT));
+        for &(art, place, up) in &buds {
+            if !up {
+                paint.art(art, place, Some((top, bottom)), 1.0);
             }
         }
-        paint.art(CASE_OPEN_FRONT, case, Clip::NONE, 1.0);
-    } else {
-        paint.art(CASE_CLOSED, case, Clip::NONE, if info.pods == Pods::Out { 0.45 } else { 1.0 });
     }
-    for (left, out) in [(true, !in_left), (false, !in_right)] {
-        if out {
-            let (art, b) = bud(left);
-            let bw = OUT_H * (b.2 - b.0) / (b.3 - b.1);
-            let x = if left { SIDE_X - bw / 2.0 } else { WIDTH - SIDE_X - bw / 2.0 };
-            paint.art(art, Place::art(b, bw, x, PIC_Y + 4.0, scale), Clip::NONE, 1.0);
+    paint.art(front, case, None, pose.case);
+    for &(art, place, up) in &buds {
+        if up {
+            paint.art(art, place, None, 1.0);
         }
     }
 
@@ -185,6 +206,14 @@ const CASE_OPEN_FRONT: &str = include_str!("../../../assets/header-case-open-fro
 const BUD_LEFT_BOUNDS: (f64, f64, f64, f64) = (7.5, 16.5, 61.03, 91.84);
 const BUD_RIGHT_BOUNDS: (f64, f64, f64, f64) = (66.97, 36.32, 120.5, 111.66);
 const CASE_BOUNDS: (f64, f64, f64, f64) = (9.45, 22.31, 118.55, 117.55);
+/// The open case's back half with the lid part of the way open (`tools/header_lid_frames.py`), and
+/// the lowest of them's front edge, above which seated buds are cut off (case units).
+const CASE_LID_30: &str = include_str!("../../../assets/header-case-lid-30-back.svg");
+const CASE_LID_54: &str = include_str!("../../../assets/header-case-lid-54-back.svg");
+const CASE_LID_78: &str = include_str!("../../../assets/header-case-lid-78-back.svg");
+const LID_30_EDGE: f64 = 56.8;
+/// How high a bud hops on its way out, header px.
+const ARC: f64 = 4.0;
 /// A seated bud: the bud drawing at this scale, its top-left at (x, y) in the case's units, cut
 /// off below the wells' front edge.
 const SEAT_SCALE: f64 = 0.72;
@@ -236,18 +265,52 @@ struct Painter<'a> {
     canvas: Canvas,
     connected: bool,
     light: bool,
+    led: Led,
 }
 
 impl Painter<'_> {
-    fn art(&mut self, svg: &str, place: Place, clip: Clip<'_>, opacity: f64) {
-        for (name, contours) in parse_tones(svg).unwrap_or_default() {
-            let (color, alpha) = tone(name, self.connected, self.light);
+    /// One layered picture at `place`, at `opacity`, optionally only between two heights (header px).
+    fn art(&mut self, svg: &str, place: Place, band: Option<(f64, f64)>, opacity: f64) {
+        if opacity <= 0.004 {
+            return;
+        }
+        // The band in the picture's own units (the placement only scales and moves).
+        let clip = match band {
+            Some((top, bottom)) => Clip::NONE.intersect(f64::NEG_INFINITY, place.v0 + (top - place.oy) / place.k, f64::INFINITY, place.v0 + (bottom - place.oy) / place.k),
+            None => Clip::NONE,
+        };
+        let tones = parse_tones(svg).unwrap_or_default();
+        // The status light is painted again over its ring, so it reads at this size.
+        let light = tones.iter().filter(|t| t.0 == "led").cloned().collect::<Vec<_>>();
+        for (name, contours) in tones.into_iter().chain(light) {
+            let (color, alpha) = match name {
+                "led" => (self.led_color(), 1.0),
+                _ => tone(name, self.connected, self.light),
+            };
             self.canvas.clear();
             self.canvas.fill_clipped(&contours, alpha * opacity, place.xf(), clip);
             let layer = self.canvas.to_bgra(rgb(color));
             *self.bgra = over(core::mem::take(self.bgra), &layer);
         }
     }
+
+    fn led_color(&self) -> u32 {
+        let c = match self.led {
+            Led::Green => 0x00C853,
+            Led::Amber => 0xFF9900,
+            Led::Off => 0xC3CAD6,
+        };
+        if self.connected { c } else { grey(c) }
+    }
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+
+fn smoothstep(a: f64, b: f64, x: f64) -> f64 {
+    let t = crate::math::clamp((x - a) / (b - a), 0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// A tone's colour and opacity: the approved pixel-art design's materials, lit from the top left;
@@ -271,7 +334,6 @@ fn tone(name: &str, connected: bool, light: bool) -> (u32, f64) {
         "lid-lo" => 0xCDD5E0,
         "hinge" => 0x9AA4B2,
         "mouth" => 0x343B48,
-        "led" => 0x00C853,
         "line" => 0x586378,
         "line-under" => 0x1C2028,
         "shadow" => return (0x000000, if light { 0.12 } else { 0.35 }),
@@ -353,11 +415,11 @@ mod tests {
 
     #[test]
     fn the_pictures_are_read_and_every_tone_is_known() {
-        for svg in [BUD_LEFT, BUD_RIGHT, CASE_CLOSED, CASE_OPEN_BACK, CASE_OPEN_FRONT] {
+        for svg in [BUD_LEFT, BUD_RIGHT, CASE_CLOSED, CASE_OPEN_BACK, CASE_OPEN_FRONT, CASE_LID_30, CASE_LID_54, CASE_LID_78] {
             let tones = parse_tones(svg).unwrap();
             assert!(tones.len() > 5);
             for (name, contours) in tones {
-                assert_ne!(tone(name, true, false).0, 0xFF00FF, "{name}");
+                assert!(name == "led" || tone(name, true, false).0 != 0xFF00FF, "{name}");
                 assert!(!contours.is_empty());
             }
         }

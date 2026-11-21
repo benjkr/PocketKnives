@@ -108,6 +108,8 @@ unsafe extern "C" {
     fn js_bt_connected(h: i32, op: u32, mac: *const u8, len: usize);
     #[link_name = "btScan"]
     fn js_bt_scan(h: i32, op: u32, model: i32, window_ms: i32);
+    #[link_name = "updateMenuHeader"]
+    fn js_update_menu_header(h: i32, json: *const u8, len: usize);
     #[link_name = "btWatchStart"]
     fn js_bt_watch_start(h: i32, model: i32);
     #[link_name = "btWatchStop"]
@@ -604,6 +606,14 @@ impl TrayHost for WebHost {
         let (id, op) = pending(|r| Ok(r.num as i32));
         unsafe { js_track_popup_menu(self.0, id, json.as_ptr(), json.len(), x, y, light as i32) };
         op
+    }
+
+    fn update_menu_header(&self, header: &quicktooth_core::popup::Header) {
+        // `{"header":…}`: the same object the menu's items carry.
+        let mut json = String::from("{\"id\":0");
+        write_header(&mut json, header);
+        json.push('}');
+        unsafe { js_update_menu_header(self.0, json.as_ptr(), json.len()) };
     }
 
     fn end_menu(&self) {

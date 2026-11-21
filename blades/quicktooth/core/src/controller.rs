@@ -46,7 +46,8 @@ pub const TIMER_PODS_SCAN: i32 = 11;
 pub const TIMER_PODS_WINDOW: i32 = 12;
 pub const TIMER_PODS_STALE: i32 = 13;
 pub const TIMER_CASE: i32 = 14;
-pub const ALL_TIMERS: [i32; 14] = [
+pub const TIMER_HEADER: i32 = 15;
+pub const ALL_TIMERS: [i32; 15] = [
     TIMER_ANIM,
     TIMER_TIMEOUT,
     TIMER_POLL,
@@ -61,6 +62,7 @@ pub const ALL_TIMERS: [i32; 14] = [
     TIMER_PODS_WINDOW,
     TIMER_PODS_STALE,
     TIMER_CASE,
+    TIMER_HEADER,
 ];
 
 pub const CMD_CONNECT: i32 = 1;
@@ -132,6 +134,11 @@ struct State {
     /// the new one is shown).
     case_icon: Option<(Option<Pods>, bool, Rc<IconImage>)>,
     case_old: Option<Rc<IconImage>>,
+    /// While the menu is open with its picture header: the header's motion, when it last moved
+    /// (host ms), and the frame shown.
+    header_motion: Option<popup::Motion>,
+    header_at: f64,
+    header_shown: Option<Vec<u8>>,
 
     icon_added: bool,
     add_attempts: i32,
@@ -398,6 +405,7 @@ impl TrayController {
                 }
                 self.update_icon(false);
             }
+            TIMER_HEADER => self.animate_header(),
             TIMER_BATTERY => {
                 self.host().set_timer(TIMER_BATTERY, int(T::BatteryCheckMs)); // back to the periodic check
                 self.maybe_scan_battery(int(T::BatteryMaxAgeMin) as f64 * MS_PER_MINUTE);
@@ -1236,14 +1244,63 @@ impl TrayController {
         self.emit("{\"type\":\"menu\",\"open\":true}");
         let light = self.st().light_taskbar;
         let menu = self.host().track_popup_menu(&items, x, y, light);
+        let result = menu.await;
+        {
+            let mut st = self.st_mut();
+            st.header_motion = None;
+            st.header_shown = None;
+        }
+        self.host().kill_timer(TIMER_HEADER);
         // A failed menu ends here, as the C# task's unobserved exception did.
-        let Ok(cmd) = menu.await else { return };
+        let Ok(cmd) = result else { return };
         self.emit(&format!("{{\"type\":\"menu\",\"open\":false,\"cmd\":{cmd}}}"));
         self.on_menu_command(cmd);
     }
 
-    /// The menu's picture header while the buds' place is known ([`crate::popup`]).
+    /// The menu's picture header while the buds' place is known ([`crate::popup`]); it starts
+    /// moving with the buds while the menu is open.
     fn menu_header(&self) -> Option<popup::Header> {
+        let (info, scale) = self.header_info()?;
+        let motion = popup::Motion::rest(info.pods);
+        let header = popup::header_posed(&info, scale, &motion.pose());
+        let now = self.host().now_ms();
+        {
+            let mut st = self.st_mut();
+            st.header_motion = Some(motion);
+            st.header_at = now;
+            st.header_shown = Some(header.bgra.clone());
+        }
+        self.host().set_timer(TIMER_HEADER, int(T::AnimFrameMs));
+        Some(header)
+    }
+
+    /// The header's next frame, shown if it changed.
+    fn animate_header(&self) {
+        let now = self.host().now_ms();
+        let pods = self.st().pods;
+        let pose = {
+            let mut st = self.st_mut();
+            let at = st.header_at;
+            st.header_at = now;
+            let Some(m) = st.header_motion.as_mut() else { return };
+            if let Some(p) = pods {
+                m.go(p);
+            }
+            m.advance(now - at);
+            m.pose()
+        };
+        let Some((mut info, scale)) = self.header_info() else { return };
+        info.pods = self.st().header_motion.as_ref().map_or(info.pods, popup::Motion::pods);
+        let header = popup::header_posed(&info, scale, &pose);
+        let changed = self.st().header_shown.as_deref() != Some(header.bgra.as_slice());
+        if changed {
+            self.st_mut().header_shown = Some(header.bgra.clone());
+            self.host().update_menu_header(&header);
+        }
+    }
+
+    /// What the header shows now, and its scale.
+    fn header_info(&self) -> Option<(popup::HeaderInfo, f64)> {
         let (pods, advert, size) = {
             let st = self.st();
             (st.pods?, st.pods_reading.clone(), st.icon_size)
@@ -1261,7 +1318,7 @@ impl TrayController {
             low_warning: self.settings().low_battery_warning(),
             light: self.st().light_taskbar,
         };
-        Some(popup::header(&info, size.max(16) as f64 / 16.0))
+        Some((info, size.max(16) as f64 / 16.0))
     }
 
     fn on_menu_command(&self, cmd: i32) {

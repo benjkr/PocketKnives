@@ -85,6 +85,7 @@ function makeImports(exports) {
     iconAnchor: (h, o) => out(o, H(h).iconAnchor()),   // "x,y" or ""
     trackPopupMenu: (h, op, ip, n, x, y, light) => { const items = str(ip, n); settle(op, () => H(h).trackPopupMenu(items, x, y, !!light), 'num'); },
     endMenu: (h) => H(h).endMenu(),
+    updateMenuHeader: (h, p, n) => H(h).updateMenuHeader(JSON.parse(str(p, n)).header),
     promoteSelf: (h, o) => out(o, H(h).promoteSelf()),
     autostartEnabled: (h) => (H(h).autostartEnabled() ? 1 : 0),
     setAutostart: (h, on) => H(h).setAutostart(!!on),

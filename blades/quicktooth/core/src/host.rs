@@ -56,6 +56,8 @@ pub trait TrayHost {
     fn icon_anchor(&self) -> Option<(i32, i32)>;
     /// Shows the popup menu; completes with the chosen command ID (0 = dismissed).
     fn track_popup_menu(&self, items: &[MenuItem], x: i32, y: i32, light: bool) -> Op<i32>;
+    /// The open menu's picture header has a new frame ([`crate::popup`]): show it in place.
+    fn update_menu_header(&self, header: &Header);
     fn end_menu(&self);
     /// Marks our notification-area entry as promoted; returns the promotion result's name.
     fn promote_self(&self) -> String;

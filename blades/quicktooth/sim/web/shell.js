@@ -365,6 +365,17 @@ export class Shell {
 
   endMenu() { if (this.menu) this._closeMenus(0); }
 
+  /** The open menu's picture header has a new frame (ModifyMenu + a redraw on Windows). */
+  updateMenuHeader(header) {
+    const w = this.menu?.windows[0];
+    const row = w?.lay.rows.find((r) => r.header);
+    if (!row) return;
+    row.header = header;
+    w._key = null; // drawn again
+    this.menuHeaderFrames = (this.menuHeaderFrames ?? 0) + 1;
+    this._renderMenus();
+  }
+
   _closeMenus(cmd) {
     const m = this.menu;
     if (!m) return;
@@ -753,6 +764,7 @@ export class Shell {
       scale: this.s, dpr: window.devicePixelRatio, screen: this.o.screen, theme: this.o.theme, explorerUp: this.explorerUp,
       icon: this.locate('icon'), iconInOverflow: !!this.appIcon && !this.geom.items.some((i) => i.key === 'icon:quicktooth'),
       hover: this.hover, tooltip: this.tip.state === 'shown' ? { key: this.tip.key, text: this.dom.tooltip.textContent } : null,
+      menuHeaderFrames: this.menuHeaderFrames ?? 0,
       menu: this.menu ? this.menu.windows.map((w) => ({ rect: [w.pos.left, w.pos.top, w.pos.left + w.lay.width, w.pos.top + w.lay.height], hot: w.hot >= 0 ? w.lay.rows[w.hot].text : null, items: w.lay.rows.map((r) => (r.separator ? '—' : `${r.checked ? '✓ ' : ''}${r.text}${r.grayed ? ' (grayed)' : ''}${r.submenu ? ' ▸' : ''}${r.header ? ' (picture)' : ''}`)) })) : null,
       flyoutOpen: this.flyout.open,
       registry: this.registry.entries.map((e) => ({ key: e.key, isPromoted: e.isPromoted, created: !!e.created })),

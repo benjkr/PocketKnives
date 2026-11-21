@@ -173,6 +173,7 @@ export class TrayAppModel {
   iconAnchor() { const r = this.shell.iconRect(); return r ? `${Math.trunc((r.left + r.right) / 2)},${Math.trunc(r.top)}` : ''; }
   async trackPopupMenu(itemsJson, x, y, light) { return (await this.shell.trackPopupMenu(JSON.parse(itemsJson), x, y, { light })) ?? 0; }
   endMenu() { this.shell.endMenu(); }
+  updateMenuHeader(header) { this.shell.updateMenuHeader(header); }
   promoteSelf() { return this.shell.notifyIconSettings.promoteSelf(EXE_PATH, (m) => this.log(m)); }
 
   autostartEnabled() { return this.autostart.enabled; }
