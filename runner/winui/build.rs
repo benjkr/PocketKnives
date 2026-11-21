@@ -7,7 +7,7 @@ fn main() {
         icon: Some(&dir.join("../../assets/pocketknives.ico")),
         // The Windows App SDK's activatable classes (stage.ps1 -Manifest generates it).
         manifest: Some(&dir.join("app.manifest")),
-        product: "PocketKnives Settings",
+        description: "PocketKnives Settings",
         file_name: "PocketKnives.Settings.exe",
     });
 }

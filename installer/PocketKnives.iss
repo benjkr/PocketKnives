@@ -51,10 +51,12 @@ LZMAUseSeparateProcess=yes
 ; "start when I sign in" as the user last set it.
 Name: snipsnap; Description: "SnipSnap"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('snipsnap.exe')
 Name: quicktooth; Description: "QuickTooth"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('QuickTooth.exe')
+Name: nowplaying; Description: "NowPlaying"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('NowPlaying.exe')
 
 [Files]
 Source: "{#AppSource}\snipsnap.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\QuickTooth.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppSource}\NowPlaying.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\pk.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\icons\*.ico"; DestDir: "{app}\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#AppSource}\winui\*"; DestDir: "{app}\winui"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -63,17 +65,20 @@ Source: "{#AppSource}\winui\*"; DestDir: "{app}\winui"; Excludes: "*.pdb"; Flags
 Name: "{autoprograms}\{#AppName}\PocketKnives Settings"; Filename: "{app}\pk.exe"; Parameters: "settings"
 Name: "{autoprograms}\{#AppName}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Comment: "Copy a rectangle, a window or the screen to the clipboard"
 Name: "{autoprograms}\{#AppName}\QuickTooth"; Filename: "{app}\QuickTooth.exe"; Comment: "Connect or disconnect your AirPods with one click"
+Name: "{autoprograms}\{#AppName}\NowPlaying"; Filename: "{app}\NowPlaying.exe"; Comment: "Live media cover, seekable timeline and frequency meter in the taskbar"
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\pk.exe"
 ; SnipSnap starts at sign-in through a Startup shortcut, as it always has.
 Name: "{userstartup}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Tasks: snipsnap
 
 [Run]
 Filename: "{app}\pk.exe"; Flags: nowait
-; QuickTooth writes its own Run value (its tray menu turns it off again).
+; QuickTooth and NowPlaying write their own Run values.
 Filename: "{app}\QuickTooth.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: quicktooth
+Filename: "{app}\NowPlaying.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: nowplaying
 ; No skipifsilent: a silent update should leave the blades running, as they were before.
 Filename: "{app}\snipsnap.exe"; Description: "Start SnipSnap now"; Flags: nowait postinstall
 Filename: "{app}\QuickTooth.exe"; Description: "Start QuickTooth now"; Flags: nowait postinstall
+Filename: "{app}\NowPlaying.exe"; Description: "Start NowPlaying now"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; Settings can create SnipSnap's Startup shortcut after Setup, so Setup never recorded it.
@@ -181,6 +186,11 @@ begin
   Result := CloseBlade('QuickTooth.exe', '--exit', 'Local\QuickTooth.Tray.6F0C2B1E');
 end;
 
+function CloseNowPlaying: Boolean;
+begin
+  Result := CloseBlade('NowPlaying.exe', '--exit', 'Local\PocketKnives.NowPlaying.v1');
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
@@ -189,7 +199,9 @@ begin
   else if not CloseSnipSnap then
     Result := 'SnipSnap is still running and could not be closed. Run "snipsnap quit", then run Setup again.'
   else if not CloseQuickTooth then
-    Result := 'QuickTooth is still running and could not be closed. Choose Exit in its tray menu, then run Setup again.';
+    Result := 'QuickTooth is still running and could not be closed. Choose Exit in its tray menu, then run Setup again.'
+  else if not CloseNowPlaying then
+    Result := 'NowPlaying is still running and could not be closed. Right-click it and choose Exit NowPlaying, then run Setup again.';
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -201,11 +213,13 @@ begin
     CloseRunner;
     CloseSnipSnap;
     CloseQuickTooth;
-    { Remove QuickTooth's "start when I sign in", but only if it points at this install. Its
-      settings in %APPDATA%\QuickTooth are kept, so a reinstall remembers the chosen headset.
-      SnipSnap's Startup shortcut is removed by [UninstallDelete]. }
+    CloseNowPlaying;
+    { Remove QuickTooth and NowPlaying "start when I sign in" entries, only if they point at this install. }
     if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth', Value) and
        (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
       RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth');
+    if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'NowPlaying', Value) and
+       (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
+      RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'NowPlaying');
   end;
 end;

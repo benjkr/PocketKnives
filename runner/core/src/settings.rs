@@ -63,8 +63,8 @@ pub struct Blade {
 }
 
 /// The blades, in the order the windows list them. SnipSnap starts at sign-in through a Startup
-/// shortcut, QuickTooth through its own `--autostart` command.
-pub const BLADES: [Blade; 2] = [
+/// shortcut, QuickTooth and NowPlaying through their own `--autostart` commands.
+pub const BLADES: [Blade; 3] = [
     Blade {
         name: "SnipSnap",
         description: "Copies a rectangle, a window or the screen to the clipboard.",
@@ -83,9 +83,19 @@ pub const BLADES: [Blade; 2] = [
         settings_command: "--settings",
         set_command: "--set",
     },
+    Blade {
+        name: "NowPlaying",
+        description: "Shows the current media cover, seekable timeline and frequency meter in the taskbar.",
+        icon: "nowplaying.ico",
+        exe: "NowPlaying.exe",
+        stop_command: "--exit",
+        settings_command: "--settings",
+        set_command: "--set",
+    },
 ];
 const SNIPSNAP: usize = 0;
 const QUICKTOOTH: usize = 1;
+const NOWPLAYING: usize = 2;
 
 /// Which blades start at sign-in, in [`BLADES`] order.
 pub type Startup = [bool; BLADES.len()];
@@ -130,12 +140,18 @@ impl Suite {
         join(&self.root, PREVIEW_FILE)
     }
 
-    /// The preview file's three lines (look, SnipSnap, QuickTooth); defaults unless it has
-    /// exactly three.
+    /// The preview file's lines (look, then one per blade); defaults unless it has every line.
     fn read_preview(&self) -> Result<Vec<String>> {
+        let expected = 1 + BLADES.len();
         match files::read_lines(&self.preview_path())? {
-            Some(lines) if lines.len() == 3 => Ok(lines),
-            _ => Ok(vec![String::from(LOOK_VALUES[0]), String::from("on"), String::from("on")]),
+            Some(lines) if lines.len() == expected => Ok(lines),
+            _ => {
+                let mut out = vec![String::from(LOOK_VALUES[0])];
+                for _ in 0..BLADES.len() {
+                    out.push(String::from("on"));
+                }
+                Ok(out)
+            }
         }
     }
 
@@ -161,10 +177,15 @@ impl Suite {
     pub fn read_startup(&self) -> Result<Startup> {
         if self.preview {
             let preview = self.read_preview()?;
-            return Ok([preview[1] == "on", preview[2] == "on"]);
+            return Ok([preview[1] == "on", preview[2] == "on", preview[3] == "on"]);
         }
-        let run = pk::reg::string(HKEY_CURRENT_USER, Some(RUN_KEY), BLADES[QUICKTOOTH].name);
-        Ok([files::exists(&startup_shortcut()), run.is_some_and(|v| !v.trim().is_empty())])
+        let qt_run = pk::reg::string(HKEY_CURRENT_USER, Some(RUN_KEY), BLADES[QUICKTOOTH].name);
+        let np_run = pk::reg::string(HKEY_CURRENT_USER, Some(RUN_KEY), BLADES[NOWPLAYING].name);
+        Ok([
+            files::exists(&startup_shortcut()),
+            qt_run.is_some_and(|v| !v.trim().is_empty()),
+            np_run.is_some_and(|v| !v.trim().is_empty()),
+        ])
     }
 
     /// Applies only the rows that changed, so an unchanged row doesn't overwrite a change made
@@ -198,14 +219,17 @@ impl Suite {
             original[SNIPSNAP] = selected[SNIPSNAP];
         }
 
-        if original[QUICKTOOTH] != selected[QUICKTOOTH] {
-            let exe = self.blade_exe(&BLADES[QUICKTOOTH]);
-            let failed = || String::from("QuickTooth could not update its sign-in setting.");
-            let child = process::start(&exe, &["--autostart", if selected[QUICKTOOTH] { "on" } else { "off" }]).map_err(|_| failed())?;
-            if child.wait(AUTOSTART_TIMEOUT_MS) != Some(0) {
-                return Err(failed());
+        for idx in [QUICKTOOTH, NOWPLAYING] {
+            if original[idx] != selected[idx] {
+                let blade = &BLADES[idx];
+                let exe = self.blade_exe(blade);
+                let failed = || alloc::format!("{} could not update its sign-in setting.", blade.name);
+                let child = process::start(&exe, &["--autostart", if selected[idx] { "on" } else { "off" }]).map_err(|_| failed())?;
+                if child.wait(AUTOSTART_TIMEOUT_MS) != Some(0) {
+                    return Err(failed());
+                }
+                original[idx] = selected[idx];
             }
-            original[QUICKTOOTH] = selected[QUICKTOOTH];
         }
         Ok(())
     }
@@ -244,36 +268,37 @@ mod tests {
         let suite = Suite::new(String::from(dir.to_str().unwrap()), true);
         let file = dir.join(PREVIEW_FILE);
 
-        // Defaults without a file, and with one that hasn't exactly three lines.
+        // Defaults without a file, and with one that hasn't all lines.
         assert_eq!(suite.read_look().unwrap(), Look::Xp);
-        assert_eq!(suite.read_startup().unwrap(), [true, true]);
+        assert_eq!(suite.read_startup().unwrap(), [true, true, true]);
         std::fs::write(&file, "win11\r\noff\r\n").unwrap();
         assert_eq!(suite.read_look().unwrap(), Look::Xp);
 
-        std::fs::write(&file, "win10\r\noff\r\non\r\n").unwrap();
+        std::fs::write(&file, "win10\r\noff\r\non\r\noff\r\n").unwrap();
         assert_eq!(suite.read_look().unwrap(), Look::Windows10);
-        assert_eq!(suite.read_startup().unwrap(), [false, true]);
+        assert_eq!(suite.read_startup().unwrap(), [false, true, false]);
 
         suite.save_look(Look::Windows11).unwrap();
-        assert_eq!(std::fs::read(&file).unwrap(), b"win11\r\noff\r\non\r\n");
+        assert_eq!(std::fs::read(&file).unwrap(), b"win11\r\noff\r\non\r\noff\r\n");
 
-        let mut original = [false, true];
-        suite.apply_startup(&mut original, &[true, false]).unwrap();
-        assert_eq!(original, [true, false]);
-        assert_eq!(std::fs::read(&file).unwrap(), b"win11\r\non\r\noff\r\n");
+        let mut original = [false, true, false];
+        suite.apply_startup(&mut original, &[true, false, true]).unwrap();
+        assert_eq!(original, [true, false, true]);
+        assert_eq!(std::fs::read(&file).unwrap(), b"win11\r\non\r\noff\r\non\r\n");
 
         // Unchanged rows aren't written: the file keeps what's there.
-        std::fs::write(&file, "xp\r\noff\r\noff\r\n").unwrap();
-        let mut original = [true, true];
-        suite.apply_startup(&mut original, &[true, true]).unwrap();
-        assert_eq!(std::fs::read(&file).unwrap(), b"xp\r\noff\r\noff\r\n");
-        let mut original = [true, true];
-        suite.apply_startup(&mut original, &[true, false]).unwrap();
-        assert_eq!(std::fs::read(&file).unwrap(), b"xp\r\noff\r\noff\r\n");
+        std::fs::write(&file, "xp\r\noff\r\noff\r\noff\r\n").unwrap();
+        let mut original = [true, true, true];
+        suite.apply_startup(&mut original, &[true, true, true]).unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"xp\r\noff\r\noff\r\noff\r\n");
+        let mut original = [true, true, true];
+        suite.apply_startup(&mut original, &[true, false, true]).unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"xp\r\noff\r\noff\r\noff\r\n");
 
         // A preview's Exit leaves the blades alone, even with their exes in its folder.
         std::fs::write(dir.join("snipsnap.exe"), b"not a program").unwrap();
         std::fs::write(dir.join("QuickTooth.exe"), b"not a program").unwrap();
+        std::fs::write(dir.join("NowPlaying.exe"), b"not a program").unwrap();
         suite.stop_blades();
 
         std::fs::remove_dir_all(&dir).unwrap();

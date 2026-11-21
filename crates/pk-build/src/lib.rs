@@ -18,15 +18,19 @@ pub fn exe() {
     }
 }
 
+/// `CompanyName` and `ProductName` of every exe: they're all parts of one suite.
+const SUITE: &str = "PocketKnives";
+const COPYRIGHT: &str = "Copyright (C) 2026 PocketKnives";
+
 /// What goes into the exe's resources.
 pub struct Resources<'a> {
     /// The exe's icon (`.ico`), shown by Explorer and the Start menu.
     pub icon: Option<&'a Path>,
     /// An application manifest (DPI awareness, common controls, OS support).
     pub manifest: Option<&'a Path>,
-    /// `FileDescription` and `ProductName`.
-    pub product: &'a str,
-    /// The exe's file name, for `OriginalFilename`.
+    /// `FileDescription`: the name Task Manager and the file's properties show.
+    pub description: &'a str,
+    /// The exe's file name, for `OriginalFilename` and, without `.exe`, `InternalName`.
     pub file_name: &'a str,
 }
 
@@ -72,11 +76,13 @@ fn rc_text(r: &Resources, icon_id: u16, version: &str) -> String {
         rc,
         "1 VERSIONINFO\nFILEVERSION {dotted}\nPRODUCTVERSION {dotted}\nFILEOS 0x40004\nFILETYPE 0x1\n\
          BEGIN\n BLOCK \"StringFileInfo\"\n BEGIN\n  BLOCK \"040904B0\"\n  BEGIN\n\
-         \x20  VALUE \"FileDescription\", \"{p}\"\n   VALUE \"ProductName\", \"{p}\"\n\
+         \x20  VALUE \"CompanyName\", \"{SUITE}\"\n   VALUE \"ProductName\", \"{SUITE}\"\n\
+         \x20  VALUE \"FileDescription\", \"{d}\"\n   VALUE \"LegalCopyright\", \"{COPYRIGHT}\"\n\
          \x20  VALUE \"FileVersion\", \"{version}\"\n   VALUE \"ProductVersion\", \"{version}\"\n\
-         \x20  VALUE \"InternalName\", \"{p}\"\n   VALUE \"OriginalFilename\", \"{f}\"\n  END\n END\n\
+         \x20  VALUE \"InternalName\", \"{internal}\"\n   VALUE \"OriginalFilename\", \"{f}\"\n  END\n END\n\
          \x20BLOCK \"VarFileInfo\"\n BEGIN\n  VALUE \"Translation\", 0x409, 1200\n END\nEND\n",
-        p = r.product,
+        d = r.description,
+        internal = r.file_name.strip_suffix(".exe").unwrap_or(r.file_name),
         f = r.file_name,
     )
     .unwrap();
@@ -122,7 +128,7 @@ mod tests {
         let r = Resources {
             icon: Some(Path::new(r"C:\a\app.ico")),
             manifest: Some(Path::new(r"C:\a\app.manifest")),
-            product: "P",
+            description: "P app",
             file_name: "p.exe",
         };
         let rc = rc_text(&r, 1, "1.2.3-beta");
@@ -130,6 +136,9 @@ mod tests {
         assert!(rc.starts_with(r#"1 ICON "C:\\a\\app.ico""#));
         assert!(rc.contains("\n1 24 \"C:\\\\a\\\\app.manifest\"\n1 VERSIONINFO\nFILEVERSION 1,2,3,0\n"));
         assert!(rc.contains("VALUE \"FileVersion\", \"1.2.3-beta\"") && rc.contains("VALUE \"OriginalFilename\", \"p.exe\""));
+        assert!(rc.contains("VALUE \"CompanyName\", \"PocketKnives\"") && rc.contains("VALUE \"ProductName\", \"PocketKnives\""));
+        assert!(rc.contains("VALUE \"FileDescription\", \"P app\"") && rc.contains("VALUE \"InternalName\", \"p\""));
+        assert!(rc.contains("VALUE \"LegalCopyright\", \"Copyright (C) 2026 PocketKnives\""));
         assert!(rc_text(&r, 32512, "0.1.0").starts_with("32512 ICON \"C:"));
         let bare = Resources { icon: None, manifest: None, ..r };
         assert!(rc_text(&bare, 32512, "0.1.0").starts_with("1 VERSIONINFO\n"));
