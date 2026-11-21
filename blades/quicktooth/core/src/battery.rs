@@ -145,7 +145,8 @@ impl Pods {
 /// The buds' placement in a status advert, and whether a bud is in an ear. Bits measured on
 /// AirPods Pro (0x2027), from both buds' adverts (each bud advertises its own view):
 /// status `[5]`: 0x04 both buds in the case, 0x10 at least one in the case, 0x0A a bud in an ear,
-/// 0x20 the sender is the left bud; lid `[8]`: 0x08 lid closed, 0x20 the sender is in the case.
+/// 0x20 the sender is the left bud, 0x40 the sender is in the case; lid `[8]`: 0x08 lid closed
+/// (its other bits change from one opening to the next).
 pub fn parse_pods(b: &[u8], model: u16) -> Option<(Pods, bool)> {
     if b.len() < 9 || b[0] != 0x07 || b[1] < 7 || u16::from_le_bytes([b[3], b[4]]) != model {
         return None;
@@ -155,7 +156,7 @@ pub fn parse_pods(b: &[u8], model: u16) -> Option<(Pods, bool)> {
         if lid & 0x08 != 0 { Pods::Closed } else { Pods::Open }
     } else if status & 0x10 != 0 {
         let sender_left = status & 0x20 != 0;
-        let sender_in_case = lid & 0x20 != 0;
+        let sender_in_case = status & 0x40 != 0;
         Pods::OneOut { left: sender_left != sender_in_case }
     } else {
         Pods::Out
@@ -202,6 +203,10 @@ mod tests {
             assert!(parse_pods(&b, 0x2014).is_none());
         }
         assert!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x75, 0x88, 0xB5], 0x2027).is_none());
+        // Another opening, the left bud in an ear and the right charging in the case: the lid byte's
+        // other bits have changed (0x51 from the bud in the case), the status bits haven't.
+        assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x53, 0x23, 0x94, 0x51], 0x2027), Some((Pods::OneOut { left: true }, true)));
+        assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x33, 0x32, 0xA4, 0x13], 0x2027), Some((Pods::OneOut { left: true }, true)));
         // The right bud taken out instead: the senders' left/right bits are the other way round.
         assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x71, 0x88, 0x95, 0x32], 0x2027), Some((Pods::OneOut { left: false }, false)));
         assert_eq!(parse_pods(&[0x07, 0x19, 0x01, 0x27, 0x20, 0x13, 0x88, 0xA5, 0x12], 0x2027), Some((Pods::OneOut { left: false }, true)));

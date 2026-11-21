@@ -50,7 +50,8 @@ battery scan), on the device thread (`worker.rs`), behind the core's `DeviceBack
   anything.
 - The bits, measured on AirPods Pro (0x2027) from both buds' adverts (each bud sends its own view):
   status `[5]` 0x04 both buds in the case, 0x10 at least one in the case, 0x02 / 0x08 a bud in an
-  ear, 0x20 the sender is the left bud; lid `[8]` 0x08 lid closed, 0x20 the sender is in the case.
+  ear, 0x20 the sender is the left bud, 0x40 the sender is in the case; lid `[8]` 0x08 lid closed
+  (its other bits change from one opening to the next).
   With one bud in the case, the one out is the sender if it's out of the case, else the other.
 - The buds advertise within about 0.1–0.3 s of a change while in or near the case, every 1–2 s
   from the ears, and stop a few seconds after the lid closes.
