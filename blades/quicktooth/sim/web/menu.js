@@ -59,8 +59,11 @@ export function layoutMenu(items, s, M = MENU_METRICS) {
   for (const it of items) if (!it.separator && !it.header) maxText = Math.max(maxText, textWidth(it.text, fontPx, M.font));
   const arrow = items.some((it) => it.submenu) ? r(M.arrowExtra) : 0;
   // An owner-drawn picture item (the app's header) is as wide and tall as its picture.
-  const pictures = items.filter((it) => it.header).map((it) => it.header.w + 2 * r(M.border + M.pad));
-  const width = Math.max(Math.ceil(r(M.textX) + maxText + r(M.rightPad) + arrow), ...pictures);
+  // A picture item sits where text goes; the exe pads it by rightPad − textX on the left, so it
+  // ends up in the middle of the menu.
+  const pad = r(M.rightPad) - r(M.textX);
+  for (const it of items) if (it.header) maxText = Math.max(maxText, it.header.w + pad);
+  const width = Math.ceil(r(M.textX) + maxText + r(M.rightPad) + arrow);
   let y = r(M.border + M.pad);
   const rows = items.map((it) => {
     const h = it.separator ? r(M.sepH) : it.header ? it.header.h : r(M.itemH);
@@ -108,7 +111,7 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
 
   lay.rows.forEach((row, i) => {
     if (row.header) {
-      drawHeader(ctx, row.header, Math.floor((W - row.header.w) / 2), row.top);
+      drawHeader(ctx, row.header, r(M.textX) + r(M.rightPad) - r(M.textX), row.top);
       return;
     }
     if (row.separator) {

@@ -53,6 +53,8 @@ pub struct Text {
 /// The header: opaque BGRA pixels, top-down, on the menu's background, and the text to draw on them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
+    /// The scaling it was drawn at (1 = 96 DPI).
+    pub scale: f64,
     pub width: i32,
     pub height: i32,
     /// The menu's background, `0xRRGGBB` (the host fills any room around the picture with it).
@@ -156,7 +158,7 @@ pub fn header(info: &HeaderInfo, scale: f64) -> Header {
     for (layer, color) in [(&l.ink, c.ink), (&l.ok, c.ok), (&l.warn, c.warn), (&l.top, c.ink)] {
         bgra = over(bgra, &layer.to_bgra(rgb(color)));
     }
-    Header { width: w, height: h, background: c.bg, bgra, texts }
+    Header { scale, width: w, height: h, background: c.bg, bgra, texts }
 }
 
 fn rgb(c: u32) -> Rgb {

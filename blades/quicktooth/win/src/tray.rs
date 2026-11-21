@@ -585,13 +585,25 @@ impl TrayHost for WinHost {
     fn emit(&self, _event: &quicktooth_core::host::Event<'_>) {} // the simulator's timeline only
 }
 
+fn round_i32(v: f64) -> i32 {
+    quicktooth_core::math::round(v) as i32
+}
+
+/// A Windows 11 menu puts a bitmap item where text goes, 38 px in, and ends 60 px past the widest
+/// item (measured at 96 DPI; sim/web/menu.js has the same). The picture starts this much further
+/// in, so it sits in the middle of the menu.
+const MENU_TEXT_X: f64 = 38.0;
+const MENU_RIGHT_PAD: f64 = 60.0;
+
 /// The menu's picture header as a bitmap: the core's pixels, then its text in Segoe UI. A bitmap
 /// item, not an owner-drawn one: one owner-drawn item turns off Windows' theme for the whole menu.
 pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
     let colorref = |c: u32| ((c & 0xFF) << 16) | (c & 0xFF00) | (c >> 16);
+    let pad = round_i32((MENU_RIGHT_PAD - MENU_TEXT_X) * h.scale);
+    let width = h.width + pad;
     let mut bmi: BITMAPINFO = unsafe { core::mem::zeroed() };
     bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
-    bmi.bmiHeader.biWidth = h.width;
+    bmi.bmiHeader.biWidth = width;
     bmi.bmiHeader.biHeight = -h.height; // top-down
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
@@ -606,7 +618,14 @@ pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
             DeleteDC(dc);
             return bmp;
         }
-        core::ptr::copy_nonoverlapping(h.bgra.as_ptr(), bits as *mut u8, h.bgra.len().min((h.width * h.height * 4) as usize));
+        let px = core::slice::from_raw_parts_mut(bits as *mut u32, (width * h.height) as usize);
+        px.fill(h.background);
+        for y in 0..h.height as usize {
+            for x in 0..h.width as usize {
+                let i = (y * h.width as usize + x) * 4;
+                px[y * width as usize + pad as usize + x] = u32::from_le_bytes([h.bgra[i], h.bgra[i + 1], h.bgra[i + 2], h.bgra[i + 3]]);
+            }
+        }
         let old_bmp = SelectObject(dc, bmp);
         SetBkMode(dc, TRANSPARENT as i32);
         for t in &h.texts {
@@ -623,7 +642,7 @@ pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
             SetTextAlign(dc, align | TA_BASELINE);
             let text = to_wide(&t.text);
             SetTextColor(dc, colorref(t.color));
-            TextOutW(dc, t.x, t.y, text.as_ptr(), (text.len() - 1) as i32); // without the terminating null
+            TextOutW(dc, pad + t.x, t.y, text.as_ptr(), (text.len() - 1) as i32); // without the terminating null
             SelectObject(dc, old);
             DeleteObject(font);
         }
@@ -631,7 +650,7 @@ pub(crate) fn header_bitmap(h: &Header) -> HBITMAP {
         DeleteDC(dc);
         // GDI's text leaves alpha at 0, and the themed menu blends 32-bit bitmaps by alpha: the
         // picture is opaque.
-        let px = core::slice::from_raw_parts_mut(bits as *mut u8, (h.width * h.height * 4) as usize);
+        let px = core::slice::from_raw_parts_mut(bits as *mut u8, (width * h.height * 4) as usize);
         for p in px.chunks_exact_mut(4) {
             p[3] = 0xFF;
         }
