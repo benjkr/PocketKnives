@@ -6,7 +6,7 @@ fn main() {
     pk_build::resources(&pk_build::Resources {
         icon: Some(&dir.join("assets/nowplaying.ico")),
         manifest: Some(&dir.join("app.manifest")),
-        product: "NowPlaying",
+        description: "NowPlaying",
         file_name: "NowPlaying.exe",
     });
 }

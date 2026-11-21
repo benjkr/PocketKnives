@@ -6,7 +6,7 @@ fn main() {
     pk_build::resources(&pk_build::Resources {
         icon: Some(&dir.join("../assets/quicktooth.ico")),
         manifest: Some(&dir.join("app.manifest")),
-        product: "QuickTooth",
+        description: "QuickTooth",
         file_name: "QuickTooth.exe",
     });
 }
