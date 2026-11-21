@@ -3,7 +3,9 @@
 //! 60fps animation timer, mouse hover/scrub hit-testing, and dark/light right-click context menu.
 use crate::audio::AudioMeter;
 use crate::ipc;
-use crate::render::{FrameState, HoverTarget, NEXT_RECT, PLAY_RECT, PREV_RECT, Renderer, STRIP_H, STRIP_W};
+use crate::render::{
+    DEFAULT_TASKBAR_H, FrameState, HoverTarget, NEXT_RECT, PLAY_RECT, PREV_RECT, Renderer, window_metrics,
+};
 use crate::settings::{self, Settings};
 use crate::smtc::{MediaCommand, MediaSnapshot, SmtcClient};
 use alloc::boxed::Box;
@@ -64,6 +66,7 @@ struct AppState {
     win_y: i32,
     win_w: i32,
     win_h: i32,
+    pad_px: i32,
     dpi: u32,
     hidden: bool,
     // Hover & animation state
@@ -103,6 +106,7 @@ pub fn run() -> u32 {
         return 1;
     }
 
+    let init = window_metrics(96, DEFAULT_TASKBAR_H as i32);
     let hwnd = unsafe {
         CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
@@ -111,8 +115,8 @@ pub fn run() -> u32 {
             WS_POPUP,
             0,
             0,
-            STRIP_W as i32,
-            STRIP_H as i32,
+            init.win_w,
+            init.win_h,
             null_mut(),
             null_mut(),
             hinst,
@@ -152,6 +156,7 @@ pub fn run() -> u32 {
         win_y: i32::MIN,
         win_w: 0,
         win_h: 0,
+        pad_px: 0,
         dpi,
         hidden: true,
         strip_hovered: false,
@@ -476,8 +481,8 @@ impl AppState {
     }
 
     fn lparam_to_dips(&self, lparam: LPARAM) -> (f32, f32) {
-        let px_x = (lparam & 0xFFFF) as i16 as f32;
-        let px_y = ((lparam >> 16) & 0xFFFF) as i16 as f32;
+        let px_x = (lparam & 0xFFFF) as i16 as f32 - self.pad_px as f32;
+        let px_y = ((lparam >> 16) & 0xFFFF) as i16 as f32 - self.pad_px as f32;
         let scale = (self.dpi.max(96)) as f32 / 96.0;
         (px_x / scale, px_y / scale)
     }
@@ -579,12 +584,15 @@ impl AppState {
                 return;
             }
             let sy = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+            let tb_h = DEFAULT_TASKBAR_H as i32;
+            let m = window_metrics(96, tb_h);
             self.dpi = 96;
-            self.renderer.set_dpi(96);
-            self.win_w = STRIP_W as i32;
-            self.win_h = STRIP_H as i32;
-            self.win_x = 4;
-            self.win_y = sy - 48 + 4;
+            self.renderer.set_layout(96, m);
+            self.win_w = m.win_w;
+            self.win_h = m.win_h;
+            self.pad_px = m.pad;
+            self.win_x = 0;
+            self.win_y = sy - tb_h;
             self.hidden = false;
             unsafe {
                 SetWindowPos(self.hwnd, (-1isize) as HWND, self.win_x, self.win_y, self.win_w, self.win_h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -605,22 +613,23 @@ impl AppState {
             return;
         }
         let dpi = unsafe { GetDpiForWindow(tray) }.max(96);
-        let scale = (dpi as f32) / 96.0;
-        let w = (STRIP_W * scale + 0.5) as i32;
-        let h = (STRIP_H * scale + 0.5) as i32;
         let tb_h = tb.bottom - tb.top;
-        // Exact equal left, top, bottom padding inside the taskbar (4 px on standard 48 px bar)
-        let equal_pad = ((tb_h - h) / 2).max(0);
+        // Hover area spans the taskbar edge-to-edge (no L/T/B padding); the strip content inside
+        // keeps equal left/top/bottom padding (`m.pad`, 4 DIPs on a standard 48 DIP taskbar).
+        let m = window_metrics(dpi, tb_h);
 
-        let x = tb.left + equal_pad;
-        let y = tb.top + equal_pad;
+        let x = tb.left;
+        let y = tb.top;
+        let w = m.win_w;
+        let h = m.win_h;
 
         let should_hide = hide_for_idle || is_monitor_fullscreen(tray, self.hwnd);
         let visible_now = unsafe { IsWindowVisible(self.hwnd) } != 0;
         let need_show = !should_hide && !visible_now;
         let below_tray = !should_hide && is_below_window(self.hwnd, tray);
         let dpi_changed = dpi != self.dpi;
-        let geom_changed = force || owner_changed || x != self.win_x || y != self.win_y || w != self.win_w || h != self.win_h || dpi_changed;
+        let layout_changed = w != self.win_w || h != self.win_h || m.pad != self.pad_px || dpi_changed;
+        let geom_changed = force || owner_changed || x != self.win_x || y != self.win_y || layout_changed;
         let vis_changed = should_hide != self.hidden || need_show;
         if !geom_changed && !vis_changed && !below_tray {
             return;
@@ -631,16 +640,17 @@ impl AppState {
         self.win_y = y;
         self.win_w = w;
         self.win_h = h;
+        self.pad_px = m.pad;
         self.dpi = dpi;
         self.hidden = should_hide;
-        self.renderer.set_dpi(dpi);
+        self.renderer.set_layout(dpi, m);
 
         if should_hide {
             self.stop_zorder_settle();
             unsafe { SetWindowPos(self.hwnd, null_mut(), x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER | SWP_HIDEWINDOW) };
         } else {
             unsafe { SetWindowPos(self.hwnd, (-1isize) as HWND, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW) };
-            if was_hidden || need_show || dpi_changed {
+            if was_hidden || need_show || layout_changed {
                 self.render_now();
             }
             if was_hidden || need_show {
