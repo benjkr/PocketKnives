@@ -21,7 +21,8 @@ What it does now. Keep it current in the same change, and lean.
 - **Row 2**: **P1 Spotify hover-reveal progress bar** — fixed `4 px` track centered in a `14 px`
   hit target (zero vertical jump), white fill at rest transitioning to album accent on hover/drag,
   cursor ghost seek fill, `10 px` smooth fade/scale knob, and tabular `cur / dur` with live hover
-  timestamp preview.
+  timestamp preview. The time column reserves the measured width of the track's longest bold
+  timestamp so multi-digit times never clip and the bar never jumps while hovering or scrubbing.
 
 ## Media and audio
 
@@ -38,10 +39,13 @@ What it does now. Keep it current in the same change, and lean.
 ## Z-order and window behavior
 
 - Owned by `Shell_TrayWnd` (`GWLP_HWNDPARENT`) so Windows moves it atomically with the taskbar on
-  every frame without flicker, plus an `EVENT_SYSTEM_FOREGROUND` hook and `TaskbarCreated` handler.
+  every frame without flicker, plus an `EVENT_SYSTEM_FOREGROUND` hook, `TaskbarCreated` handler,
+  and Z-order checks that re-raise the strip above `Shell_TrayWnd` whenever the taskbar rises over
+  it (such as after a fullscreen window or SnipSnap overlay closes).
 - `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` and `WM_MOUSEACTIVATE -> MA_NOACTIVATE` on left-clicks so
   clicking controls or scrubbing never steals focus.
-- Hidden when no media session is active, and behind fullscreen windows.
+- Hidden when no media session is active, and behind visible, uncloaked fullscreen windows
+  (ignoring desktop shell windows like `Progman` and `WorkerW`).
 
 ## Settings, single instance and CLI
 
