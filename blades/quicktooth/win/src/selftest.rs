@@ -198,4 +198,6 @@ impl DeviceBackend for FakeDevices {
     fn scan_battery(&self, _: u16, _: i32) -> Op<Option<BatteryReading>> {
         Op::ok(None)
     }
+    fn start_advert_watch(&self, _: u16) {}
+    fn stop_advert_watch(&self) {}
 }

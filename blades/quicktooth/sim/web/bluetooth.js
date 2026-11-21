@@ -92,13 +92,34 @@ export const PROFILE_DEFAULTS = {
   sendMs: [4, 9],              // worker time for SendOneShot (real log: click → KsProperty 6–8 ms)
   pnpMs: [3, 8],               // worker time for PnpEndpoints.BluetoothConnected / BluetoothBattery
   bleHeard: true,              // AirPods status advert is heard during a battery scan
+  advertMs: 1000,              // how often the advert watch hears a bud that's advertising
   bleScanMs: [2500, 5000],     // time to hear a strong advert (real: reading ~6.5 s after connecting)
 };
 
 let nextId = 1;
 const guid = () => `{${(0xA1000000 + nextId++).toString(16)}-0000-4000-8000-${String(nextId).padStart(12, '0')}}`;
 
-export function makeDevice({ name, mac, appleModel = null, connected = false, windowsBattery = null, battery = null, present = true, inRange = true } = {}) {
+/**
+ * The AirPods' Apple status advert (manufacturer data, company 0x004C) as the left bud sends it,
+ * from the bytes real AirPods Pro sent in each state: [5] status (0x20 = the sender is the left
+ * bud, 0x04 both in the case, 0x10 one in the case, 0x02 in an ear), [6] bud levels (left in the
+ * low nibble), [7] charging + case level, [8] lid (0x08 closed, 0x20 the sender is in the case).
+ */
+export function statusAdvert(d) {
+  const { state, inEar } = d.pods;
+  const [status, lid] = {
+    'closed': [0x75, 0x39], 'lid open': [0x75, 0x32], 'left out': [0x31, 0x12], 'right out': [0x71, 0x32], 'out': [0x21, 0x12],
+  }[state];
+  const level = (v) => (v == null ? 15 : Math.round(v / 10));
+  const b = d.battery ?? {};
+  const charging = (b.budsCharging ? 0x30 : 0) | (b.caseCharging ? 0x40 : 0);
+  return new Uint8Array([
+    0x07, 0x19, 0x01, d.appleModel & 0xFF, d.appleModel >> 8, status | (inEar && state !== 'closed' && state !== 'lid open' ? 0x02 : 0),
+    (level(b.right) << 4) | level(b.left), charging | level(b.case), lid, 0x00, 0x04,
+  ]);
+}
+
+export function makeDevice({ name, mac, appleModel = null, connected = false, windowsBattery = null, battery = null, present = true, inRange = true, pods = null } = {}) {
   const containerId = guid();
   const vid = appleModel != null ? `_vid&0001004c_pid&${appleModel.toString(16).padStart(4, '0')}` : '_vid&000105d6_pid&000a';
   const macLower = mac.toLowerCase();
@@ -118,6 +139,7 @@ export function makeDevice({ name, mac, appleModel = null, connected = false, wi
     link: connected ? 'up' : 'down',   // ACL link: down | up | lingering
     windowsBattery,                    // % reported to Windows (non-AirPods), or null
     battery: battery ?? (appleModel != null ? { left: 80, right: 70, case: null, budsCharging: false, caseCharging: false } : null), // case unknown while the buds are out
+    pods,                              // where the buds are, as advertised (see setPods), or null
     _pending: [],                      // scheduled clock handles for in-flight work
     _attempt: null,                    // { requests, landed }
   };
@@ -132,6 +154,7 @@ export class MockBluetooth {
       makeDevice({ name: 'Studio Headset', mac: '00AABBCCDDEE', windowsBattery: 70 }),
     ];
     this.listeners = new Set();
+    this.watches = new Set();
     this.events = [];            // world-side timeline (for logs and assertions)
     this.setProfile(profile);
   }
@@ -288,6 +311,32 @@ export class MockBluetooth {
     });
   }
 
+  /**
+   * The advert watch (BluetoothLEAdvertisementWatcher): while it runs, every advertMs (and at
+   * once on a change) each AirPods of `model` that's advertising (`pods` set) is heard.
+   * Returns a handle with stop().
+   */
+  bleWatch(model, onAdvert) {
+    const watch = { stopped: false, timer: null };
+    const hear = () => {
+      for (const d of this.devices) if (d.appleModel === model && d.present && d.inRange && d.pods) onAdvert(statusAdvert(d), -55);
+    };
+    const tick = () => { if (watch.stopped) return; hear(); watch.timer = this.clock.after(this._ms('advertMs'), tick); };
+    watch.timer = this.clock.after(this._ms('advertMs'), tick);
+    watch.onChange = () => { if (!watch.stopped) hear(); };
+    this.watches.add(watch);
+    return { stop: () => { watch.stopped = true; watch.timer?.cancel(); this.watches.delete(watch); } };
+  }
+
+  /** Where the buds are, as the AirPods advertise it: null (not advertising), or
+   *  { state: 'closed' | 'lid open' | 'left out' | 'right out' | 'out', inEar }. */
+  setPods(id, pods) {
+    const d = this.device(id); if (!d) throw new Error(`no device ${id}`);
+    d.pods = pods ? { inEar: false, ...pods } : null;
+    this._event(`pods ${JSON.stringify(d.pods)}`, d);
+    for (const w of this.watches) w.onChange();
+  }
+
   // ------------------------------------------------------------------ the world (things the user or headset do)
 
   /** The headset connects on its own (taken out of the case near the PC, or another app connected it). */
@@ -331,7 +380,7 @@ export class MockBluetooth {
     return this.devices.map((d) => ({
       name: d.name, containerId: d.containerId, mac: d.mac, present: d.present, inRange: d.inRange, link: d.link,
       a2dp: stateName(d.endpoints[0].state), hfp: stateName(d.endpoints[1].state), connecting: !!d._connecting,
-      battery: d.battery, windowsBattery: d.windowsBattery,
+      battery: d.battery, windowsBattery: d.windowsBattery, pods: d.pods,
     }));
   }
 }

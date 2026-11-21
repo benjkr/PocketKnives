@@ -81,6 +81,11 @@ pub trait DeviceBackend {
     /// The Bluetooth link's connected flag (`None` when the device isn't known).
     fn bluetooth_connected(&self, mac: &str) -> Op<Option<bool>>;
     fn scan_battery(&self, model: u16, window_ms: i32) -> Op<Option<BatteryReading>>;
+    /// Starts a passive BLE watch: each Apple status advert of `model` (its manufacturer data,
+    /// company 0x004C) goes to [`crate::controller::TrayController::on_advert`] on the UI thread,
+    /// until [`Self::stop_advert_watch`]. Never connects to anything. Starting it again replaces it.
+    fn start_advert_watch(&self, model: u16);
+    fn stop_advert_watch(&self);
 }
 
 /// Icon pixels plus what they show. Compared by identity (`Rc::ptr_eq`), as the C# class was.

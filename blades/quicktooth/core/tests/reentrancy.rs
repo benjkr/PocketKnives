@@ -261,6 +261,17 @@ impl DeviceBackend for Devices {
         });
         op
     }
+    fn start_advert_watch(&self, _model: u16) {
+        // An advert arrives later, as the exe posts it to its window.
+        let w = self.0.clone();
+        self.0.post(move || {
+            let c = w.controller.borrow().clone();
+            if let Some(c) = c {
+                c.on_advert(&[0x07, 0x19, 0x01, 0x14, 0x20, 0x75, 0x88, 0xB5, 0x32, 0x00, 0x04], -50);
+            }
+        });
+    }
+    fn stop_advert_watch(&self) {}
 }
 
 #[test]

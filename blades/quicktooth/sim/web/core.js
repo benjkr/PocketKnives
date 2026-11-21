@@ -99,6 +99,8 @@ function makeImports(exports) {
     btSend: (h, op, cp, cn, op2, on) => { const c = str(cp, cn), o = str(op2, on); settle(op, () => H(h).btSend(c, o), 'str'); },
     btConnected: (h, op, p, n) => { const mac = str(p, n); settle(op, () => H(h).btConnected(mac), 'num'); }, // -1 unknown, 0, 1
     btScan: (h, op, model, windowMs) => settle(op, () => H(h).btScan(model, windowMs), 'str'), // JSON or "null"
+    btWatchStart: (h, model) => H(h).btWatchStart(model),
+    btWatchStop: (h) => H(h).btWatchStop(),
   };
 }
 
@@ -150,6 +152,12 @@ function wrap(ex) {
     AppDisplayChange: (id) => ex.qt_app_display_change(id),
     AppTaskbarCreated: (id) => ex.qt_app_taskbar_created(id),
     AppEndpointChanged: (id) => ex.qt_app_endpoint_changed(id),
+    /** A status advert (Uint8Array, Apple's manufacturer data) from the watch: WM_APP_ADVERT. */
+    AppAdvert: (id, data, rssi) => {
+      const p = ex.qt_alloc(data.length);
+      new Uint8Array(mem(), p, data.length).set(data);
+      ex.qt_app_advert(id, p, data.length, rssi);
+    },
     AppRebuildIcons: (id) => ex.qt_app_rebuild_icons(id),
     AppSnapshot: (id) => text(ex.qt_app_snapshot(id)),
     AppStatusLine: (id) => text(ex.qt_app_status_line(id)),

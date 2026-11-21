@@ -1,9 +1,10 @@
-//! Short, passive BLE scans for the target's Apple status advert (docs/specs/bluetooth.md).
-//! Never connects to anything. A scan stops at the first strong match (the AirPods are in the
-//! ears, so they're close), or after its window with the strongest match seen.
+//! Passive BLE for the target's Apple status advert (docs/specs/bluetooth.md): short battery scans,
+//! and the advert watch. Never connects to anything. A scan stops at the first strong match (the
+//! AirPods are in the ears, so they're close), or after its window with the strongest match seen.
 use crate::worker::Handle;
 use alloc::string::String;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::ptr::null;
 use core::sync::atomic::{AtomicU32, Ordering};
 use pk::sync::Mutex;
@@ -179,4 +180,61 @@ fn error_name(e: BluetoothError) -> String {
         n => return alloc::format!("{n}"),
     };
     name.into()
+}
+
+/// The advert watch: a passive watcher that hands each status advert of one model to `deliver`
+/// (on a thread-pool thread). It stops when dropped.
+pub struct Watch(BluetoothLEAdvertisementWatcher);
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        let _ = self.0.Stop();
+    }
+}
+
+pub fn watch(model: u16, deliver: impl Fn(Vec<u8>, i32) + Send + Sync + 'static) -> Option<Watch> {
+    let start = || -> windows_core::Result<Watch> {
+        let watcher = BluetoothLEAdvertisementWatcher::new()?;
+        watcher.SetScanningMode(BluetoothLEScanningMode::Passive)?;
+        watcher.Received(&TypedEventHandler::new(move |_, args: windows_core::Ref<BluetoothLEAdvertisementReceivedEventArgs>| {
+            if let Some(a) = args.as_ref() {
+                // A failed read is a dropped advert; the next one comes within a second or two.
+                let _ = status_adverts(a, model, &deliver);
+            }
+            Ok(())
+        }))?;
+        watcher.Start()?;
+        Ok(Watch(watcher))
+    };
+    match start() {
+        Ok(w) => Some(w),
+        Err(e) => {
+            quicktooth_core::log!("advert watch unavailable: {}", e.message());
+            None
+        }
+    }
+}
+
+/// Passes on the advert's Apple status messages of `model` (the core reads them).
+fn status_adverts(a: &BluetoothLEAdvertisementReceivedEventArgs, model: u16, deliver: &impl Fn(Vec<u8>, i32)) -> windows_core::Result<()> {
+    let rssi = a.RawSignalStrengthInDBm()? as i32;
+    if rssi < MIN_RSSI {
+        return Ok(());
+    }
+    for md in a.Advertisement()?.ManufacturerData()? {
+        if md.CompanyId()? != APPLE {
+            continue;
+        }
+        let data = md.Data()?;
+        let len = data.Length()? as usize;
+        if len < 9 {
+            continue;
+        }
+        let mut bytes = alloc::vec![0u8; len];
+        DataReader::FromBuffer(&data)?.ReadBytes(&mut bytes)?;
+        if bytes[0] == 0x07 && u16::from_le_bytes([bytes[3], bytes[4]]) == model {
+            deliver(bytes, rssi);
+        }
+    }
+    Ok(())
 }

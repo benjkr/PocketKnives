@@ -108,6 +108,10 @@ unsafe extern "C" {
     fn js_bt_connected(h: i32, op: u32, mac: *const u8, len: usize);
     #[link_name = "btScan"]
     fn js_bt_scan(h: i32, op: u32, model: i32, window_ms: i32);
+    #[link_name = "btWatchStart"]
+    fn js_bt_watch_start(h: i32, model: i32);
+    #[link_name = "btWatchStop"]
+    fn js_bt_watch_stop(h: i32);
     /// A Rust panic's message, for the console (the module traps right after).
     #[link_name = "panic"]
     fn js_panic(message: *const u8, len: usize);
@@ -378,6 +382,14 @@ pub extern "C" fn qt_app_taskbar_created(id: i32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn qt_app_endpoint_changed(id: i32) {
     app(id).on_endpoint_changed();
+}
+
+/// A status advert from the mock watch (its bytes in a [`qt_alloc`] block, freed here).
+#[unsafe(no_mangle)]
+pub extern "C" fn qt_app_advert(id: i32, data: *mut u8, len: usize, rssi: i32) {
+    let bytes = unsafe { core::slice::from_raw_parts(data, len) }.to_vec();
+    qt_free(data, len);
+    app(id).on_advert(&bytes, rssi);
 }
 
 #[unsafe(no_mangle)]
@@ -728,5 +740,13 @@ impl DeviceBackend for WebDevices {
         let (id, op) = pending(move |r| battery_reading(&r.text, unsafe { js_now_epoch_ms(h) }));
         unsafe { js_bt_scan(self.0, id, model as i32, window_ms) };
         op
+    }
+
+    fn start_advert_watch(&self, model: u16) {
+        unsafe { js_bt_watch_start(self.0, model as i32) };
+    }
+
+    fn stop_advert_watch(&self) {
+        unsafe { js_bt_watch_stop(self.0) };
     }
 }

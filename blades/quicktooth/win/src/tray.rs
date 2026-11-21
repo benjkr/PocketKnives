@@ -59,6 +59,7 @@ const WM_TRAY: u32 = WM_APP + 1;
 const NIN_KEYSELECT: u32 = NIN_SELECT | NINF_KEY;
 const WM_APP_INVOKE: u32 = WM_APP + 2;
 const WM_APP_DEVCHANGE: u32 = WM_APP + 3;
+const WM_APP_ADVERT: u32 = WM_APP + 4;
 
 type Deliver = Box<dyn FnOnce(Box<dyn Any + Send>)>;
 
@@ -114,6 +115,10 @@ impl Ui {
 /// Results from the worker and scan threads for the UI thread: (arrival number, the id of the
 /// pending `Done`, the value).
 static RESULTS: pk::sync::Mutex<VecDeque<(u64, usize, Box<dyn Any + Send>)>> = pk::sync::Mutex::new(VecDeque::new());
+/// Status adverts from the advert watch (thread-pool threads) for the UI thread. One
+/// `WM_APP_ADVERT` is posted while it's non-empty; past `ADVERTS_MAX` the oldest are dropped.
+static ADVERTS: pk::sync::Mutex<VecDeque<(Vec<u8>, i32)>> = pk::sync::Mutex::new(VecDeque::new());
+const ADVERTS_MAX: usize = 64;
 /// Arrival numbers for results and woken tasks.
 static ARRIVAL: AtomicU64 = AtomicU64::new(0);
 
@@ -233,7 +238,7 @@ pub fn run() -> u32 {
 
     let schedule: Rc<dyn Schedule> = Rc::new(UiSchedule(ui));
     let host: Rc<dyn TrayHost> = Rc::new(WinHost(ui));
-    let devices: Rc<dyn DeviceBackend> = Rc::new(WinDevices { ui, worker: Worker::start() });
+    let devices: Rc<dyn DeviceBackend> = Rc::new(WinDevices { ui, worker: Worker::start(), watch: RefCell::new(None) });
     let controller = TrayController::new(host, devices, files::load_settings(), schedule);
     let _ = ui.controller.set(controller.clone());
     controller.start();
@@ -280,6 +285,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_INVOKE => {
             drain(ui);
+            return 0;
+        }
+        WM_APP_ADVERT => {
+            let adverts = core::mem::take(&mut *ADVERTS.lock());
+            if let Some(c) = c {
+                for (data, rssi) in adverts {
+                    c.on_advert(&data, rssi);
+                }
+            }
             return 0;
         }
         WM_APP_DEVCHANGE => {
@@ -584,6 +598,7 @@ fn append(menu: HMENU, items: &[MenuItem]) {
 struct WinDevices {
     ui: &'static Ui,
     worker: Worker,
+    watch: RefCell<Option<ble::Watch>>,
 }
 
 impl WinDevices {
@@ -627,5 +642,29 @@ impl DeviceBackend for WinDevices {
         let hwnd = self.ui.hwnd() as isize;
         ble::scan_async(model, window_ms.max(0) as u32, move |scan| post_result(hwnd, id, Ok(scan.reading)));
         op
+    }
+
+    fn start_advert_watch(&self, model: u16) {
+        let hwnd = self.ui.hwnd() as isize;
+        let watch = ble::watch(model, move |data, rssi| {
+            let first = {
+                let mut q = ADVERTS.lock();
+                if q.len() >= ADVERTS_MAX {
+                    q.pop_front();
+                }
+                q.push_back((data, rssi));
+                q.len() == 1
+            };
+            if first {
+                unsafe { PostMessageW(hwnd as HWND, WM_APP_ADVERT, 0, 0) };
+            }
+        });
+        let old = self.watch.replace(watch);
+        drop(old); // stopped outside the borrow
+    }
+
+    fn stop_advert_watch(&self) {
+        let old = self.watch.take();
+        drop(old);
     }
 }

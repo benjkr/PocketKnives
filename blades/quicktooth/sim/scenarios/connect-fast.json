@@ -15,7 +15,7 @@
     { "expect": { "app.anim": "Landing", "app.tooltip": "AirPods Pro — Connected", "log": "Connect confirmed after" } },
     { "eval": "qt.timeline().find(e => e.type === 'confirmed').ms" },
     { "waitFor": "s.app.anim === null", "timeout": 2000 },
-    { "expect": { "app.icon.state": "connected", "app.timers.length": 2, "bt.0.a2dp": "ACTIVE", "bt.0.hfp": "ACTIVE" } },
+    { "expect": { "app.icon.state": "connected", "app.timers.length": 3, "bt.0.a2dp": "ACTIVE", "bt.0.hfp": "ACTIVE" } },
     { "shot": "connected" }
   ]
 }

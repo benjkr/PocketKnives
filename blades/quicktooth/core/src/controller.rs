@@ -12,7 +12,7 @@
 //! Each C# `async` method is a future started with [`exec::spawn`] (runs synchronously up to its
 //! first pending wait, as `_ = M()` did); an exception the C# caught is an `Err` from an [`Op`].
 use crate::Guid;
-use crate::battery::{self, BatteryReading};
+use crate::battery::{self, BatteryReading, Pods};
 use crate::blade_settings::{self, SetResult, SettingsChange};
 use crate::devices::{BtDevice, OneShot};
 use crate::exec::{self, Schedule};
@@ -20,6 +20,7 @@ use crate::host::{DeviceBackend, Event, IconDesc, IconImage, MenuItem, TrayHost,
 use crate::icon::{self, AnimPhase, IconState};
 use crate::json;
 use crate::log;
+use crate::math::ceil;
 use crate::num::{round_away, trunc_i64, write_r};
 use crate::settings::Settings;
 use crate::tunables::{self, T};
@@ -39,7 +40,10 @@ pub const TIMER_PROMOTE: i32 = 7;
 pub const TIMER_RESEND: i32 = 8;
 pub const TIMER_BATTERY: i32 = 9;
 pub const TIMER_LOWBATTERY: i32 = 10;
-pub const ALL_TIMERS: [i32; 10] = [
+pub const TIMER_PODS_SCAN: i32 = 11;
+pub const TIMER_PODS_WINDOW: i32 = 12;
+pub const TIMER_PODS_STALE: i32 = 13;
+pub const ALL_TIMERS: [i32; 13] = [
     TIMER_ANIM,
     TIMER_TIMEOUT,
     TIMER_POLL,
@@ -50,6 +54,9 @@ pub const ALL_TIMERS: [i32; 10] = [
     TIMER_RESEND,
     TIMER_BATTERY,
     TIMER_LOWBATTERY,
+    TIMER_PODS_SCAN,
+    TIMER_PODS_WINDOW,
+    TIMER_PODS_STALE,
 ];
 
 pub const CMD_CONNECT: i32 = 1;
@@ -103,6 +110,17 @@ struct State {
     battery_container: Guid,
     battery_scanning: bool,
     was_connected: bool,
+
+    /// Where the buds are, from the advert watch: the last state heard, a bud in an ear, when
+    /// (host ms), and the levels in that advert (any connection state).
+    pods: Option<Pods>,
+    pods_in_ear: bool,
+    pods_seen_ms: f64,
+    pods_reading: Option<BatteryReading>,
+    /// The model the advert watch is running for, and whether a scan window is open (while not
+    /// connected).
+    watching: Option<u16>,
+    pods_window: bool,
 
     icon_added: bool,
     add_attempts: i32,
@@ -236,6 +254,7 @@ impl TrayController {
         self.request_refresh();
         self.host().set_timer(TIMER_POLL, int(T::IdlePollMs));
         self.host().set_timer(TIMER_BATTERY, int(T::BatteryCheckMs));
+        self.host().set_timer(TIMER_PODS_SCAN, int(T::PodsScanEveryMs));
         let promoted = self.settings().tray_promoted_once;
         if !promoted {
             self.host().set_timer(TIMER_PROMOTE, int(T::PromoteRetryMs));
@@ -249,6 +268,9 @@ impl TrayController {
         }
         self.remove_icon();
         self.host().end_menu();
+        if self.st_mut().watching.take().is_some() {
+            self.inner.devices.stop_advert_watch();
+        }
         self.host().kill_all_timers();
         self.st_mut().running = false;
         log::info("tray exit");
@@ -334,6 +356,28 @@ impl TrayController {
                 };
                 if replay {
                     self.start_animation(AnimPhase::LowBattery, 0.0);
+                }
+            }
+            TIMER_PODS_SCAN => {
+                // While not connected: one scan window (connected, the watch runs all the time).
+                if !self.target_connected() {
+                    self.st_mut().pods_window = true;
+                    self.host().set_timer(TIMER_PODS_WINDOW, int(T::PodsScanMs));
+                    self.update_watch();
+                }
+            }
+            TIMER_PODS_WINDOW => {
+                self.host().kill_timer(TIMER_PODS_WINDOW);
+                self.st_mut().pods_window = false;
+                self.update_watch();
+            }
+            TIMER_PODS_STALE => {
+                let left = int(T::PodsStaleMs) as f64 - (self.host().now_ms() - self.st().pods_seen_ms);
+                if left > 0.0 {
+                    self.host().set_timer(TIMER_PODS_STALE, ceil(left) as i32);
+                } else {
+                    self.host().kill_timer(TIMER_PODS_STALE);
+                    self.forget_pods();
                 }
             }
             TIMER_BATTERY => {
@@ -472,6 +516,7 @@ impl TrayController {
             }
         }
         self.st_mut().was_connected = connected;
+        self.update_watch();
 
         let state_log = match &target {
             Some(t) => format!("{}: {} ({})", t.name, if t.connected() { "connected" } else { "not connected" }, t.state_signature()),
@@ -769,6 +814,68 @@ impl TrayController {
             }
         }
         self.st_mut().battery_scanning = false;
+    }
+
+    // ------------------------------------------------------------------ where the buds are
+
+    /// Runs the advert watch while the target (an Apple headset) is connected or a scan window is
+    /// open; stops it otherwise.
+    fn update_watch(&self) {
+        let (want, watching) = {
+            let st = self.st();
+            let model = st.target.as_ref().and_then(battery::model_of);
+            let on = st.running && (st.target.as_ref().is_some_and(BtDevice::connected) || st.pods_window);
+            (model.filter(|_| on), st.watching)
+        };
+        if want == watching {
+            return;
+        }
+        self.st_mut().watching = want;
+        match want {
+            Some(model) => self.inner.devices.start_advert_watch(model),
+            None => self.inner.devices.stop_advert_watch(),
+        }
+    }
+
+    /// An Apple status advert from the watch (manufacturer data, company 0x004C).
+    pub fn on_advert(&self, data: &[u8], rssi: i32) {
+        let Some(model) = self.st().watching.filter(|_| self.running()) else { return };
+        let Some((pods, in_ear)) = battery::parse_pods(data, model) else { return };
+        let now = self.host().now_ms();
+        let reading = battery::parse_apple_status(data, model, rssi, self.host().now_epoch_ms());
+        let (changed, first) = {
+            let mut st = self.st_mut();
+            let changed = st.pods != Some(pods) || st.pods_in_ear != in_ear;
+            let first = st.pods.is_none();
+            st.pods = Some(pods);
+            st.pods_in_ear = in_ear;
+            st.pods_seen_ms = now;
+            if reading.is_some() {
+                st.pods_reading = reading;
+            }
+            (changed, first)
+        };
+        if first {
+            self.host().set_timer(TIMER_PODS_STALE, int(T::PodsStaleMs));
+        }
+        if changed {
+            let ear = if in_ear { ", in an ear" } else { "" };
+            log::info(&format!("pods: {}{ear}", pods.name()));
+            self.emit(&format!("{{\"type\":\"pods\",\"state\":\"{}\",\"inEar\":{in_ear}}}", pods.name()));
+        }
+    }
+
+    /// No advert for `PodsStaleMs`: where the buds are is no longer known.
+    fn forget_pods(&self) {
+        {
+            let mut st = self.st_mut();
+            if st.pods.take().is_none() {
+                return;
+            }
+            st.pods_reading = None;
+        }
+        log::info("pods: not heard");
+        self.emit("{\"type\":\"pods\",\"state\":null,\"inEar\":false}");
     }
 
     // ------------------------------------------------------------------ pending animation
@@ -1180,6 +1287,16 @@ impl TrayController {
             }
             None => w.push_str("null"),
         }
+        w.push_str(",\"pods\":");
+        match st.pods {
+            Some(p) => {
+                json::write_str(&mut w, p.name());
+                w.push_str(if st.pods_in_ear { ",\"podsInEar\":true" } else { ",\"podsInEar\":false" });
+            }
+            None => w.push_str("null,\"podsInEar\":false"),
+        }
+        w.push_str(",\"watching\":");
+        w.push_str(if st.watching.is_some() { "true" } else { "false" });
         w.push_str(",\"settings\":{\"targetName\":");
         match &settings.target_name {
             Some(n) => json::write_str(&mut w, n),
