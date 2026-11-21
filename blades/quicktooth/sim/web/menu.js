@@ -148,18 +148,16 @@ export function drawMenu(ctx, lay, { theme = 'dark', hot = -1, M = MENU_METRICS 
   ctx.restore();
 }
 
-/** The app's owner-drawn header: its pixels, then its text in Tahoma, as the exe draws it with GDI. */
+/** The app's owner-drawn header: its pixels, then its text in Segoe UI, as the exe draws it with GDI. */
 function drawHeader(ctx, h, x0, y0) {
   const bytes = Uint8ClampedArray.from(atob(h.rgba), (c) => c.charCodeAt(0));
   ctx.putImageData(new ImageData(bytes, h.w, h.h), x0, y0);
   ctx.textBaseline = 'top';
   for (const t of h.texts) {
-    ctx.font = `${t.bold ? 'bold ' : ''}${t.size}px Tahoma, Verdana, sans-serif`;
-    ctx.textAlign = t.right ? 'right' : 'left';
-    const x = x0 + t.x;
-    if (t.gray) { ctx.fillStyle = '#FFFFFF'; ctx.fillText(t.text, x + 1, y0 + t.y + 1); }
-    ctx.fillStyle = t.gray ? '#ACA899' : '#000000';
-    ctx.fillText(t.text, x, y0 + t.y);
+    ctx.font = `${t.bold ? '600 ' : ''}${t.size}px ${MENU_METRICS.font}`;
+    ctx.textAlign = t.align;
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.text, x0 + t.x, y0 + t.y);
   }
   ctx.textAlign = 'left';
 }

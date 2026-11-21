@@ -58,12 +58,14 @@ The behaviour is `core/src/controller.rs` (shared); `win/src/tray.rs` is its Win
 - Order: the status line (grayed), separator, Connect or Disconnect, Device ▸, separator,
   Start with Windows, Exit.
 - While the buds' place is known, the status line is an owner-drawn picture instead (its text stays
-  the item's text): Windows XP pixel art (the approved "B1" design, `core/src/popup`) of the case
-  and buds as they are, the tray glyph, the device name and `<status> · <where>` ("lid open",
-  "left in ear", …), and a Battery group with Left, Right and Case bars from the last advert
-  (or the connected reading): 17 blocks, orange at or below the low-battery warning, a bolt while
-  charging, "—" when unknown. Grey when not connected. 216 × 258 px at 100 %, one art pixel = 2 px;
-  the exe draws the core's pixels and Tahoma text with GDI. The rows below stay Windows' own.
+  the item's text; `core/src/popup`), in the menu's own colours (dark or light, with the taskbar):
+  the device name centred; line art of the case, open with the buds nested while a bud is in it,
+  closed when both are in, closed and faint when both are out, a bud that's out standing beside it
+  (the traced bud of `tools/airpods_pro_shapes.json`; solid when connected, dim when not); under
+  the left bud, the case and the right bud a Fluent battery gauge and its level from the last
+  advert (or the connected reading): green with a bolt while charging, orange at or below the
+  low-battery warning, "—" when unknown. 236 × 102 px at 100 %; the exe draws the core's pixels
+  and Segoe UI text with GDI. The rows below stay Windows' own.
 - While an action is pending, the second item is the grayed status (Connecting…) and Device is
   grayed. With no target, the second item is a grayed Connect.
 - Device ▸ lists the paired Bluetooth audio devices (the target checked, `  (connected)` after

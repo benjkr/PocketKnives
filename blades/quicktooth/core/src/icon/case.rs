@@ -106,7 +106,7 @@ const RADIUS: f64 = 3.2;
 const PAST: f64 = 6.0;
 
 /// A rounded rectangle, clockwise; `r` is capped to fit.
-fn rounded(x0: f64, y0: f64, x1: f64, y1: f64, r: f64) -> Vec<Pt> {
+pub(crate) fn rounded(x0: f64, y0: f64, x1: f64, y1: f64, r: f64) -> Vec<Pt> {
     const N: i32 = 8; // segments per corner
     let r = max(0.0, min(r, min((x1 - x0) / 2.0, (y1 - y0) / 2.0)));
     let mut pts = Vec::new();
@@ -120,7 +120,7 @@ fn rounded(x0: f64, y0: f64, x1: f64, y1: f64, r: f64) -> Vec<Pt> {
 }
 
 /// The band `w` wide centred on a rounded rectangle's edge (outer clockwise, inner reversed).
-fn ring(x0: f64, y0: f64, x1: f64, y1: f64, r: f64, w: f64) -> [Vec<Pt>; 2] {
+pub(crate) fn ring(x0: f64, y0: f64, x1: f64, y1: f64, r: f64, w: f64) -> [Vec<Pt>; 2] {
     let h = w / 2.0;
     let mut inner = rounded(x0 + h, y0 + h, x1 - h, y1 - h, max(0.0, r - h));
     inner.reverse();

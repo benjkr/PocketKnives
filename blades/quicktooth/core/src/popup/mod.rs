@@ -1,47 +1,44 @@
-//! The menu's header while the buds' place is known (docs/specs/tray.md): Windows XP pixel art
-//! (the approved "B1" design) of the case and buds as they are, and a Battery group with Left,
-//! Right and Case bars. The core draws the picture; the host draws the text items on it in Tahoma
-//! (it owns the fonts), at the positions given here.
+//! The menu's header while the buds' place is known (docs/specs/tray.md): the device name,
+//! centred; a line-art picture of the case with the buds where they are (nested in the
+//! open case, or standing beside it once out); and a battery gauge with its level under each bud
+//! and the case. In the menu's own colours (Windows 11, dark or light). The core draws the
+//! picture; the host draws the text items on it in Segoe UI (it owns the fonts).
 //!
-//! Laid out in 96-DPI pixels; one art pixel is two of them. At other scalings everything grows by
-//! `art / 2`, `art` being the whole number of screen pixels per art pixel nearest to 2 × scaling.
+//! Laid out in 96-DPI pixels and drawn at `scale`.
 use crate::battery::Pods;
-use crate::icon::{self, IconState};
+use crate::icon::case::{ring, rounded};
+use crate::icon::glyph::Pt;
+use crate::icon::raster::{Canvas, Clip, Rgb, Xf, over};
+use crate::json::{self, Value};
+use crate::math::{max, min};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-
-mod sprites;
-
-/// A pixel-art sprite: runs of `(x, y, length, palette entry)`, entry 0 never stored.
-pub struct Sprite {
-    pub w: i32,
-    pub h: i32,
-    /// The pixel that sits on a bud's position, and the columns its shadow covers.
-    pub ax: i32,
-    pub ay: i32,
-    pub shadow: [i32; 2],
-    pub runs: &'static [u8],
-}
 
 /// What the header shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeaderInfo {
     pub name: String,
-    /// e.g. "Connected · left in ear".
-    pub status: String,
     pub pods: Pods,
     pub connected: bool,
     /// Levels in % (None = not known) and whether each charges.
     pub left: Option<(i32, bool)>,
     pub right: Option<(i32, bool)>,
     pub case: Option<(i32, bool)>,
-    /// At or below this a bar is orange.
+    /// At or below this a level is orange.
     pub low_warning: i32,
+    /// The menu's theme (it follows the taskbar's).
+    pub light: bool,
 }
 
-/// A text item for the host to draw: Tahoma at `size` px, top-left at (x, y), or right-aligned to
-/// x when `right`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+/// A text item for the host to draw: Segoe UI at `size` px, its top at `y`, aligned on `x`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     pub x: i32,
@@ -49,376 +46,311 @@ pub struct Text {
     pub size: i32,
     pub text: String,
     pub bold: bool,
-    pub right: bool,
-    /// Grayed (an unknown level): `#ACA899` with a white shadow one pixel down and right.
-    pub gray: bool,
+    pub align: Align,
+    /// `0xRRGGBB`.
+    pub color: u32,
 }
 
-/// The header: opaque BGRA pixels, top-down, and the text to draw on them.
+/// The header: opaque BGRA pixels, top-down, on the menu's background, and the text to draw on them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
     pub width: i32,
     pub height: i32,
+    /// The menu's background, `0xRRGGBB` (the host fills any room around the picture with it).
+    pub background: u32,
     pub bgra: Vec<u8>,
     pub texts: Vec<Text>,
 }
 
-/// How a bud reads in the status line: "lid open", "left in ear", …
-pub fn pods_phrase(pods: Pods, in_ear: bool) -> &'static str {
-    match pods {
-        Pods::Closed => "in the case",
-        Pods::Open => "lid open",
-        Pods::OneOut { left: true } => if in_ear { "left in ear" } else { "left out" },
-        Pods::OneOut { left: false } => if in_ear { "right in ear" } else { "right out" },
-        Pods::Out => if in_ear { "in ear" } else { "out of the case" },
-    }
+/// The menu's colours (background measured on Windows 11; the rest Fluent's).
+struct Palette {
+    bg: u32,
+    text: u32,
+    disabled: u32,
+    ink: u32,
+    ok: u32,
+    warn: u32,
 }
 
-// ---------------------------------------------------------------- layout (96-DPI pixels)
+const DARK: Palette = Palette { bg: 0x2C2C2C, text: 0xFFFFFF, disabled: 0x6D6D6D, ink: 0xF2F2F2, ok: 0x6CCB5F, warn: 0xFFA348 };
+const LIGHT: Palette = Palette { bg: 0xF9F9F9, text: 0x000000, disabled: 0x9F9F9F, ink: 0x282828, ok: 0x0F7B0F, warn: 0xC2500A };
 
-const WIDTH: i32 = 216;
-const HEIGHT: i32 = 258;
-const FACE: u32 = 0xECE9D8;
-const SHADOW: u32 = 0xACA899;
-const DARK: u32 = 0x716F64;
-const LIGHT: u32 = 0xF1EFE2;
-const WHITE: u32 = 0xFFFFFF;
-const WELL_BG: u32 = 0x6C8FDD;
-/// The scene: 102 × 69 art pixels at (6, 40).
-const SCENE: (i32, i32, i32, i32) = (6, 40, 102, 69);
-const GROUP_TOP: i32 = 191;
-const ROW_TOP: i32 = 201;
-const ROW_STEP: i32 = 16;
-const TEXT_SIZE: i32 = 11;
-/// The bars: 17 blocks of 4 px with 2 px gaps.
-const BLOCKS: i32 = 17;
+const WIDTH: f64 = 236.0;
+const HEIGHT: f64 = 102.0;
+const MID: f64 = WIDTH / 2.0;
+/// The picture's top.
+const Y0: f64 = 23.0;
+/// The gauges' row, and each gauge's size.
+const GAUGE_Y: f64 = 83.0;
+const GAUGE_W: f64 = 16.0;
+const GAUGE_H: f64 = 10.0;
+const TEXT_SIZE: f64 = 12.0;
+/// Where the buds out of the case stand (their middles), and the levels under them.
+const SIDE_X: f64 = 40.0;
+
+/// The layers, in drawing order: the line art, the green and orange levels, then the bolts.
+struct Layers {
+    ink: Canvas,
+    ok: Canvas,
+    warn: Canvas,
+    top: Canvas,
+}
 
 /// The header at `scale` (1 = 96 DPI).
 pub fn header(info: &HeaderInfo, scale: f64) -> Header {
-    let art = max1(round_half_up(2.0 * scale));
-    let px = |v: i32| v * art / 2;
-    let (w, h) = (px(WIDTH), px(HEIGHT));
-    let mut c = Rgb { w, h, px: vec![FACE; (w * h) as usize] };
-    let rect = |c: &mut Rgb, x: i32, y: i32, rw: i32, rh: i32, color: u32| c.fill(px(x), px(y), px(x + rw) - px(x), px(y + rh) - px(y), color);
+    let c = if info.light { &LIGHT } else { &DARK };
+    let (w, h) = (round(WIDTH * scale), round(HEIGHT * scale));
+    let xf = Xf::new(scale, 0.0, 0.0);
+    let mut l = Layers { ink: Canvas::rect(w, h), ok: Canvas::rect(w, h), warn: Canvas::rect(w, h), top: Canvas::rect(w, h) };
     let mut texts = Vec::new();
-    let text = |texts: &mut Vec<Text>, x: i32, y: i32, s: &str, bold: bool, right: bool, gray: bool| {
-        texts.push(Text { x: px(x), y: px(y), size: px(TEXT_SIZE), text: s.into(), bold, right, gray })
+    let mut text = |x: f64, top: f64, s: &str, bold: bool, align: Align, color: u32| {
+        texts.push(Text { x: round(x * scale), y: round(top * scale), size: round(TEXT_SIZE * scale), text: s.into(), bold, align, color })
     };
+    text(MID, 3.0, &info.name, true, Align::Center, c.text);
 
-    // The head: the tray icon, the name and the status.
-    let icon_px = px(16);
-    let glyph = icon::render_bgra(if info.connected { IconState::Connected } else { IconState::Disconnected }, true, icon_px);
-    c.blend_bgra(px(7), px(11), icon_px, &glyph);
-    text(&mut texts, 30, 6, &info.name, true, false, false);
-    text(&mut texts, 30, 19, &info.status, false, false, false);
-
-    // The well: a sunken frame around the scene.
-    rect(&mut c, 4, 38, 208, 1, SHADOW);
-    rect(&mut c, 4, 38, 1, 142, SHADOW);
-    rect(&mut c, 4, 179, 208, 1, WHITE);
-    rect(&mut c, 211, 38, 1, 142, WHITE);
-    rect(&mut c, 5, 39, 206, 140, WELL_BG);
-    rect(&mut c, 5, 39, 206, 1, DARK);
-    rect(&mut c, 5, 39, 1, 140, DARK);
-    rect(&mut c, 5, 178, 206, 1, LIGHT);
-    rect(&mut c, 210, 39, 1, 140, LIGHT);
-    let scene = scene(info);
-    for y in 0..SCENE.3 {
-        for x in 0..SCENE.2 {
-            let color = scene[(y * SCENE.2 + x) as usize];
-            c.fill(px(SCENE.0) + x * art, px(SCENE.1) + y * art, art, art, color);
+    // The case, centred: open while a bud is in it, closed and faint once both are out.
+    let solid = info.connected;
+    let (in_left, in_right) = match info.pods {
+        Pods::Closed | Pods::Open => (true, true),
+        Pods::OneOut { left } => (!left, left),
+        Pods::Out => (false, false),
+    };
+    let open = matches!(info.pods, Pods::Open | Pods::OneOut { .. });
+    let (x0, x1) = (MID - 30.0, MID + 30.0);
+    if open {
+        let (nest_h, top, hinge) = (30.0, Y0 + 6.0, Y0 + 26.0);
+        let nest_w = bud_width(nest_h);
+        let mut nested = Vec::new();
+        if in_left {
+            nested.push((MID - 2.0 - nest_w, false));
         }
+        if in_right {
+            nested.push((MID + 2.0, true));
+        }
+        draw_case(&mut l.ink, xf, x0, x1, hinge, Y0 + 49.0, Y0 + 1.5, 1.0, 1.0, 0.14, |canvas| {
+            for &(x, mirror) in &nested {
+                draw_bud(canvas, xf, x, top, nest_h, mirror, solid, Clip::NONE.intersect(-1e9, -1e9, 1e9, hinge + 0.6));
+            }
+        });
+    } else {
+        let faint = if info.pods == Pods::Out { 0.4 } else { 1.0 };
+        draw_case(&mut l.ink, xf, x0, x1, Y0 + 24.0, Y0 + 49.0, Y0 + 10.0, 0.0, faint, 0.0, |_| {});
+    }
+    // Buds out of the case stand beside it.
+    let out_h = 45.0;
+    let out_w = bud_width(out_h);
+    if !in_left {
+        draw_bud(&mut l.ink, xf, SIDE_X - out_w / 2.0, Y0 + 2.0, out_h, false, solid, Clip::NONE);
+    }
+    if !in_right {
+        draw_bud(&mut l.ink, xf, WIDTH - SIDE_X - out_w / 2.0, Y0 + 2.0, out_h, true, solid, Clip::NONE);
     }
 
-    // The Battery group: an etched frame with its label over the top edge.
-    let (gx, gw, gh) = (6, WIDTH - 12, 62);
-    rect(&mut c, gx, GROUP_TOP, gw, 1, SHADOW);
-    rect(&mut c, gx, GROUP_TOP, 1, gh, SHADOW);
-    rect(&mut c, gx, GROUP_TOP + gh - 1, gw, 1, SHADOW);
-    rect(&mut c, gx + gw - 1, GROUP_TOP, 1, gh, SHADOW);
-    rect(&mut c, gx + 1, GROUP_TOP + 1, gw - 2, 1, WHITE);
-    rect(&mut c, gx + 1, GROUP_TOP + 1, 1, gh - 2, WHITE);
-    rect(&mut c, gx, GROUP_TOP + gh, gw + 1, 1, WHITE);
-    rect(&mut c, gx + gw, GROUP_TOP, 1, gh + 1, WHITE);
-    rect(&mut c, gx + 4, GROUP_TOP - 1, 46, 3, FACE);
-    text(&mut texts, gx + 6, GROUP_TOP - 7, "Battery", false, false, false);
-
-    for (i, (label, level)) in [("Left:", info.left), ("Right:", info.right), ("Case:", info.case)].into_iter().enumerate() {
-        let y = ROW_TOP + i as i32 * ROW_STEP;
-        let gray = level.is_none();
-        text(&mut texts, 13, y, label, false, false, gray);
-        // The bar: a sunken white box with whole blocks.
-        rect(&mut c, 47, y, 107, 1, SHADOW);
-        rect(&mut c, 47, y, 1, 13, SHADOW);
-        rect(&mut c, 47, y + 12, 107, 1, WHITE);
-        rect(&mut c, 153, y, 1, 13, WHITE);
-        rect(&mut c, 48, y + 1, 105, 11, WHITE);
-        let pct = match level {
-            Some((p, charging)) => {
-                let n = (round_half_up(p as f64 / 100.0 * BLOCKS as f64)).clamp(1, BLOCKS);
-                let ramp = if p <= info.low_warning { &ORANGE } else { &GREEN };
-                for b in 0..n {
-                    for (r, &color) in ramp.iter().enumerate() {
-                        rect(&mut c, 49 + b * 6, y + 2 + r as i32, 4, 1, color);
-                    }
-                }
-                if charging {
-                    c.blit_rows(px(190), px(y + 2), art / 2, &BOLT);
-                }
-                alloc::format!("{p}%")
-            }
-            None => "\u{2014}".into(),
+    // A gauge and its level under each: left, the case, right.
+    for (cx, level) in [(SIDE_X, info.left), (MID, info.case), (WIDTH - SIDE_X, info.right)] {
+        let gx = cx - 24.0;
+        gauge(&mut l, xf, gx, GAUGE_Y, level, info.low_warning);
+        let color = match level {
+            None => c.disabled,
+            Some((p, _)) if p <= info.low_warning => c.warn,
+            _ => c.text,
         };
-        text(&mut texts, 186, y, &pct, false, true, gray);
+        let pct = level.map_or_else(|| String::from("\u{2014}"), |(p, _)| alloc::format!("{p}%"));
+        text(gx + GAUGE_W + 7.0, GAUGE_Y - 4.0, &pct, false, Align::Left, color);
     }
-    Header { width: w, height: h, bgra: c.to_bgra(), texts }
+
+    let mut bgra: Vec<u8> = [(c.bg & 0xFF) as u8, ((c.bg >> 8) & 0xFF) as u8, (c.bg >> 16) as u8, 0xFF].repeat((w * h) as usize);
+    for (layer, color) in [(&l.ink, c.ink), (&l.ok, c.ok), (&l.warn, c.warn), (&l.top, c.ink)] {
+        bgra = over(bgra, &layer.to_bgra(rgb(color)));
+    }
+    Header { width: w, height: h, background: c.bg, bgra, texts }
 }
 
-/// The bars' rows, top to bottom (the mockup's gradient, sampled per row).
-const GREEN: [u32; 9] = [0xC9F2C3, 0x7BE077, 0x5AD858, 0x3ED13E, 0x37C937, 0x2DBE2D, 0x3EC83E, 0x4FD14F, 0x8DE58A];
-const ORANGE: [u32; 9] = [0xFFE2B0, 0xFFB54A, 0xFFA725, 0xFF9900, 0xF69000, 0xEE8800, 0xF79613, 0xFFA41E, 0xFFC670];
-/// The charging bolt, 5 × 8.
-const BOLT: [&[u8]; 8] = [b"...kk", b"..kyk", b".kyk.", b"kyykk", b"kkyyk", b".kyk.", b"kyk..", b"kk..."];
+fn rgb(c: u32) -> Rgb {
+    Rgb { r: (c >> 16) as u8, g: ((c >> 8) & 0xFF) as u8, b: (c & 0xFF) as u8 }
+}
 
-// ---------------------------------------------------------------- the scene (art pixels)
+fn round(v: f64) -> i32 {
+    crate::math::round(v) as i32
+}
 
-/// Backdrop: top and bottom colours dithered down the height, and the shadow colour.
-const STAGE_ON: [u32; 3] = [0x7B9FE7, 0x6C90DF, 0x4868BE];
-const STAGE_OFF: [u32; 3] = [0xB5B9C1, 0xA8ACB5, 0x8C9099];
-const BAYER4: [[i32; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
-/// The status light: green (open), amber (charging in the closed case, or a low bud).
-const LED_GREEN: [u32; 2] = [0x4DE38A, 0x00C853];
-const LED_AMBER: [u32; 2] = [0xFFB13B, 0xFF9900];
-
-/// The scene's pixels, 102 × 69, as the mockup's resting poses lay them out (units of 1.5 art px).
-fn scene(info: &HeaderInfo) -> Vec<u32> {
-    let (w, h) = (SCENE.2, SCENE.3);
-    let stage = if info.connected { STAGE_ON } else { STAGE_OFF };
-    let mut px: Vec<u32> = (0..w * h)
-        .map(|i| {
-            let (x, y) = (i % w, i / w);
-            let t = (BAYER4[(y % 4) as usize][(x % 4) as usize] as f64 + 0.5) / 16.0;
-            if y as f64 / (h - 1) as f64 > t { stage[1] } else { stage[0] }
-        })
-        .collect();
-    let mut palette: Vec<u32> = if info.connected { sprites::ON.to_vec() } else { sprites::OFF.to_vec() };
-    let low = [info.left, info.right].iter().flatten().any(|&(p, _)| p <= info.low_warning);
-    let led = if !info.connected {
-        None
-    } else {
-        match info.pods {
-            Pods::Out => None,
-            Pods::Closed => Some(LED_AMBER),
-            _ if low => Some(LED_AMBER),
-            _ => Some(LED_GREEN),
-        }
-    };
-    let (m, s) = (key(&palette, b'm'), key(&palette, b's'));
-    let lit = led.unwrap_or([m, s]);
-    set_key(&mut palette, b'a', lit[0]);
-    set_key(&mut palette, b'b', lit[1]);
-
-    let p = |v: f64| round_half_up(v * 1.5);
-    let mut canvas = Art { w, h, px: &mut px, palette: &palette };
-    let (ky, shadow_y) = (p(9.0), p(44.0));
-    let seat_y = p(16.0) - 2;
-    // Where the case sits, and which buds are out (and where their middles rest, in units).
-    let (kx, out_left, out_right): (f64, Option<(f64, f64)>, Option<(f64, f64)>) = match info.pods {
-        Pods::Closed | Pods::Open => (17.0, None, None),
-        Pods::OneOut { left: true } => (29.0, Some((12.0, 21.0)), None),
-        Pods::OneOut { left: false } => (5.0, None, Some((56.0, 21.0))),
-        Pods::Out => (17.0, Some((22.0, 28.0)), Some((46.0, 28.0))),
-    };
-    let kx = p(kx);
-    let place = |b: &Sprite, mx: i32, my: i32, left: bool| (mx - if left { b.w - b.ax } else { b.ax }, my - b.ay);
-    let mut top = Vec::new();
-    for (left, out) in [(true, out_left), (false, out_right)] {
-        if let Some((ux, uy)) = out {
-            let b = if left { &sprites::OUT_LEFT } else { &sprites::OUT_RIGHT };
-            let (x, y) = place(b, round_half_up(ux * 1.5), round_half_up(uy * 1.5), left);
-            let cols = if left { [b.w - 1 - b.shadow[1], b.w - 1 - b.shadow[0]] } else { b.shadow };
-            canvas.shadow(x + cols[0], x + cols[1], shadow_y, 2, 1.0, stage[2]);
-            top.push((b, x, y));
-        }
+/// The case as the tray's case icon draws it (`icon::case`), larger: a lid arch over the hinge
+/// line, `inside` (the nested buds) drawn after the lid, then the body's U, the rim and, closed,
+/// the status light.
+#[allow(clippy::too_many_arguments)]
+fn draw_case(c: &mut Canvas, xf: Xf, x0: f64, x1: f64, hinge: f64, bottom: f64, lid_top: f64, open: f64, alpha: f64, body_fill: f64, inside: impl FnOnce(&mut Canvas)) {
+    const R: f64 = 12.0;
+    const SW: f64 = 1.5;
+    let lid_r = min(R, max(R * 0.19, (hinge - lid_top) * 0.72));
+    let above = Clip::NONE.intersect(-1e9, -1e9, 1e9, hinge);
+    let below = Clip::NONE.intersect(-1e9, hinge, 1e9, 1e9);
+    if open > 0.0 {
+        c.fill_clipped(&[rounded(x0, lid_top, x1, hinge + 2.0 * R, lid_r)], 0.09 * open * alpha, xf, above);
     }
-    if info.pods == Pods::Out {
-        canvas.blit(&sprites::CASE_MINI, p(24.0), p(3.0));
-    } else {
-        let front = if info.pods == Pods::Closed { &sprites::CASE_CLOSED } else { &sprites::CASE_OPEN_FRONT };
-        canvas.shadow(kx + p(2.0), kx + front.w - 1 - p(2.0), ky + front.h, p(2.0), 6.0 / (p(2.0) - 1) as f64, stage[2]);
-        if info.pods != Pods::Closed {
-            canvas.blit(&sprites::CASE_OPEN_BACK, kx, ky);
-            // The buds still in the case, seated between the case's back and front.
-            let seats = [(true, out_left.is_none()), (false, out_right.is_none())];
-            for (left, seated) in seats {
-                if seated {
-                    let b = if left { &sprites::SEAT_LEFT } else { &sprites::SEAT_RIGHT };
-                    let mx = kx + if left { p(9.0) } else { front.w - p(9.0) };
-                    let (x, y) = place(b, mx, ky + seat_y, left);
-                    canvas.blit(b, x, y);
-                }
+    c.fill_clipped(&ring(x0, lid_top, x1, hinge + 2.0 * R, lid_r, SW * (1.0 - 0.2 * open)), alpha * (1.0 - 0.35 * open), xf, above);
+    inside(c);
+    if body_fill > 0.0 {
+        c.fill_clipped(&[rounded(x0, hinge - 2.0 * R, x1, bottom, R)], body_fill * alpha, xf, below);
+    }
+    c.fill_clipped(&ring(x0, hinge - 2.0 * R, x1, bottom, R, SW), alpha, xf, below);
+    c.fill_clipped(&[rect(x0 - SW / 2.0, hinge, x1 - x0 + SW, SW * 0.75)], 0.9 * alpha, xf, Clip::NONE);
+    if open == 0.0 {
+        c.fill_clipped(&[disc((x0 + x1) / 2.0, hinge + (bottom - hinge) * 0.4, SW * 0.5)], 0.6 * alpha, xf, Clip::NONE);
+    }
+}
+
+fn rect(x: f64, y: f64, w: f64, h: f64) -> Vec<Pt> {
+    vec![Pt { x, y }, Pt { x: x + w, y }, Pt { x: x + w, y: y + h }, Pt { x, y: y + h }]
+}
+
+fn disc(cx: f64, cy: f64, r: f64) -> Vec<Pt> {
+    use crate::math::{PI, cos, sin};
+    (0..24).map(|k| Pt { x: cx + r * cos(2.0 * PI * k as f64 / 24.0), y: cy + r * sin(2.0 * PI * k as f64 / 24.0) }).collect()
+}
+
+// ---------------------------------------------------------------- the bud
+
+/// The traced earbud: the regions of a right AirPods Pro bud (ear tip to the left), the same
+/// drawing the tray glyph comes from. The gaps between the regions are the line art.
+const SHAPES: &str = include_str!("../../../tools/airpods_pro_shapes.json");
+/// Its bounding box.
+const BOX: (f64, f64, f64, f64) = (66.96, 36.79, 53.08, 74.42);
+
+struct Bud {
+    /// Body and stem; ear tip, its opening and the vent.
+    shell: Vec<Vec<Pt>>,
+    detail: Vec<Vec<Pt>>,
+}
+
+fn bud_shapes(mirror: bool) -> Bud {
+    let root = json::parse(SHAPES).unwrap_or(Value::Null);
+    let region = |name: &str| -> Vec<Vec<Pt>> {
+        let mut out = Vec::new();
+        for poly in root.get(name).and_then(Value::as_array).unwrap_or(&[]) {
+            for ring in poly.as_array().unwrap_or(&[]) {
+                let pts: Vec<Pt> = ring
+                    .as_array()
+                    .unwrap_or(&[])
+                    .iter()
+                    .filter_map(|p| {
+                        let p = p.as_array()?;
+                        let (x, y) = (p.first()?.as_f64()?, p.get(1)?.as_f64()?);
+                        Some(Pt { x: if mirror { 2.0 * BOX.0 + BOX.2 - x } else { x }, y })
+                    })
+                    .collect();
+                out.push(pts);
             }
-        }
-        canvas.blit(front, kx, ky);
-    }
-    for (b, x, y) in top {
-        canvas.blit(b, x, y);
-    }
-    px
-}
-
-fn key(palette: &[u32], k: u8) -> u32 {
-    sprites::KEYS.iter().position(|&c| c == k).map_or(0, |i| palette[i])
-}
-
-fn set_key(palette: &mut [u32], k: u8, color: u32) {
-    if let Some(i) = sprites::KEYS.iter().position(|&c| c == k) {
-        palette[i] = color;
-    }
-}
-
-struct Art<'a> {
-    w: i32,
-    h: i32,
-    px: &'a mut Vec<u32>,
-    palette: &'a [u32],
-}
-
-impl Art<'_> {
-    fn put(&mut self, x: i32, y: i32, color: u32) {
-        if x >= 0 && y >= 0 && x < self.w && y < self.h {
-            self.px[(y * self.w + x) as usize] = color;
-        }
-    }
-
-    fn blit(&mut self, s: &Sprite, x0: i32, y0: i32) {
-        for r in s.runs.chunks_exact(4) {
-            let color = self.palette[r[3] as usize - 1];
-            for i in 0..r[2] as i32 {
-                self.put(x0 + r[0] as i32 + i, y0 + r[1] as i32, color);
-            }
-        }
-    }
-
-    /// A checkered shadow, each row shorter at both ends by `taper`.
-    fn shadow(&mut self, x0: i32, x1: i32, y0: i32, rows: i32, taper: f64, color: u32) {
-        for r in 0..rows {
-            let ins = round_half_up(r as f64 * taper);
-            for x in x0 + ins..=x1 - ins {
-                if (x + y0 + r) & 1 == 1 {
-                    self.put(x, y0 + r, color);
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- the picture
-
-struct Rgb {
-    w: i32,
-    h: i32,
-    px: Vec<u32>,
-}
-
-impl Rgb {
-    fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, color: u32) {
-        for yy in y.max(0)..(y + h).min(self.h) {
-            for xx in x.max(0)..(x + w).min(self.w) {
-                self.px[(yy * self.w + xx) as usize] = color;
-            }
-        }
-    }
-
-    /// Straight-alpha BGRA `size` × `size` over this picture.
-    fn blend_bgra(&mut self, x0: i32, y0: i32, size: i32, bgra: &[u8]) {
-        for y in 0..size {
-            for x in 0..size {
-                let i = ((y * size + x) * 4) as usize;
-                let a = bgra[i + 3] as u32;
-                if a == 0 || x0 + x >= self.w || y0 + y >= self.h {
-                    continue;
-                }
-                let o = ((y0 + y) * self.w + x0 + x) as usize;
-                let d = self.px[o];
-                let mix = |s: u8, d: u32| (s as u32 * a + d * (255 - a) + 127) / 255;
-                let (r, g, b) = (mix(bgra[i + 2], d >> 16), mix(bgra[i + 1], (d >> 8) & 0xFF), mix(bgra[i], d & 0xFF));
-                self.px[o] = (r << 16) | (g << 8) | b;
-            }
-        }
-    }
-
-    /// A small pixel glyph (`k` near-black, `y` yellow), `cell` screen pixels per glyph pixel.
-    fn blit_rows(&mut self, x0: i32, y0: i32, cell: i32, rows: &[&[u8]]) {
-        let cell = cell.max(1);
-        for (y, row) in rows.iter().enumerate() {
-            for (x, &c) in row.iter().enumerate() {
-                let color = match c {
-                    b'k' => 0x202020,
-                    b'y' => 0xFFD21E,
-                    _ => continue,
-                };
-                self.fill(x0 + x as i32 * cell, y0 + y as i32 * cell, cell, cell, color);
-            }
-        }
-    }
-
-    fn to_bgra(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.px.len() * 4);
-        for &p in &self.px {
-            out.extend_from_slice(&[(p & 0xFF) as u8, ((p >> 8) & 0xFF) as u8, (p >> 16) as u8, 0xFF]);
         }
         out
+    };
+    let mut shell = region("body");
+    shell.extend(region("stem"));
+    let mut detail = region("tip");
+    detail.extend(region("noz"));
+    detail.extend(region("vent"));
+    Bud { shell, detail }
+}
+
+fn bud_width(h: f64) -> f64 {
+    BOX.2 * h / BOX.3
+}
+
+/// A bud `h` px tall with its top-left at (x, y); `mirror`ed it's a left bud. Solid when
+/// connected (the details tinted), dim when not.
+#[allow(clippy::too_many_arguments)]
+fn draw_bud(c: &mut Canvas, xf: Xf, x: f64, y: f64, h: f64, mirror: bool, solid: bool, clip: Clip<'_>) {
+    let s = h / BOX.3;
+    let bud = bud_shapes(mirror);
+    // Bud units to header px, then to pixels: x' = scale·(s·(u − box.x) + x).
+    let place = |v: &Vec<Vec<Pt>>| -> Vec<Vec<Pt>> {
+        v.iter().map(|ring| ring.iter().map(|p| Pt { x: x + s * (p.x - BOX.0), y: y + s * (p.y - BOX.1) }).collect()).collect()
+    };
+    let (shell, detail) = (place(&bud.shell), place(&bud.detail));
+    let (a_shell, a_detail) = if solid { (1.0, 0.55) } else { (0.34, 0.2) };
+    c.fill_clipped(&shell, a_shell, xf, clip);
+    c.fill_clipped(&detail, a_detail, xf, clip);
+}
+
+// ---------------------------------------------------------------- the gauge
+
+/// A Fluent battery glyph: an outline, a nub, a bar to the level (green while charging, orange at
+/// or below the warning), a bolt while charging.
+fn gauge(l: &mut Layers, xf: Xf, x: f64, y: f64, level: Option<(i32, bool)>, low: i32) {
+    let a = if level.is_some() { 0.9 } else { 0.35 };
+    l.ink.fill_clipped(&ring(x + 0.5, y + 0.5, x + GAUGE_W - 0.5, y + GAUGE_H - 0.5, 2.5, 1.0), a, xf, Clip::NONE);
+    l.ink.fill_clipped(&[rounded(x + GAUGE_W + 0.5, y + 3.0, x + GAUGE_W + 2.0, y + GAUGE_H - 3.0, 0.75)], a, xf, Clip::NONE);
+    let Some((p, charging)) = level else { return };
+    let bar = [rounded(x + 2.0, y + 2.0, x + 2.0 + max(1.5, (GAUGE_W - 4.0) * p as f64 / 100.0), y + GAUGE_H - 2.0, 1.0)];
+    let layer = if p <= low {
+        &mut l.warn
+    } else if charging {
+        &mut l.ok
+    } else {
+        &mut l.ink
+    };
+    layer.fill_clipped(&bar, 1.0, xf, Clip::NONE);
+    if charging {
+        let (bx, by, bh) = (x + GAUGE_W / 2.0 - 2.7, y + 0.5, GAUGE_H - 1.0);
+        let bolt: Vec<Pt> = BOLT.iter().map(|&(px, py)| Pt { x: bx + px * bh / 10.0, y: by + py * bh / 10.0 }).collect();
+        // A halo of background around the bolt: the bolt grown about its middle, knocked out below.
+        let (cx, cy) = (bx + 3.0 * bh / 10.0, by + bh / 2.0);
+        let halo: Vec<Pt> = bolt.iter().map(|p| Pt { x: cx + (p.x - cx) * 1.6, y: cy + (p.y - cy) * 1.3 }).collect();
+        for layer in [&mut l.ink, &mut l.ok, &mut l.warn] {
+            layer.erase(&halo, xf);
+        }
+        l.top.fill_clipped(&[bolt], 1.0, xf, Clip::NONE);
     }
 }
 
-/// JavaScript's `Math.round` (halves up), which the mockup's layout used.
-fn round_half_up(v: f64) -> i32 {
-    crate::math::floor(v + 0.5) as i32
-}
-
-fn max1(v: i32) -> i32 {
-    v.max(1)
-}
+const BOLT: [(f64, f64); 6] = [(3.6, 0.0), (0.4, 5.7), (2.8, 5.7), (2.2, 10.0), (5.6, 4.2), (3.2, 4.2)];
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn info(pods: Pods, connected: bool) -> HeaderInfo {
+    fn info(pods: Pods, connected: bool, light: bool) -> HeaderInfo {
         HeaderInfo {
             name: "AirPods Pro".into(),
-            status: "Connected · left in ear".into(),
             pods,
             connected,
             left: Some((80, false)),
             right: Some((20, true)),
             case: None,
             low_warning: 20,
+            light,
         }
     }
 
     #[test]
-    fn sizes_and_text() {
-        for (scale, w) in [(1.0, 216), (1.25, 324), (1.5, 324), (2.0, 432)] {
-            let hd = header(&info(Pods::OneOut { left: true }, true), scale);
-            assert_eq!((hd.width, hd.bgra.len() as i32), (w, w * hd.height * 4), "{scale}");
+    fn sizes_text_and_background() {
+        for (scale, w, h) in [(1.0, 236, 102), (1.25, 295, 128), (1.5, 354, 153), (2.0, 472, 204)] {
+            let hd = header(&info(Pods::OneOut { left: true }, true, false), scale);
+            assert_eq!((hd.width, hd.height, hd.bgra.len() as i32), (w, h, w * h * 4), "{scale}");
         }
-        let hd = header(&info(Pods::Open, true), 1.0);
+        let hd = header(&info(Pods::Open, true, false), 1.0);
         let t: Vec<&str> = hd.texts.iter().map(|t| t.text.as_str()).collect();
-        assert_eq!(t, ["AirPods Pro", "Connected · left in ear", "Battery", "Left:", "80%", "Right:", "20%", "Case:", "\u{2014}"]);
-        assert!(hd.texts[8].gray && hd.texts[8].right);
+        assert_eq!(t, ["AirPods Pro", "80%", "\u{2014}", "20%"]);
+        assert_eq!((hd.texts[2].color, hd.texts[3].color), (DARK.disabled, DARK.warn));
+        assert_eq!(&hd.bgra[..4], &[0x2C, 0x2C, 0x2C, 0xFF]);
+        assert_eq!(header(&info(Pods::Open, true, true), 1.0).background, 0xF9F9F9);
+    }
+
+    #[test]
+    fn the_bud_is_read() {
+        let b = bud_shapes(false);
+        assert_eq!((b.shell.len(), b.detail.len()), (2, 3));
+        assert!(b.shell.iter().chain(&b.detail).all(|r| r.len() > 40));
     }
 
     #[test]
     fn every_pose_draws_differently() {
         let all = [Pods::Closed, Pods::Open, Pods::OneOut { left: true }, Pods::OneOut { left: false }, Pods::Out];
-        let scenes: Vec<Vec<u32>> = all.iter().map(|&p| scene(&info(p, true))).collect();
-        for i in 0..scenes.len() {
-            for j in i + 1..scenes.len() {
-                assert_ne!(scenes[i], scenes[j], "{:?} {:?}", all[i], all[j]);
+        let pics: Vec<Vec<u8>> = all.iter().map(|&p| header(&info(p, true, false), 1.0).bgra).collect();
+        for i in 0..pics.len() {
+            for j in i + 1..pics.len() {
+                assert_ne!(pics[i], pics[j], "{:?} {:?}", all[i], all[j]);
             }
         }
-        assert_ne!(scene(&info(Pods::Open, true)), scene(&info(Pods::Open, false)));
+        assert_ne!(header(&info(Pods::Open, true, false), 1.0).bgra, header(&info(Pods::Open, false, false), 1.0).bgra);
     }
 }

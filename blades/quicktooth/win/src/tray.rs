@@ -36,12 +36,12 @@ use quicktooth_core::controller::{ALL_TIMERS, TrayController};
 use quicktooth_core::devices::{OneShot, SendResult, Snapshot};
 use quicktooth_core::exec::{self, Done, Op, OpResult, Schedule, Task};
 use quicktooth_core::host::{DeviceBackend, IconImage, MenuItem, TrayHost};
-use quicktooth_core::popup::Header;
+use quicktooth_core::popup::{Align, Header};
 use windows_sys::Win32::Foundation::RECT;
 use windows_sys::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLIP_DEFAULT_PRECIS, CreateFontW, DEFAULT_CHARSET, DEFAULT_PITCH, DEFAULT_QUALITY, DIB_RGB_COLORS,
-    DeleteObject, HDC, OUT_DEFAULT_PRECIS, SelectObject, SetBkMode, SetDIBitsToDevice, SetTextAlign, SetTextColor, TA_LEFT, TA_RIGHT,
-    TA_TOP, TRANSPARENT, TextOutW,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush, DEFAULT_CHARSET, DEFAULT_PITCH,
+    DIB_RGB_COLORS, DeleteObject, FillRect, HDC, OUT_DEFAULT_PRECIS, SelectObject, SetBkMode, SetDIBitsToDevice, SetTextAlign, SetTextColor,
+    TA_CENTER, TA_LEFT, TA_RIGHT, TA_TOP, TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::UI::Controls::{DRAWITEMSTRUCT, MEASUREITEMSTRUCT, ODT_MENU};
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
@@ -610,8 +610,14 @@ impl TrayHost for WinHost {
     fn emit(&self, _event: &quicktooth_core::host::Event<'_>) {} // the simulator's timeline only
 }
 
-/// The menu's picture header: the core's pixels, then its text in Tahoma.
+/// The menu's picture header: the menu's background, the core's pixels, then its text in Segoe UI.
 fn draw_header(hdc: HDC, rc: &RECT, h: &Header) {
+    let colorref = |c: u32| ((c & 0xFF) << 16) | (c & 0xFF00) | (c >> 16);
+    unsafe {
+        let brush = CreateSolidBrush(colorref(h.background));
+        FillRect(hdc, rc, brush);
+        DeleteObject(brush);
+    }
     let x0 = rc.left + ((rc.right - rc.left - h.width) / 2).max(0);
     let y0 = rc.top;
     let mut bmi: BITMAPINFO = unsafe { core::mem::zeroed() };
@@ -627,19 +633,20 @@ fn draw_header(hdc: HDC, rc: &RECT, h: &Header) {
     }
     for t in &h.texts {
         let font = unsafe {
-            CreateFontW(-t.size, 0, 0, 0, if t.bold { 700 } else { 400 }, 0, 0, 0, DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32, CLIP_DEFAULT_PRECIS as u32, DEFAULT_QUALITY as u32, DEFAULT_PITCH as u32, pk::w!("Tahoma"))
+            CreateFontW(-t.size, 0, 0, 0, if t.bold { 600 } else { 400 }, 0, 0, 0, DEFAULT_CHARSET as u32, OUT_DEFAULT_PRECIS as u32, CLIP_DEFAULT_PRECIS as u32, CLEARTYPE_QUALITY as u32, DEFAULT_PITCH as u32, pk::w!("Segoe UI"))
         };
         let old = unsafe { SelectObject(hdc, font) };
-        unsafe { SetTextAlign(hdc, if t.right { TA_RIGHT } else { TA_LEFT } | TA_TOP) };
+        let align = match t.align {
+            Align::Left => TA_LEFT,
+            Align::Center => TA_CENTER,
+            Align::Right => TA_RIGHT,
+        };
+        unsafe { SetTextAlign(hdc, align | TA_TOP) };
         let text = to_wide(&t.text);
         let len = (text.len() - 1) as i32; // without the terminating null
         let (x, y) = (x0 + t.x, y0 + t.y);
         unsafe {
-            if t.gray {
-                SetTextColor(hdc, 0x00FFFFFF);
-                TextOutW(hdc, x + 1, y + 1, text.as_ptr(), len);
-            }
-            SetTextColor(hdc, if t.gray { 0x0099A8AC } else { 0 });
+            SetTextColor(hdc, colorref(t.color));
             TextOutW(hdc, x, y, text.as_ptr(), len);
             SelectObject(hdc, old);
             DeleteObject(font);

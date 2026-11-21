@@ -486,10 +486,10 @@ fn write_menu(w: &mut String, items: &[MenuItem]) {
     w.push(']');
 }
 
-/// `,"header":{"w","h","rgba":<base64>,"texts":[{x,y,size,text,bold,right,gray}]}`: the
+/// `,"header":{"w","h","background","rgba":<base64>,"texts":[{x,y,size,text,bold,align,color}]}`: the
 /// owner-drawn picture item, as the exe draws it.
 fn write_header(w: &mut String, h: &quicktooth_core::popup::Header) {
-    w.push_str(&format!(",\"header\":{{\"w\":{},\"h\":{},\"rgba\":\"", h.width, h.height));
+    w.push_str(&format!(",\"header\":{{\"w\":{},\"h\":{},\"background\":\"#{:06X}\",\"rgba\":\"", h.width, h.height, h.background));
     base64(w, &to_rgba(&h.bgra));
     w.push_str("\",\"texts\":[");
     for (i, t) in h.texts.iter().enumerate() {
@@ -498,7 +498,12 @@ fn write_header(w: &mut String, h: &quicktooth_core::popup::Header) {
         }
         w.push_str(&format!("{{\"x\":{},\"y\":{},\"size\":{},\"text\":", t.x, t.y, t.size));
         json::write_str(w, &t.text);
-        w.push_str(&format!(",\"bold\":{},\"right\":{},\"gray\":{}}}", t.bold, t.right, t.gray));
+        let align = match t.align {
+            quicktooth_core::popup::Align::Left => "left",
+            quicktooth_core::popup::Align::Center => "center",
+            quicktooth_core::popup::Align::Right => "right",
+        };
+        w.push_str(&format!(",\"bold\":{},\"align\":\"{align}\",\"color\":\"#{:06X}\"}}", t.bold, t.color));
     }
     w.push_str("]}");
 }

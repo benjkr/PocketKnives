@@ -1244,22 +1244,22 @@ impl TrayController {
 
     /// The menu's picture header while the buds' place is known ([`crate::popup`]).
     fn menu_header(&self) -> Option<popup::Header> {
-        let (pods, in_ear, advert, size) = {
+        let (pods, advert, size) = {
             let st = self.st();
-            (st.pods?, st.pods_in_ear, st.pods_reading.clone(), st.icon_size)
+            (st.pods?, st.pods_reading.clone(), st.icon_size)
         };
         let connected = self.target_connected();
         let reading = advert.or_else(|| self.battery_shown());
         let level = |v: Option<i32>, charging: bool| v.map(|v| (v, charging));
         let info = popup::HeaderInfo {
             name: self.device_label(),
-            status: format!("{} \u{b7} {}", self.status_text(), popup::pods_phrase(pods, in_ear)),
             pods,
             connected,
             left: reading.as_ref().and_then(|r| level(r.left, r.left_charging)),
             right: reading.as_ref().and_then(|r| level(r.right, r.right_charging)),
             case: reading.as_ref().and_then(|r| level(r.case, r.case_charging)),
             low_warning: self.settings().low_battery_warning(),
+            light: self.st().light_taskbar,
         };
         Some(popup::header(&info, size.max(16) as f64 / 16.0))
     }
