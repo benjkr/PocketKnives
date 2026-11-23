@@ -1,7 +1,7 @@
 //! Windows.Graphics.Capture session driving `VideoEncoder` from a `HWND` or `HMONITOR`.
 use crate::encode::VideoEncoder;
 use crate::gpu::GpuContext;
-use crate::ipc::{Quality, RecKind, RecTarget, WM_APP_REC_ENDED, output_size};
+use crate::ipc::{Fps, Quality, RecKind, RecTarget, WM_APP_REC_ENDED, output_size};
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -40,6 +40,7 @@ pub struct CaptureSession {
     stopped: Arc<AtomicBool>,
     bytes: Arc<AtomicU64>,
     quality: Quality,
+    fps: Fps,
 }
 
 // WinRT capture objects created in MTA (`CreateFreeThreaded`) and serialized via UI / worker handoff.
@@ -48,7 +49,7 @@ unsafe impl Send for CaptureSession {}
 impl CaptureSession {
     /// Pre-builds the entire WGC + D3D11 Video Processor + Media Foundation H.264 pipeline during
     /// Armed dead time without calling `StartCapture()` yet, so `begin()` fires instantaneously.
-    pub fn prepare(gpu: GpuContext, target: RecTarget, quality: Quality, notify_hwnd: HWND, gen_id: u32) -> Option<Self> {
+    pub fn prepare(gpu: GpuContext, target: RecTarget, quality: Quality, fps: Fps, notify_hwnd: HWND, gen_id: u32) -> Option<Self> {
         let interop = windows_core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>().ok()?;
         let kind = target.kind();
 
@@ -82,7 +83,7 @@ impl CaptureSession {
         };
 
         let (out_w, out_h) = output_size(src_w, src_h, quality);
-        let encoder = VideoEncoder::new_staged(&gpu, src_w, src_h, out_w, out_h, quality, gen_id)?;
+        let encoder = VideoEncoder::new_staged(&gpu, src_w, src_h, out_w, out_h, quality, fps, gen_id)?;
 
         let pool =
             Direct3D11CaptureFramePool::CreateFreeThreaded(&gpu.winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, item_size)
@@ -169,29 +170,34 @@ impl CaptureSession {
             let _ = item.Closed(&closed_cb);
         }
 
-        Some(Self { item, pool, session, inner, started, stopped, bytes, quality })
+        Some(Self { item, pool, session, inner, started, stopped, bytes, quality, fps })
     }
 
     pub fn quality(&self) -> Quality {
         self.quality
     }
 
-    /// Swaps the pre-warmed `VideoEncoder` to a new preset while Armed, reusing the hot GPU
-    /// device and WGC frame pool. Drops the old staging encoder first to free its NVENC slot
-    /// and remove its 0-byte staging file.
-    pub fn reconfigure_quality(&mut self, quality: Quality, gen_id: u32) -> bool {
-        if self.started.load(Ordering::Acquire) || self.quality == quality {
+    pub fn fps(&self) -> Fps {
+        self.fps
+    }
+
+    /// Swaps the pre-warmed `VideoEncoder` to a new resolution / FPS preset while Armed, reusing
+    /// the hot GPU device and WGC frame pool. Drops the old staging encoder first to free its
+    /// NVENC slot and remove its 0-byte staging file.
+    pub fn reconfigure(&mut self, quality: Quality, fps: Fps, gen_id: u32) -> bool {
+        if self.started.load(Ordering::Acquire) || (self.quality == quality && self.fps == fps) {
             return true;
         }
         let mut guard = self.inner.lock();
         guard.encoder = None;
         let (src_w, src_h) = (guard.src_w, guard.src_h);
         let (out_w, out_h) = output_size(src_w, src_h, quality);
-        let Some(enc) = VideoEncoder::new_staged(&guard.gpu, src_w, src_h, out_w, out_h, quality, gen_id) else {
+        let Some(enc) = VideoEncoder::new_staged(&guard.gpu, src_w, src_h, out_w, out_h, quality, fps, gen_id) else {
             return false;
         };
         guard.encoder = Some(enc);
         self.quality = quality;
+        self.fps = fps;
         true
     }
 

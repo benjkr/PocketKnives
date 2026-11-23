@@ -91,9 +91,9 @@ impl Quality {
         }
     }
 
-    /// Lightweight target H.264 bitrate (bits/sec) tailored to crisp UI clips.
-    pub fn bitrate(self, out_w: u32, out_h: u32) -> u32 {
-        match self {
+    /// Lightweight target H.264 bitrate (bits/sec) tailored to crisp UI clips, scaled gently by FPS.
+    pub fn bitrate(self, out_w: u32, out_h: u32, fps: Fps) -> u32 {
+        let base = match self {
             Quality::Q480 => 1_200_000,
             Quality::Q720 => 2_500_000,
             Quality::Q1080 => 5_000_000,
@@ -107,6 +107,68 @@ impl Quality {
                     3_500_000
                 }
             }
+        };
+        match fps {
+            Fps::F24 => (base as u64 * 60 / 100) as u32,
+            Fps::F30 => (base as u64 * 70 / 100) as u32,
+            Fps::F60 => base,
+        }
+    }
+}
+
+/// Frame-rate cap presets on the adjacent F2 FPS drum (default `F60`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub enum Fps {
+    F24 = 0,
+    F30 = 1,
+    F60 = 2,
+}
+
+impl Fps {
+    pub fn from_index(i: usize) -> Self {
+        match i {
+            0 => Fps::F24,
+            1 => Fps::F30,
+            _ => Fps::F60,
+        }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
+    pub fn fps(self) -> u32 {
+        match self {
+            Fps::F24 => 24,
+            Fps::F30 => 30,
+            Fps::F60 => 60,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Fps::F24 => "24f",
+            Fps::F30 => "30f",
+            Fps::F60 => "60f",
+        }
+    }
+
+    /// Nominal frame duration in 100 ns units.
+    pub fn frame_dur_100ns(self) -> i64 {
+        match self {
+            Fps::F24 => 416_667,
+            Fps::F30 => 333_333,
+            Fps::F60 => 166_667,
+        }
+    }
+
+    /// Minimum inter-frame interval in 100 ns (~85% of nominal so compositor jitter isn't dropped).
+    pub fn min_interval_100ns(self) -> i64 {
+        match self {
+            Fps::F24 => 355_000,
+            Fps::F30 => 285_000,
+            Fps::F60 => 140_000,
         }
     }
 }

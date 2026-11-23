@@ -31,8 +31,8 @@ use core::ptr::{null, null_mut};
 use core::sync::atomic::{AtomicBool, Ordering};
 use gpu::GpuContext;
 use ipc::{
-    COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_PREP_DONE, WM_APP_REC_ENDED, WM_APP_SAVE_DONE, WM_APP_STOP,
-    WM_APP_WARM_DONE,
+    COPYDATA_TARGET, Fps, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_PREP_DONE, WM_APP_REC_ENDED, WM_APP_SAVE_DONE,
+    WM_APP_STOP, WM_APP_WARM_DONE,
 };
 use pk::sync::Mutex;
 use ui::{DRUM_ROLL_MS, OverlayUi, PillAction, TRANSITION_MS, UiState, ease_out_expo_like};
@@ -45,7 +45,7 @@ use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::SystemInformation::GetTickCount64;
 use windows_sys::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_DOWN, VK_ESCAPE, VK_RETURN, VK_UP,
+    MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_RETURN, VK_RIGHT, VK_UP,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
@@ -67,9 +67,12 @@ const HK_Q3: i32 = 12;
 const HK_Q4: i32 = 13;
 const HK_UP: i32 = 14;
 const HK_DOWN: i32 = 15;
-const HK_ENTER: i32 = 16;
-const HK_R: i32 = 17;
-const HK_ESC: i32 = 18;
+const HK_LEFT: i32 = 16;
+const HK_RIGHT: i32 = 17;
+const HK_F: i32 = 18;
+const HK_ENTER: i32 = 19;
+const HK_R: i32 = 20;
+const HK_ESC: i32 = 21;
 
 static WARM_SLOT: Mutex<Option<Option<GpuContext>>> = Mutex::new(None);
 static PREP_SLOT: Mutex<Option<Option<CaptureSession>>> = Mutex::new(None);
@@ -105,6 +108,10 @@ struct App {
     drum_to: f32,
     drum_t0: u64,
     drum_rolling: bool,
+    fps_from: f32,
+    fps_to: f32,
+    fps_t0: u64,
+    fps_rolling: bool,
     trans_t0: u64,
     rec_t0: u64,
     session: Option<CaptureSession>,
@@ -123,6 +130,9 @@ impl App {
             RegisterHotKey(self.host, HK_Q4, MOD_NOREPEAT, b'4' as u32);
             RegisterHotKey(self.host, HK_UP, MOD_NOREPEAT, VK_UP as u32);
             RegisterHotKey(self.host, HK_DOWN, MOD_NOREPEAT, VK_DOWN as u32);
+            RegisterHotKey(self.host, HK_LEFT, MOD_NOREPEAT, VK_LEFT as u32);
+            RegisterHotKey(self.host, HK_RIGHT, MOD_NOREPEAT, VK_RIGHT as u32);
+            RegisterHotKey(self.host, HK_F, MOD_NOREPEAT, b'F' as u32);
             RegisterHotKey(self.host, HK_ENTER, MOD_NOREPEAT, VK_RETURN as u32);
             RegisterHotKey(self.host, HK_R, MOD_NOREPEAT, b'R' as u32);
             RegisterHotKey(self.host, HK_ESC, MOD_NOREPEAT, VK_ESCAPE as u32);
@@ -156,6 +166,40 @@ impl App {
         self.set_quality(Quality::from_index(next));
     }
 
+    fn set_fps(&mut self, fps: Fps) {
+        if self.phase != Phase::Armed || self.ui_state.fps == fps {
+            return;
+        }
+        self.ui_state.fps = fps;
+        self.fps_from = self.ui_state.fps_drum_pos;
+        self.fps_to = fps.index() as f32;
+        self.fps_t0 = unsafe { GetTickCount64() };
+        self.fps_rolling = true;
+        self.fast_timer = true;
+        self.reconfig_pending = true;
+        unsafe {
+            SetTimer(self.host, TIMER_UI_TICK, 16, None);
+            SetTimer(self.host, TIMER_RECONFIG, RECONFIG_DEBOUNCE_MS, None);
+        }
+    }
+
+    fn step_fps(&mut self, delta: i32) {
+        if self.phase != Phase::Armed {
+            return;
+        }
+        let cur = self.ui_state.fps.index() as i32;
+        let next = (cur + delta).clamp(0, 2) as usize;
+        self.set_fps(Fps::from_index(next));
+    }
+
+    fn cycle_fps(&mut self) {
+        if self.phase != Phase::Armed {
+            return;
+        }
+        let next = (self.ui_state.fps.index() + 1) % 3;
+        self.set_fps(Fps::from_index(next));
+    }
+
     fn unregister_armed_keys(&mut self) {
         if !self.armed_keys_on {
             return;
@@ -176,6 +220,7 @@ impl App {
             return;
         };
         let quality = self.ui_state.quality;
+        let fps = self.ui_state.fps;
         let host_addr = self.host as usize;
         self.prep_gen = self.prep_gen.wrapping_add(1);
         let gen_id = self.prep_gen;
@@ -186,7 +231,7 @@ impl App {
                 drop(gpu);
                 return;
             }
-            let sess = CaptureSession::prepare(gpu, target, quality, host_addr as HWND, gen_id);
+            let sess = CaptureSession::prepare(gpu, target, quality, fps, host_addr as HWND, gen_id);
             if PREP_CANCELLED.load(Ordering::Acquire) {
                 if let Some(s) = sess {
                     let _ = s.stop(0);
@@ -202,14 +247,15 @@ impl App {
         }
     }
 
-    /// Rebuilds only the staging `VideoEncoder` in the background when the user rolls the wheel
+    /// Rebuilds only the staging `VideoEncoder` in the background when the user rolls either drum
     /// to a different preset while Armed, keeping `GpuContext` and the WGC frame pool hot.
     fn maybe_reconfigure(&mut self) {
         if self.prep_in_flight || self.prep_failed {
             return;
         }
         let target_q = self.ui_state.quality;
-        if self.prepared.as_ref().map(|s| s.quality() == target_q).unwrap_or(true) {
+        let target_fps = self.ui_state.fps;
+        if self.prepared.as_ref().map(|s| s.quality() == target_q && s.fps() == target_fps).unwrap_or(true) {
             return;
         }
         let Some(mut sess) = self.prepared.take() else {
@@ -225,7 +271,7 @@ impl App {
                 let _ = sess.stop(0);
                 return;
             }
-            let ok = sess.reconfigure_quality(target_q, gen_id);
+            let ok = sess.reconfigure(target_q, target_fps, gen_id);
             if !ok || PREP_CANCELLED.load(Ordering::Acquire) {
                 let _ = sess.stop(0);
                 if !PREP_CANCELLED.load(Ordering::Acquire) {
@@ -250,7 +296,9 @@ impl App {
         self.ui_state = UiState {
             target: target.rect,
             quality: Quality::Q720,
+            fps: Fps::F60,
             drum_pos: Quality::Q720.index() as f32,
+            fps_drum_pos: Fps::F60.index() as f32,
             recording: false,
             trans_t: 0.0,
             elapsed_ms: 0,
@@ -260,6 +308,9 @@ impl App {
         self.drum_from = self.ui_state.drum_pos;
         self.drum_to = self.ui_state.drum_pos;
         self.drum_rolling = false;
+        self.fps_from = self.ui_state.fps_drum_pos;
+        self.fps_to = self.ui_state.fps_drum_pos;
+        self.fps_rolling = false;
         if self.ui.is_none() {
             self.ui = OverlayUi::new(on_pill_action, on_pill_hover, self as *mut App as *mut c_void);
         }
@@ -313,8 +364,8 @@ impl App {
             self.cancel();
             return;
         }
-        // Fast path: pipeline already prepared for the selected preset -> call StartCapture() now!
-        if self.prepared.as_ref().map(|s| s.quality() == self.ui_state.quality).unwrap_or(false) {
+        // Fast path: pipeline already prepared for the selected presets -> call StartCapture() now!
+        if self.prepared.as_ref().map(|s| s.quality() == self.ui_state.quality && s.fps() == self.ui_state.fps).unwrap_or(false) {
             self.begin_recording_now();
             return;
         }
@@ -417,14 +468,24 @@ impl App {
             if t >= 1.0 {
                 self.ui_state.drum_pos = self.drum_to;
                 self.drum_rolling = false;
-                if self.phase == Phase::Armed {
-                    self.fast_timer = false;
-                    if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) {
-                        unsafe { SetTimer(self.host, TIMER_UI_TICK, 33, None) };
-                    } else {
-                        unsafe { KillTimer(self.host, TIMER_UI_TICK) };
-                    }
-                }
+            }
+        }
+        if self.fps_rolling {
+            let t = ((now.saturating_sub(self.fps_t0)) as f32 / DRUM_ROLL_MS).clamp(0.0, 1.0);
+            let e = ease_out_expo_like(t);
+            self.ui_state.fps_drum_pos = self.fps_from + (self.fps_to - self.fps_from) * e;
+            dirty = true;
+            if t >= 1.0 {
+                self.ui_state.fps_drum_pos = self.fps_to;
+                self.fps_rolling = false;
+            }
+        }
+        if self.phase == Phase::Armed && self.fast_timer && !self.drum_rolling && !self.fps_rolling {
+            self.fast_timer = false;
+            if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) {
+                unsafe { SetTimer(self.host, TIMER_UI_TICK, 33, None) };
+            } else {
+                unsafe { KillTimer(self.host, TIMER_UI_TICK) };
             }
         }
 
@@ -444,7 +505,7 @@ impl App {
             }
 
             // Once the 340 ms transition has settled, relax the timer once to 50 ms (or 33 ms for window tracking).
-            if trans >= 1.0 && self.fast_timer && !self.drum_rolling {
+            if trans >= 1.0 && self.fast_timer && !self.drum_rolling && !self.fps_rolling {
                 self.fast_timer = false;
                 let period = if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) { 33 } else { 50 };
                 unsafe { SetTimer(self.host, TIMER_UI_TICK, period, None) };
@@ -461,6 +522,7 @@ fn on_pill_action(ctx: *mut c_void, action: PillAction) {
     let app = unsafe { &mut *(ctx as *mut App) };
     match action {
         PillAction::StepQuality(delta) => app.step_quality(delta),
+        PillAction::StepFps(delta) => app.step_fps(delta),
         PillAction::ToggleRecord => {
             if app.phase == Phase::Armed {
                 app.start_recording();
@@ -542,7 +604,7 @@ unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
             }
             match result {
                 Some(sess) => {
-                    let matches = sess.quality() == app.ui_state.quality;
+                    let matches = sess.quality() == app.ui_state.quality && sess.fps() == app.ui_state.fps;
                     app.prepared = Some(sess);
                     if !matches {
                         if app.phase == Phase::WaitingPrepToRecord || !app.reconfig_pending {
@@ -577,6 +639,9 @@ unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 HK_Q4 => app.set_quality(Quality::Native),
                 HK_UP => app.step_quality(-1),
                 HK_DOWN => app.step_quality(1),
+                HK_LEFT => app.step_fps(-1),
+                HK_RIGHT => app.step_fps(1),
+                HK_F => app.cycle_fps(),
                 HK_ENTER | HK_R => app.start_recording(),
                 HK_ESC => app.cancel(),
                 _ => {}
@@ -714,7 +779,9 @@ fn run() -> u32 {
         ui_state: UiState {
             target: RECT { left: 0, top: 0, right: 0, bottom: 0 },
             quality: Quality::Q720,
+            fps: Fps::F60,
             drum_pos: Quality::Q720.index() as f32,
+            fps_drum_pos: Fps::F60.index() as f32,
             recording: false,
             trans_t: 0.0,
             elapsed_ms: 0,
@@ -727,6 +794,10 @@ fn run() -> u32 {
         drum_to: Quality::Q720.index() as f32,
         drum_t0: 0,
         drum_rolling: false,
+        fps_from: Fps::F60.index() as f32,
+        fps_to: Fps::F60.index() as f32,
+        fps_t0: 0,
+        fps_rolling: false,
         trans_t0: 0,
         rec_t0: 0,
         session: None,

@@ -1,7 +1,7 @@
 //! Hardware-accelerated H.264 MP4 encoder using Windows Media Foundation (`IMFSinkWriter`)
 //! and D3D11 Video Processor (GPU crop, aspect-preserving scale/letterbox, and BGRA -> NV12).
 use crate::gpu::GpuContext;
-use crate::ipc::Quality;
+use crate::ipc::{Fps, Quality};
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -36,7 +36,6 @@ use windows_sys::Win32::System::Threading::{GetCurrentProcessId, Sleep};
 use windows_sys::Win32::UI::Shell::FOLDERID_Videos;
 
 const RING_SIZE: usize = 4;
-const TARGET_FPS: u64 = 60;
 
 fn snipsnap_videos_dir() -> Option<String> {
     let videos = pk::env::known_folder(&FOLDERID_Videos).or_else(|| pk::env::var("USERPROFILE").map(|u| format!("{u}\\Videos")))?;
@@ -122,6 +121,8 @@ pub struct VideoEncoder {
     stream_idx: u32,
     out_w: u32,
     out_h: u32,
+    min_interval: i64,
+    frame_dur: i64,
     pipeline: Pipeline,
     wpath: Vec<u16>,
     committed: bool,
@@ -147,7 +148,16 @@ impl Drop for VideoEncoder {
 impl VideoEncoder {
     /// Pre-initializes `IMFSinkWriter`, the hardware H.264 encoder MFT, and the D3D11 Video
     /// Processor NV12 ring onto a hidden staging file so pressing Record starts instantaneously.
-    pub fn new_staged(gpu: &GpuContext, src_w: u32, src_h: u32, out_w: u32, out_h: u32, quality: Quality, gen_id: u32) -> Option<Self> {
+    pub fn new_staged(
+        gpu: &GpuContext,
+        src_w: u32,
+        src_h: u32,
+        out_w: u32,
+        out_h: u32,
+        quality: Quality,
+        fps: Fps,
+        gen_id: u32,
+    ) -> Option<Self> {
         let wpath = make_staging_path(gen_id)?;
         // Declared before `writer` so if any step returns `None`, `writer` drops first and then
         // `StagingGuard` removes the 0-byte staging file.
@@ -167,25 +177,26 @@ impl VideoEncoder {
         guard.active = true;
         unsafe { SetFileAttributesW(wpath.as_ptr(), FILE_ATTRIBUTE_HIDDEN) };
 
+        let fps_num = fps.fps();
         // Output H.264 stream type.
         let out_type: IMFMediaType = unsafe { MFCreateMediaType() }.ok()?;
         unsafe {
             out_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video).ok()?;
             out_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264).ok()?;
-            out_type.SetUINT32(&MF_MT_AVG_BITRATE, quality.bitrate(out_w, out_h)).ok()?;
+            out_type.SetUINT32(&MF_MT_AVG_BITRATE, quality.bitrate(out_w, out_h, fps)).ok()?;
             out_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32).ok()?;
             out_type.SetUINT64(&MF_MT_FRAME_SIZE, pack_u64(out_w, out_h)).ok()?;
-            out_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(TARGET_FPS as u32, 1)).ok()?;
+            out_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(fps_num, 1)).ok()?;
             out_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack_u64(1, 1)).ok()?;
             let _ = out_type.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main.0 as u32);
         }
         let stream_idx = unsafe { writer.AddStream(&out_type) }.ok()?;
 
         // Try hardware NV12 pipeline first; fall back to ARGB32 if unavailable.
-        let pipeline = if let Some(nv12) = Self::init_nv12(gpu, &writer, stream_idx, src_w, src_h, out_w, out_h) {
+        let pipeline = if let Some(nv12) = Self::init_nv12(gpu, &writer, stream_idx, src_w, src_h, out_w, out_h, fps_num) {
             nv12
         } else {
-            Self::init_bgra(gpu, &writer, stream_idx, out_w, out_h)?
+            Self::init_bgra(gpu, &writer, stream_idx, out_w, out_h, fps_num)?
         };
 
         unsafe { writer.BeginWriting() }.ok()?;
@@ -197,6 +208,8 @@ impl VideoEncoder {
             stream_idx,
             out_w,
             out_h,
+            min_interval: fps.min_interval_100ns(),
+            frame_dur: fps.frame_dur_100ns(),
             pipeline,
             wpath,
             committed: false,
@@ -215,6 +228,7 @@ impl VideoEncoder {
         src_h: u32,
         out_w: u32,
         out_h: u32,
+        fps_num: u32,
     ) -> Option<Pipeline> {
         let vd = gpu.video_device.as_ref()?;
         let _vc = gpu.video_context.as_ref()?;
@@ -225,17 +239,17 @@ impl VideoEncoder {
             in_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12).ok()?;
             in_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32).ok()?;
             in_type.SetUINT64(&MF_MT_FRAME_SIZE, pack_u64(out_w, out_h)).ok()?;
-            in_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(TARGET_FPS as u32, 1)).ok()?;
+            in_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(fps_num, 1)).ok()?;
             in_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack_u64(1, 1)).ok()?;
             writer.SetInputMediaType(stream_idx, &in_type, None).ok()?;
         }
 
         let content = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
             InputFrameFormat: D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-            InputFrameRate: DXGI_RATIONAL { Numerator: TARGET_FPS as u32, Denominator: 1 },
+            InputFrameRate: DXGI_RATIONAL { Numerator: fps_num, Denominator: 1 },
             InputWidth: src_w.max(2),
             InputHeight: src_h.max(2),
-            OutputFrameRate: DXGI_RATIONAL { Numerator: TARGET_FPS as u32, Denominator: 1 },
+            OutputFrameRate: DXGI_RATIONAL { Numerator: fps_num, Denominator: 1 },
             OutputWidth: out_w,
             OutputHeight: out_h,
             ..Default::default()
@@ -275,14 +289,14 @@ impl VideoEncoder {
         Some(Pipeline::Nv12 { vp_enum, vp, staging: None, ring, ring_idx: 0 })
     }
 
-    fn init_bgra(gpu: &GpuContext, writer: &IMFSinkWriter, stream_idx: u32, out_w: u32, out_h: u32) -> Option<Pipeline> {
+    fn init_bgra(gpu: &GpuContext, writer: &IMFSinkWriter, stream_idx: u32, out_w: u32, out_h: u32, fps_num: u32) -> Option<Pipeline> {
         let in_type: IMFMediaType = unsafe { MFCreateMediaType() }.ok()?;
         unsafe {
             in_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video).ok()?;
             in_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_ARGB32).ok()?;
             in_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32).ok()?;
             in_type.SetUINT64(&MF_MT_FRAME_SIZE, pack_u64(out_w, out_h)).ok()?;
-            in_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(TARGET_FPS as u32, 1)).ok()?;
+            in_type.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(fps_num, 1)).ok()?;
             in_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack_u64(1, 1)).ok()?;
             writer.SetInputMediaType(stream_idx, &in_type, None).ok()?;
         }
@@ -327,7 +341,7 @@ impl VideoEncoder {
         let sw = (sx1 - sx0) as u32;
         let sh = (sy1 - sy0) as u32;
 
-        // Compute timestamp relative to first captured frame; drop frames closer than ~14 ms (>60 fps).
+        // Compute timestamp relative to first captured frame; drop frames exceeding the chosen FPS cap.
         let pts = match self.first_pts {
             None => {
                 self.first_pts = Some(rel_time_100ns);
@@ -335,13 +349,13 @@ impl VideoEncoder {
             }
             Some(t0) => {
                 let p = (rel_time_100ns - t0).max(0);
-                if p <= self.last_pts + 140_000 {
+                if p <= self.last_pts + self.min_interval {
                     return true;
                 }
                 p
             }
         };
-        let dur = if self.frames == 0 { 166_667 } else { (pts - self.last_pts).clamp(166_667, 10_000_000) };
+        let dur = if self.frames == 0 { self.frame_dur } else { (pts - self.last_pts).clamp(self.frame_dur, 10_000_000) };
 
         let out_tex = match &mut self.pipeline {
             Pipeline::Nv12 { vp_enum, vp, staging, ring, ring_idx } => {
@@ -499,10 +513,10 @@ impl VideoEncoder {
         if self.frames == 0 {
             return None; // Drop deletes the staging file.
         }
-        if elapsed_100ns > self.last_pts + 333_333
+        if elapsed_100ns > self.last_pts + self.frame_dur * 2
             && let Some(last) = self.last_out.as_ref()
         {
-            let _ = self.submit_texture(last, elapsed_100ns, 166_667);
+            let _ = self.submit_texture(last, elapsed_100ns, self.frame_dur);
         }
         let writer = self.writer.take()?;
         let ok = unsafe { writer.Finalize() }.is_ok();

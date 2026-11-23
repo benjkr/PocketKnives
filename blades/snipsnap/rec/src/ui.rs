@@ -3,7 +3,7 @@
 //! - Straddling bottom-center housing (`H5` monoblock milled titanium housing with `E3` embedded
 //!   brushed-titanium rolling tumbler wheel -> `S2` 340ms calm dissolve -> `H5` 25px recording block)
 //! Both windows set `WDA_EXCLUDEFROMCAPTURE` so nothing SnipSnap draws appears in the video.
-use crate::ipc::Quality;
+use crate::ipc::{Fps, Quality};
 use alloc::format;
 use core::ffi::c_void;
 use core::ptr::{null, null_mut};
@@ -54,8 +54,8 @@ const WM_MOUSELEAVE: u32 = 0x02A3;
 pub const TRANSITION_MS: f32 = 340.0;
 pub const DRUM_ROLL_MS: f32 = 280.0;
 
-// Locked `H5` Monoblock Milled Titanium + `E3` wheel geometry in logical DIPs.
-const BLOCK_W_ARMED: f32 = 105.0;
+// Locked `H5` Monoblock Milled Titanium + `F2` adjacent twin lock drums geometry in logical DIPs.
+const BLOCK_W_ARMED: f32 = 135.0;
 const BLOCK_H_ARMED: f32 = 30.0;
 const BLOCK_W_REC: f32 = 132.0;
 const BLOCK_H_REC: f32 = 25.0;
@@ -64,9 +64,12 @@ const WIN_PAD_X: f32 = 14.0;
 const WIN_PAD_TOP: f32 = 10.0;
 const WIN_PAD_BOT: f32 = 14.0;
 
-// Embedded `E3` milled pocket & cylinder constants.
+// Embedded `F2` unified milled slot: Resolution drum (54) + 1.5px dark parting gap + FPS drum (28.5).
 const WELL_LEFT: f32 = 5.0;
-const WELL_W: f32 = 54.0;
+const RES_W: f32 = 54.0;
+const SLOT_GAP: f32 = 1.5;
+const FPS_W: f32 = 28.5;
+const SLOT_W: f32 = RES_W + SLOT_GAP + FPS_W;
 const WELL_H: f32 = 24.0;
 const WELL_R: f32 = 5.0;
 const DRUM_R: f32 = 18.0;
@@ -86,8 +89,11 @@ const TICK_DIP: f32 = 14.0;
 pub struct UiState {
     pub target: RECT,
     pub quality: Quality,
-    /// Smoothly interpolated continuous drum index (`0.0` = 480p .. `3.0` = Native).
+    pub fps: Fps,
+    /// Smoothly interpolated continuous resolution drum index (`0.0` = 480p .. `3.0` = Native).
     pub drum_pos: f32,
+    /// Smoothly interpolated continuous FPS drum index (`0.0` = 24f .. `2.0` = 60f).
+    pub fps_drum_pos: f32,
     /// `false` = Armed, `true` = Recording (or transitioning into Recording).
     pub recording: bool,
     /// `0.0` (Armed) -> `1.0` (Recording), linear elapsed ratio over `TRANSITION_MS`.
@@ -100,13 +106,15 @@ pub struct UiState {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PillAction {
     StepQuality(i32),
+    StepFps(i32),
     ToggleRecord,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum HoverZone {
     None,
-    Wheel,
+    ResWheel,
+    FpsWheel,
     Shutter,
 }
 
@@ -272,7 +280,7 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
             let zone = if cb_ptr.is_null() { HoverZone::None } else { unsafe { (*cb_ptr).hover_zone } };
             let cur = match zone {
                 HoverZone::Shutter => IDC_HAND,
-                HoverZone::Wheel => IDC_SIZENS,
+                HoverZone::ResWheel | HoverZone::FpsWheel => IDC_SIZENS,
                 HoverZone::None => IDC_ARROW,
             };
             unsafe { SetCursor(LoadCursorW(null_mut(), cur)) };
@@ -295,9 +303,12 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                     let now = unsafe { GetTickCount64() };
                     if delta != 0 && now.saturating_sub(cb.last_wheel_ms) >= 110 {
                         cb.last_wheel_ms = now;
-                        // Scroll down -> next (higher res), scroll up -> previous (lower res).
                         let dir = if delta < 0 { 1 } else { -1 };
-                        (cb.on_action)(cb.ctx, PillAction::StepQuality(dir));
+                        let act = match cb.hover_zone {
+                            HoverZone::FpsWheel => PillAction::StepFps(dir),
+                            _ => PillAction::StepQuality(dir),
+                        };
+                        (cb.on_action)(cb.ctx, act);
                     }
                 }
             }
@@ -331,12 +342,17 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 let on_shut = dx * dx + dy * dy <= (shut_d * 0.65) * (shut_d * 0.65);
 
                 let well_top = (bh - WELL_H) * 0.5;
-                let on_wheel = !cb.recording && rx >= WELL_LEFT && rx <= WELL_LEFT + WELL_W && ry >= well_top && ry <= well_top + WELL_H;
+                let in_well_y = !cb.recording && ry >= well_top && ry <= well_top + WELL_H;
+                let on_res = in_well_y && rx >= WELL_LEFT && rx <= WELL_LEFT + RES_W;
+                let fps_left = WELL_LEFT + RES_W + SLOT_GAP;
+                let on_fps = in_well_y && rx >= fps_left && rx <= fps_left + FPS_W;
 
                 cb.hover_zone = if on_shut {
                     HoverZone::Shutter
-                } else if on_wheel {
-                    HoverZone::Wheel
+                } else if on_res {
+                    HoverZone::ResWheel
+                } else if on_fps {
+                    HoverZone::FpsWheel
                 } else {
                     HoverZone::None
                 };
@@ -345,12 +361,18 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                     (cb.on_hover)(cb.ctx, on_shut);
                 } else if on_shut {
                     (cb.on_action)(cb.ctx, PillAction::ToggleRecord);
-                } else if on_wheel {
+                } else if on_res || on_fps {
                     let frac = (ry - well_top) / WELL_H;
-                    if frac < 0.42 {
-                        (cb.on_action)(cb.ctx, PillAction::StepQuality(-1));
+                    let dir = if frac < 0.42 {
+                        -1
                     } else if frac > 0.58 {
-                        (cb.on_action)(cb.ctx, PillAction::StepQuality(1));
+                        1
+                    } else {
+                        0
+                    };
+                    if dir != 0 {
+                        let act = if on_fps { PillAction::StepFps(dir) } else { PillAction::StepQuality(dir) };
+                        (cb.on_action)(cb.ctx, act);
                     }
                 }
                 return 0;
@@ -715,15 +737,15 @@ impl OverlayUi {
                 self.rt.DrawRoundedRectangle(&body_rr, &bd, 1.0, None);
             }
 
-            // --- Armed layer: E3 brushed-titanium rolling drum inside H5 deep pocket + milled notch ---
+            // --- Armed layer: F2 adjacent twin brushed-titanium drums in one recessed H5 slot + milled notch ---
             if armed_alpha > 0.01 {
                 let well_h = lerp(WELL_H, 12.0, e);
                 let wx = px + WELL_LEFT;
                 let wy = py + (bh - well_h) * 0.5;
-                self.draw_titanium_wheel(wx, wy, WELL_W, well_h, st.drum_pos, armed_alpha);
+                self.draw_f2_dual_slot(wx, wy, well_h, st.drum_pos, st.fps_drum_pos, armed_alpha);
 
-                // H5 milled dark notch pointer (6x3, #050607) with subtle bright lower lip right off the pocket.
-                let nx = wx + WELL_W + 2.0;
+                // H5 milled dark notch pointer (6x3, #050607) with subtle bright lower lip right off the slot.
+                let nx = wx + SLOT_W + 2.0;
                 let ny = py + bh * 0.5 - 1.5;
                 if let Ok(sh) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.24 * armed_alpha), None) {
                     self.rt.DrawLine(Vector2 { X: nx, Y: ny + 3.5 }, Vector2 { X: nx + 5.5, Y: ny + 3.5 }, &sh, 1.0, None);
@@ -844,47 +866,9 @@ impl OverlayUi {
         self.pill_surf.present(self.pill_hwnd, x, y);
     }
 
-    /// Renders `E3`'s satin-titanium rolling cylinder inside the milled pocket `(wx, wy, ww, wh)`.
-    unsafe fn draw_titanium_wheel(&self, wx: f32, wy: f32, ww: f32, wh: f32, drum_pos: f32, alpha: f32) {
-        let well_rect = D2D_RECT_F { left: wx, top: wy, right: wx + ww, bottom: wy + wh };
-        let well_rr = D2D1_ROUNDED_RECT { rect: well_rect, radiusX: WELL_R, radiusY: WELL_R };
-
-        // Outer pocket lip: dark top edge, subtle bright catchlight along bottom rim.
-        if let Ok(lip_hi) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.11 * alpha), None) } {
-            unsafe {
-                self.rt.DrawLine(
-                    Vector2 { X: wx + 2.0, Y: wy + wh + 0.8 },
-                    Vector2 { X: wx + ww - 2.0, Y: wy + wh + 0.8 },
-                    &lip_hi,
-                    1.0,
-                    None,
-                );
-            }
-        }
-        if let Ok(lip_lo) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.75 * alpha), None) } {
-            unsafe {
-                self.rt.DrawLine(Vector2 { X: wx + 2.0, Y: wy - 0.8 }, Vector2 { X: wx + ww - 2.0, Y: wy - 0.8 }, &lip_lo, 1.0, None);
-            }
-        }
-
-        // Clip all drum contents cleanly to the rounded milled pocket (`r = 4`).
-        let Ok(clip_geo) = (unsafe { self.d2d.CreateRoundedRectangleGeometry(&well_rr) }) else {
-            return;
-        };
-        let Ok(layer) = (unsafe { self.rt.CreateLayer(None) }) else {
-            return;
-        };
-        let layer_params = D2D1_LAYER_PARAMETERS {
-            contentBounds: well_rect,
-            geometricMask: core::mem::ManuallyDrop::new(Some(clip_geo.into())),
-            maskAntialiasMode: windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-            maskTransform: Matrix3x2::identity(),
-            opacity: alpha,
-            opacityBrush: core::mem::ManuallyDrop::new(None),
-            layerOptions: D2D1_LAYER_OPTIONS_NONE,
-        };
-        unsafe { self.rt.PushLayer(&layer_params, &layer) };
-
+    /// Renders one brushed-titanium cylinder band (`dx..dx+dw`) inside an already-clipped F2 slot.
+    unsafe fn draw_drum_band(&self, dx: f32, wy: f32, dw: f32, wh: f32, drum_pos: f32, labels: &[&str], knurl_right: bool) {
+        let drum_rect = D2D_RECT_F { left: dx, top: wy, right: dx + dw, bottom: wy + wh };
         // H5 brighter brushed-titanium drum (#1b1f25 -> #434a56 -> #5e6776 -> #373d48 -> #15181d).
         if let Some(metal) = make_vgrad(
             &self.rt,
@@ -898,12 +882,16 @@ impl OverlayUi {
                 (1.0, color(21, 24, 29, 1.0)),
             ],
         ) {
-            unsafe { self.rt.FillRectangle(&well_rect, &metal) };
+            unsafe { self.rt.FillRectangle(&drum_rect, &metal) };
         }
 
-        // Turning cylindrical faces (-2..=5: 0..=3 carry labels, bare machined metal past both ends).
         let mid_y = wy + wh * 0.5;
         let face_h = 11.7f32;
+        let kx0 = if knurl_right { dx + dw - KNURL_W } else { dx };
+        let kx1 = kx0 + KNURL_W;
+        let tx0 = if knurl_right { dx } else { dx + KNURL_W };
+        let tx1 = if knurl_right { dx + dw - KNURL_W } else { dx + dw };
+
         for i in -2i32..=5i32 {
             let theta = (i as f32 - drum_pos) * DRUM_STEP_RAD;
             if theta.abs() >= 1.45 {
@@ -913,24 +901,18 @@ impl OverlayUi {
             let cy = mid_y + DRUM_R * sinf(theta);
             let fh_proj = face_h * cos_t;
 
-            // Left-edge machined grip ticks scrolling with the cylinder.
+            // Machined grip knurl ridges scrolling with the cylinder (left on Res, right on FPS).
             for k in 0..3 {
                 let local_y = (k as f32 - 1.0) * 3.8 * cos_t;
                 let gy = cy + local_y;
                 if let Ok(dk) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.70 * cos_t), None) } {
                     unsafe {
-                        self.rt.DrawLine(Vector2 { X: wx, Y: gy }, Vector2 { X: wx + KNURL_W, Y: gy }, &dk, 1.0, None);
+                        self.rt.DrawLine(Vector2 { X: kx0, Y: gy }, Vector2 { X: kx1, Y: gy }, &dk, 1.0, None);
                     }
                 }
                 if let Ok(lt) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.14 * cos_t), None) } {
                     unsafe {
-                        self.rt.DrawLine(
-                            Vector2 { X: wx, Y: gy + 1.0 * cos_t },
-                            Vector2 { X: wx + KNURL_W, Y: gy + 1.0 * cos_t },
-                            &lt,
-                            0.8,
-                            None,
-                        );
+                        self.rt.DrawLine(Vector2 { X: kx0, Y: gy + 1.0 * cos_t }, Vector2 { X: kx1, Y: gy + 1.0 * cos_t }, &lt, 0.8, None);
                     }
                 }
             }
@@ -938,12 +920,11 @@ impl OverlayUi {
             // Horizontal face divider groove between stops.
             let div_y = cy + fh_proj * 0.5;
             if let Ok(grv) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.30 * cos_t), None) } {
-                unsafe { self.rt.DrawLine(Vector2 { X: wx, Y: div_y }, Vector2 { X: wx + ww, Y: div_y }, &grv, 0.9, None) };
+                unsafe { self.rt.DrawLine(Vector2 { X: dx, Y: div_y }, Vector2 { X: dx + dw, Y: div_y }, &grv, 0.9, None) };
             }
 
-            // Preset text with real cylindrical vertical foreshortening via Direct2D transform.
-            if (0..=3).contains(&i) {
-                let q = Quality::from_index(i as usize);
+            // Preset text with cylindrical vertical foreshortening via Direct2D transform.
+            if i >= 0 && (i as usize) < labels.len() {
                 let dist = (i as f32 - drum_pos).abs().min(1.0);
                 let txt_col = if dist < 0.35 {
                     let k = dist / 0.35;
@@ -952,16 +933,15 @@ impl OverlayUi {
                     color(206, 214, 226, 0.50 * cos_t)
                 };
                 if let Ok(tbr) = unsafe { self.rt.CreateSolidColorBrush(&txt_col, None) } {
-                    let wtxt = to_wide(q.label());
-                    // Scale vertically around (center_x, cy) for cylindrical tilt.
-                    let cx = wx + KNURL_W + (ww - KNURL_W) * 0.5;
+                    let wtxt = to_wide(labels[i as usize]);
+                    let cx = (tx0 + tx1) * 0.5;
                     let m = Matrix3x2::translation(-cx, -cy) * Matrix3x2::scale(1.0, cos_t) * Matrix3x2::translation(cx, cy);
                     unsafe {
                         self.rt.SetTransform(&m);
                         self.draw_text(
                             &self.fmt_wheel,
                             &wtxt,
-                            D2D_RECT_F { left: wx + KNURL_W, top: cy - face_h * 0.65, right: wx + ww, bottom: cy + face_h * 0.65 },
+                            D2D_RECT_F { left: tx0, top: cy - face_h * 0.65, right: tx1, bottom: cy + face_h * 0.65 },
                             &tbr,
                             true,
                         );
@@ -978,10 +958,67 @@ impl OverlayUi {
             wy + wh,
             &[(0.38, color(255, 255, 255, 0.0)), (0.50, color(255, 255, 255, 0.09)), (0.62, color(255, 255, 255, 0.0))],
         ) {
-            unsafe { self.rt.FillRectangle(&well_rect, &sheen) };
+            unsafe { self.rt.FillRectangle(&drum_rect, &sheen) };
+        }
+    }
+
+    /// Renders `F2`'s unified recessed slot containing both adjacent titanium drums (`Res` + `FPS`),
+    /// separated by a 1.5px dark parting gap with a 5.5px hairline index across the seam.
+    unsafe fn draw_f2_dual_slot(&self, wx: f32, wy: f32, wh: f32, res_pos: f32, fps_pos: f32, alpha: f32) {
+        let slot_rect = D2D_RECT_F { left: wx, top: wy, right: wx + SLOT_W, bottom: wy + wh };
+        let slot_rr = D2D1_ROUNDED_RECT { rect: slot_rect, radiusX: WELL_R, radiusY: WELL_R };
+
+        // Outer slot lip: dark top edge, subtle bright catchlight along bottom rim.
+        if let Ok(lip_hi) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.11 * alpha), None) } {
+            unsafe {
+                self.rt.DrawLine(
+                    Vector2 { X: wx + 2.0, Y: wy + wh + 0.8 },
+                    Vector2 { X: wx + SLOT_W - 2.0, Y: wy + wh + 0.8 },
+                    &lip_hi,
+                    1.0,
+                    None,
+                );
+            }
+        }
+        if let Ok(lip_lo) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.75 * alpha), None) } {
+            unsafe {
+                self.rt.DrawLine(Vector2 { X: wx + 2.0, Y: wy - 0.8 }, Vector2 { X: wx + SLOT_W - 2.0, Y: wy - 0.8 }, &lip_lo, 1.0, None);
+            }
         }
 
-        // Deep inset top & bottom cylindrical shadow gradients where the drum enters the housing.
+        // Clip both drums cleanly inside the unified rounded recessed slot (`r = 5`).
+        let Ok(clip_geo) = (unsafe { self.d2d.CreateRoundedRectangleGeometry(&slot_rr) }) else {
+            return;
+        };
+        let Ok(layer) = (unsafe { self.rt.CreateLayer(None) }) else {
+            return;
+        };
+        let layer_params = D2D1_LAYER_PARAMETERS {
+            contentBounds: slot_rect,
+            geometricMask: core::mem::ManuallyDrop::new(Some(clip_geo.into())),
+            maskAntialiasMode: windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskTransform: Matrix3x2::identity(),
+            opacity: alpha,
+            opacityBrush: core::mem::ManuallyDrop::new(None),
+            layerOptions: D2D1_LAYER_OPTIONS_NONE,
+        };
+        unsafe { self.rt.PushLayer(&layer_params, &layer) };
+
+        // Black recessed slot base (shows cleanly as the 1.5px dark parting gap between the two rings).
+        if let Ok(blk) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 1.0), None) } {
+            unsafe { self.rt.FillRectangle(&slot_rect, &blk) };
+        }
+
+        let res_labels = [Quality::Q480.label(), Quality::Q720.label(), Quality::Q1080.label(), Quality::Native.label()];
+        let fps_labels = [Fps::F24.label(), Fps::F30.label(), Fps::F60.label()];
+
+        // Left Resolution drum (knurl on left edge) and right FPS drum (knurl on right edge).
+        unsafe {
+            self.draw_drum_band(wx, wy, RES_W, wh, res_pos, &res_labels, false);
+            self.draw_drum_band(wx + RES_W + SLOT_GAP, wy, FPS_W, wh, fps_pos, &fps_labels, true);
+        }
+
+        // Deep inset top & bottom cylindrical shadow gradients across the unified slot.
         if let Some(vsh) = make_vgrad(
             &self.rt,
             wy,
@@ -994,16 +1031,24 @@ impl OverlayUi {
                 (1.0, color(0, 0, 0, 0.88)),
             ],
         ) {
-            unsafe { self.rt.FillRectangle(&well_rect, &vsh) };
+            unsafe { self.rt.FillRectangle(&slot_rect, &vsh) };
         }
-        // Subtle left & right pocket wall shadows.
+        // Subtle left & right outer slot wall shadows.
         if let Some(hsh) = make_hgrad(
             &self.rt,
             wx,
-            wx + ww,
-            &[(0.0, color(0, 0, 0, 0.68)), (0.10, color(0, 0, 0, 0.0)), (0.90, color(0, 0, 0, 0.0)), (1.0, color(0, 0, 0, 0.68))],
+            wx + SLOT_W,
+            &[(0.0, color(0, 0, 0, 0.68)), (0.07, color(0, 0, 0, 0.0)), (0.93, color(0, 0, 0, 0.0)), (1.0, color(0, 0, 0, 0.68))],
         ) {
-            unsafe { self.rt.FillRectangle(&well_rect, &hsh) };
+            unsafe { self.rt.FillRectangle(&slot_rect, &hsh) };
+        }
+
+        // F2 hairline alignment index bridging the 1.5px parting gap (`left: 52px`, `width: 5.5px`).
+        if let Ok(idx) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.60), None) } {
+            let iy = wy + wh * 0.5;
+            unsafe {
+                self.rt.DrawLine(Vector2 { X: wx + 52.0, Y: iy }, Vector2 { X: wx + 57.5, Y: iy }, &idx, 1.0, None);
+            }
         }
 
         unsafe {
@@ -1014,7 +1059,7 @@ impl OverlayUi {
 
         // Crisp 1px inner pocket rim.
         if let Ok(rim) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.65 * alpha), None) } {
-            unsafe { self.rt.DrawRoundedRectangle(&well_rr, &rim, 1.0, None) };
+            unsafe { self.rt.DrawRoundedRectangle(&slot_rr, &rim, 1.0, None) };
         }
     }
 

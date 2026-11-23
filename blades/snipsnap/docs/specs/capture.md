@@ -82,12 +82,14 @@ are the constants at the top of `src/main.rs`. Keep it current in the same chang
   after a 180 ms debounce; pressing Record only calls `StartCapture()` so capture begins
   instantaneously. Cancelling deletes the 0-byte staging file; stopping atomically renames it to the
   final timestamped `.mp4`.
-- **Armed stage (`H5` + `E3` + `B2`)**: the target stays framed in a muted red 2px border with 14px
-  corner ticks, straddled at bottom-center by a 30px monoblock milled titanium housing with an
-  embedded brushed-titanium rolling tumbler wheel (`480p`, `720p` default, `1080p`, `Native`), a
-  milled notch pointer and a seated matte-red enamel shutter circle. Scroll the wheel, click its
-  upper/lower half, or press `↑`/`↓`/`1`–`4` to roll to a downscale-only preset; `Enter`/`R` or
-  clicking the shutter starts recording; `Esc` cancels.
+- **Armed stage (`H5` + `F2` + `B2`)**: the target stays framed in a muted red 2px border with 14px
+  corner ticks, straddled at bottom-center by a 30px monoblock milled titanium housing with two
+  adjacent brushed-titanium rolling tumbler drums in one unified recessed slot — resolution
+  (`480p`, `720p` default, `1080p`, `Native`) and frame rate (`24f`, `30f`, `60f` default)
+  separated by a 1.5px dark parting gap with a hairline index — plus a milled notch pointer and a
+  seated matte-red enamel shutter circle. Scroll or click upper/lower half on either drum (or use
+  `↑`/`↓`/`1`–`4` for resolution, `←`/`→`/`F` for FPS); `Enter`/`R` or clicking the shutter starts
+  recording; `Esc` cancels.
 - **Recording (`S2` + `B2`)**: over 340 ms the four corners lock into a bright `#e81123` border
   while the housing settles into a 25px monoblock titanium recording block (pulsing red dot,
   tabular timer, muted live file size, seated 17px red stop circle). Both overlay windows set
