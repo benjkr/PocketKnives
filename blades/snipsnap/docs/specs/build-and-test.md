@@ -13,7 +13,7 @@ current in the same change, and lean.
   (`.cargo/config.toml`).
   - `snipsnap.exe`: `no_std`, `no_main`, ~23.5 KB, imports only `KERNEL32`, `USER32`, `GDI32` and
     `dwmapi`. `build.rs` adds `pk-build`'s link flags and `/DEBUG:NONE`.
-  - `snipsnap-rec.exe` (`rec/`): `no_std`, `no_main`, ~65 KB, on `pk`, `windows` and `windows-sys`
+  - `snipsnap-rec.exe` (`rec/`): `no_std`, `no_main`, ~83 KB, on `pk`, `windows` and `windows-sys`
     for D3D11, Windows.Graphics.Capture, Media Foundation, Direct2D/DirectWrite and Shell
     notifications.
 - `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window (and
