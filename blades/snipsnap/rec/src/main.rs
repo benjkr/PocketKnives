@@ -28,11 +28,14 @@ use alloc::string::String;
 use capture::CaptureSession;
 use core::ffi::c_void;
 use core::ptr::{null, null_mut};
+use core::sync::atomic::{AtomicBool, Ordering};
 use gpu::GpuContext;
-use ipc::{COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_REC_ENDED, WM_APP_STOP, WM_APP_WARM_DONE};
+use ipc::{
+    COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_PREP_DONE, WM_APP_REC_ENDED, WM_APP_STOP, WM_APP_WARM_DONE,
+};
 use pk::sync::Mutex;
 use ui::{DRUM_ROLL_MS, OverlayUi, PillAction, TRANSITION_MS, UiState, ease_out_expo_like};
-use windows::Win32::System::WinRT::{RO_INIT_SINGLETHREADED, RoInitialize};
+use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RO_INIT_SINGLETHREADED, RoInitialize};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint};
@@ -53,6 +56,8 @@ pk::entry!(run);
 
 const TIMER_IDLE_TIMEOUT: usize = 1;
 const TIMER_UI_TICK: usize = 2;
+const TIMER_RECONFIG: usize = 3;
+const RECONFIG_DEBOUNCE_MS: u32 = 180;
 
 // Temporary armed-only hotkeys (unregistered the instant recording starts or cancels).
 const HK_Q1: i32 = 10;
@@ -66,12 +71,14 @@ const HK_R: i32 = 17;
 const HK_ESC: i32 = 18;
 
 static WARM_SLOT: Mutex<Option<Option<GpuContext>>> = Mutex::new(None);
+static PREP_SLOT: Mutex<Option<Option<CaptureSession>>> = Mutex::new(None);
+static PREP_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
     Warming,
     Armed,
-    WaitingWarmToRecord,
+    WaitingPrepToRecord,
     Recording,
     Done,
 }
@@ -81,6 +88,12 @@ struct App {
     phase: Phase,
     gpu: Option<GpuContext>,
     warm_failed: bool,
+    prepared: Option<CaptureSession>,
+    prep_in_flight: bool,
+    prep_failed: bool,
+    prep_gen: u32,
+    prep_thread: Option<pk::thread::Thread>,
+    reconfig_pending: bool,
     target: Option<RecTarget>,
     ui: Option<OverlayUi>,
     ui_state: UiState,
@@ -125,7 +138,11 @@ impl App {
         self.drum_t0 = unsafe { GetTickCount64() };
         self.drum_rolling = true;
         self.fast_timer = true;
-        unsafe { SetTimer(self.host, TIMER_UI_TICK, 16, None) };
+        self.reconfig_pending = true;
+        unsafe {
+            SetTimer(self.host, TIMER_UI_TICK, 16, None);
+            SetTimer(self.host, TIMER_RECONFIG, RECONFIG_DEBOUNCE_MS, None);
+        }
     }
 
     fn step_quality(&mut self, delta: i32) {
@@ -145,6 +162,83 @@ impl App {
             unsafe { UnregisterHotKey(self.host, id) };
         }
         self.armed_keys_on = false;
+    }
+
+    /// Starts Stage 2 background preparation (WGC item/pool + D3D11 VideoProcessor + H.264 MFT)
+    /// as soon as both `gpu` and `target` are available, so pressing Record is instantaneous.
+    fn maybe_start_prepare(&mut self) {
+        if self.prep_in_flight || self.prepared.is_some() || self.prep_failed {
+            return;
+        }
+        let (Some(target), Some(gpu)) = (self.target, self.gpu.take()) else {
+            return;
+        };
+        let quality = self.ui_state.quality;
+        let host_addr = self.host as usize;
+        self.prep_gen = self.prep_gen.wrapping_add(1);
+        let gen_id = self.prep_gen;
+        self.prep_in_flight = true;
+        self.prep_thread = pk::thread::spawn(move || {
+            let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+            if PREP_CANCELLED.load(Ordering::Acquire) {
+                drop(gpu);
+                return;
+            }
+            let sess = CaptureSession::prepare(gpu, target, quality, host_addr as HWND, gen_id);
+            if PREP_CANCELLED.load(Ordering::Acquire) {
+                if let Some(s) = sess {
+                    let _ = s.stop(0);
+                }
+                return;
+            }
+            *PREP_SLOT.lock() = Some(sess);
+            unsafe { PostMessageW(host_addr as HWND, WM_APP_PREP_DONE, 0, 0) };
+        });
+        if self.prep_thread.is_none() {
+            self.prep_in_flight = false;
+            self.prep_failed = true;
+        }
+    }
+
+    /// Rebuilds only the staging `VideoEncoder` in the background when the user rolls the wheel
+    /// to a different preset while Armed, keeping `GpuContext` and the WGC frame pool hot.
+    fn maybe_reconfigure(&mut self) {
+        if self.prep_in_flight || self.prep_failed {
+            return;
+        }
+        let target_q = self.ui_state.quality;
+        if self.prepared.as_ref().map(|s| s.quality() == target_q).unwrap_or(true) {
+            return;
+        }
+        let Some(mut sess) = self.prepared.take() else {
+            return;
+        };
+        let host_addr = self.host as usize;
+        self.prep_gen = self.prep_gen.wrapping_add(1);
+        let gen_id = self.prep_gen;
+        self.prep_in_flight = true;
+        self.prep_thread = pk::thread::spawn(move || {
+            let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+            if PREP_CANCELLED.load(Ordering::Acquire) {
+                let _ = sess.stop(0);
+                return;
+            }
+            let ok = sess.reconfigure_quality(target_q, gen_id);
+            if !ok || PREP_CANCELLED.load(Ordering::Acquire) {
+                let _ = sess.stop(0);
+                if !PREP_CANCELLED.load(Ordering::Acquire) {
+                    *PREP_SLOT.lock() = Some(None);
+                    unsafe { PostMessageW(host_addr as HWND, WM_APP_PREP_DONE, 0, 0) };
+                }
+                return;
+            }
+            *PREP_SLOT.lock() = Some(Some(sess));
+            unsafe { PostMessageW(host_addr as HWND, WM_APP_PREP_DONE, 0, 0) };
+        });
+        if self.prep_thread.is_none() {
+            self.prep_in_flight = false;
+            self.prep_failed = true;
+        }
     }
 
     fn enter_armed(&mut self, target: RecTarget) {
@@ -175,34 +269,22 @@ impl App {
         if target.kind() == RecKind::Window {
             unsafe { SetTimer(self.host, TIMER_UI_TICK, 33, None) };
         }
+        // Begin Stage 2 background prep immediately if Stage 1 GPU warm-up already landed.
+        self.maybe_start_prepare();
     }
 
-    fn start_recording(&mut self) {
-        if self.phase != Phase::Armed && self.phase != Phase::WaitingWarmToRecord {
+    fn begin_recording_now(&mut self) {
+        let Some(mut sess) = self.prepared.take() else {
+            self.cancel();
+            return;
+        };
+        if !sess.begin() {
+            let _ = sess.stop(0);
+            self.cancel();
             return;
         }
-        self.unregister_armed_keys();
-        let Some(target) = self.target else {
-            self.cancel();
-            return;
-        };
-        let Some(gpu) = self.gpu.take() else {
-            if self.warm_failed {
-                self.cancel();
-                return;
-            }
-            // Pre-warm still finishing (rare, e.g. instant Full Screen + Enter): start the moment it lands.
-            self.phase = Phase::WaitingWarmToRecord;
-            return;
-        };
-
-        let Some(session) = CaptureSession::start(gpu, target, self.ui_state.quality, self.host) else {
-            self.cancel();
-            return;
-        };
-
         let now = unsafe { GetTickCount64() };
-        self.session = Some(session);
+        self.session = Some(sess);
         self.phase = Phase::Recording;
         self.trans_t0 = now;
         self.rec_t0 = now;
@@ -218,6 +300,31 @@ impl App {
         unsafe { SetTimer(self.host, TIMER_UI_TICK, 16, None) };
     }
 
+    fn start_recording(&mut self) {
+        if self.phase != Phase::Armed && self.phase != Phase::WaitingPrepToRecord {
+            return;
+        }
+        self.unregister_armed_keys();
+        self.reconfig_pending = false;
+        unsafe { KillTimer(self.host, TIMER_RECONFIG) };
+        if self.target.is_none() || self.warm_failed || self.prep_failed {
+            self.cancel();
+            return;
+        }
+        // Fast path: pipeline already prepared for the selected preset -> call StartCapture() now!
+        if self.prepared.as_ref().map(|s| s.quality() == self.ui_state.quality).unwrap_or(false) {
+            self.begin_recording_now();
+            return;
+        }
+        // Otherwise wait for the background prep / reconfigure to land and trigger immediately.
+        self.phase = Phase::WaitingPrepToRecord;
+        if self.prepared.is_some() {
+            self.maybe_reconfigure();
+        } else {
+            self.maybe_start_prepare();
+        }
+    }
+
     fn stop_recording(&mut self) {
         if self.phase != Phase::Recording {
             self.cancel();
@@ -225,7 +332,10 @@ impl App {
         }
         self.phase = Phase::Done;
         self.fast_timer = false;
-        unsafe { KillTimer(self.host, TIMER_UI_TICK) };
+        unsafe {
+            KillTimer(self.host, TIMER_UI_TICK);
+            KillTimer(self.host, TIMER_RECONFIG);
+        }
         self.unregister_armed_keys();
         if let Some(ui) = self.ui.as_mut() {
             ui.hide();
@@ -244,11 +354,14 @@ impl App {
     }
 
     fn cancel(&mut self) {
+        PREP_CANCELLED.store(true, Ordering::Release);
         self.phase = Phase::Done;
         self.fast_timer = false;
+        self.reconfig_pending = false;
         unsafe {
             KillTimer(self.host, TIMER_IDLE_TIMEOUT);
             KillTimer(self.host, TIMER_UI_TICK);
+            KillTimer(self.host, TIMER_RECONFIG);
         }
         self.unregister_armed_keys();
         if let Some(ui) = self.ui.as_mut() {
@@ -256,6 +369,9 @@ impl App {
         }
         self.ui = None;
         if let Some(sess) = self.session.take() {
+            let _ = sess.stop(0);
+        }
+        if let Some(sess) = self.prepared.take() {
             let _ = sess.stop(0);
         }
         self.gpu = None;
@@ -399,13 +515,44 @@ unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
             match result {
                 Some(gpu) => {
                     app.gpu = Some(gpu);
-                    if app.phase == Phase::WaitingWarmToRecord {
-                        app.start_recording();
+                    if app.phase == Phase::Armed || app.phase == Phase::WaitingPrepToRecord {
+                        app.maybe_start_prepare();
                     }
                 }
                 None => {
                     app.warm_failed = true;
-                    if app.phase == Phase::WaitingWarmToRecord {
+                    if app.phase == Phase::WaitingPrepToRecord {
+                        app.cancel();
+                    }
+                }
+            }
+            0
+        }
+        WM_APP_PREP_DONE => {
+            app.prep_in_flight = false;
+            app.prep_thread = None;
+            let result = PREP_SLOT.lock().take().flatten();
+            if app.phase == Phase::Done {
+                if let Some(sess) = result {
+                    let _ = sess.stop(0);
+                }
+                return 0;
+            }
+            match result {
+                Some(sess) => {
+                    let matches = sess.quality() == app.ui_state.quality;
+                    app.prepared = Some(sess);
+                    if !matches {
+                        if app.phase == Phase::WaitingPrepToRecord || !app.reconfig_pending {
+                            app.maybe_reconfigure();
+                        }
+                    } else if app.phase == Phase::WaitingPrepToRecord {
+                        app.begin_recording_now();
+                    }
+                }
+                None => {
+                    app.prep_failed = true;
+                    if app.phase == Phase::WaitingPrepToRecord {
                         app.cancel();
                     }
                 }
@@ -439,6 +586,12 @@ unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 app.cancel();
             } else if wp == TIMER_UI_TICK {
                 app.on_tick();
+            } else if wp == TIMER_RECONFIG {
+                unsafe { KillTimer(h, TIMER_RECONFIG) };
+                app.reconfig_pending = false;
+                if app.phase == Phase::Armed || app.phase == Phase::WaitingPrepToRecord {
+                    app.maybe_reconfigure();
+                }
             }
             0
         }
@@ -548,6 +701,12 @@ fn run() -> u32 {
         phase: Phase::Warming,
         gpu: None,
         warm_failed: false,
+        prepared: None,
+        prep_in_flight: false,
+        prep_failed: false,
+        prep_gen: 0,
+        prep_thread: None,
+        reconfig_pending: false,
         target: None,
         ui: None,
         ui_state: UiState {
@@ -597,6 +756,8 @@ fn run() -> u32 {
     }
 
     // Grab finished recording info, then drop `app` so every GPU/WGC/MF/Direct2D handle is freed.
+    PREP_CANCELLED.store(true, Ordering::Release);
+    let prep_thread = app.prep_thread.take();
     let finished = app.finished.take();
     unsafe { SetWindowLongPtrW(host, GWLP_USERDATA, 0) };
     drop(app);
@@ -611,6 +772,13 @@ fn run() -> u32 {
     }
 
     unsafe { DestroyWindow(host) };
+    // If cancelled mid-preparation, wait for the worker to close and delete its staging file cleanly.
+    if let Some(t) = prep_thread {
+        t.join();
+    }
+    if let Some(sess) = PREP_SLOT.lock().take().flatten() {
+        let _ = sess.stop(0);
+    }
     drop(mutex);
     0
 }

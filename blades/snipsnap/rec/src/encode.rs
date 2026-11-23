@@ -27,24 +27,76 @@ use windows::Win32::Media::MediaFoundation::{
 };
 use windows_core::{Interface, PCWSTR};
 use windows_sys::Win32::Foundation::SYSTEMTIME;
-use windows_sys::Win32::Storage::FileSystem::{CreateDirectoryW, GetFileAttributesExW, GetFileExInfoStandard, WIN32_FILE_ATTRIBUTE_DATA};
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateDirectoryW, DeleteFileW, FILE_ATTRIBUTE_HIDDEN, GetFileAttributesExW, GetFileExInfoStandard, MOVEFILE_REPLACE_EXISTING,
+    MoveFileExW, SetFileAttributesW, WIN32_FILE_ATTRIBUTE_DATA,
+};
 use windows_sys::Win32::System::SystemInformation::GetLocalTime;
+use windows_sys::Win32::System::Threading::{GetCurrentProcessId, Sleep};
 use windows_sys::Win32::UI::Shell::FOLDERID_Videos;
 
 const RING_SIZE: usize = 4;
 const TARGET_FPS: u64 = 60;
 
-/// Builds `%USERPROFILE%\Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4` and ensures the
-/// folder exists.
-pub fn make_output_path() -> Option<String> {
+fn snipsnap_videos_dir() -> Option<String> {
     let videos = pk::env::known_folder(&FOLDERID_Videos).or_else(|| pk::env::var("USERPROFILE").map(|u| format!("{u}\\Videos")))?;
     let dir = format!("{videos}\\SnipSnap");
     let wdir = to_wide(&dir);
     unsafe { CreateDirectoryW(wdir.as_ptr(), null()) };
+    Some(dir)
+}
 
+/// Builds `%USERPROFILE%\Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4` and ensures the
+/// folder exists.
+pub fn make_output_path() -> Option<String> {
+    let dir = snipsnap_videos_dir()?;
     let mut st: SYSTEMTIME = unsafe { core::mem::zeroed() };
     unsafe { GetLocalTime(&mut st) };
     Some(format!("{dir}\\SnipSnap_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.mp4", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond))
+}
+
+/// Hidden staging `.mp4` path in `Videos\SnipSnap` so `IMFSinkWriter` and the hardware H.264 MFT
+/// can finish initializing while Armed, then atomically rename on stop or delete on cancel.
+fn make_staging_path(gen_id: u32) -> Option<Vec<u16>> {
+    let dir = snipsnap_videos_dir()?;
+    let pid = unsafe { GetCurrentProcessId() };
+    Some(to_wide(&format!("{dir}\\.snipsnap-staging-{pid}-{gen_id}.mp4")))
+}
+
+/// Retries `DeleteFileW` briefly in case Media Foundation's async byte-stream worker or an AV
+/// minifilter still holds a transient handle for a few milliseconds after `IMFSinkWriter` drops.
+fn delete_with_retry(wpath: &[u16]) {
+    for _ in 0..15 {
+        if unsafe { DeleteFileW(wpath.as_ptr()) } != 0 {
+            return;
+        }
+        unsafe { Sleep(15) };
+    }
+}
+
+/// Retries `MoveFileExW` briefly for the same transient handle-close / AV-scan window after
+/// `IMFSinkWriter::Finalize` + drop.
+fn move_with_retry(src: &[u16], dst: &[u16]) -> bool {
+    for _ in 0..20 {
+        if unsafe { MoveFileExW(src.as_ptr(), dst.as_ptr(), MOVEFILE_REPLACE_EXISTING) } != 0 {
+            return true;
+        }
+        unsafe { Sleep(15) };
+    }
+    false
+}
+
+struct StagingGuard<'a> {
+    wpath: &'a [u16],
+    active: bool,
+}
+
+impl Drop for StagingGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            delete_with_retry(self.wpath);
+        }
+    }
 }
 
 fn pack_u64(hi: u32, lo: u32) -> u64 {
@@ -66,13 +118,13 @@ enum Pipeline {
 }
 
 pub struct VideoEncoder {
-    writer: IMFSinkWriter,
+    writer: Option<IMFSinkWriter>,
     stream_idx: u32,
     out_w: u32,
     out_h: u32,
     pipeline: Pipeline,
-    path: String,
     wpath: Vec<u16>,
+    committed: bool,
     frames: u64,
     first_pts: Option<i64>,
     last_pts: i64,
@@ -82,10 +134,24 @@ pub struct VideoEncoder {
 // Created in MTA with a multithread-protected D3D11 device; every access is serialized by a Mutex.
 unsafe impl Send for VideoEncoder {}
 
+impl Drop for VideoEncoder {
+    fn drop(&mut self) {
+        // Close IMFSinkWriter first so its file handle releases before removing the staging file.
+        self.writer = None;
+        if !self.committed {
+            delete_with_retry(&self.wpath);
+        }
+    }
+}
+
 impl VideoEncoder {
-    pub fn new(gpu: &GpuContext, src_w: u32, src_h: u32, out_w: u32, out_h: u32, quality: Quality) -> Option<Self> {
-        let path = make_output_path()?;
-        let wpath = to_wide(&path);
+    /// Pre-initializes `IMFSinkWriter`, the hardware H.264 encoder MFT, and the D3D11 Video
+    /// Processor NV12 ring onto a hidden staging file so pressing Record starts instantaneously.
+    pub fn new_staged(gpu: &GpuContext, src_w: u32, src_h: u32, out_w: u32, out_h: u32, quality: Quality, gen_id: u32) -> Option<Self> {
+        let wpath = make_staging_path(gen_id)?;
+        // Declared before `writer` so if any step returns `None`, `writer` drops first and then
+        // `StagingGuard` removes the 0-byte staging file.
+        let mut guard = StagingGuard { wpath: &wpath, active: false };
 
         let mut attrs: Option<IMFAttributes> = None;
         unsafe { MFCreateAttributes(&mut attrs, 4) }.ok()?;
@@ -98,6 +164,8 @@ impl VideoEncoder {
         }
 
         let writer = unsafe { MFCreateSinkWriterFromURL(PCWSTR(wpath.as_ptr()), None, &attrs) }.ok()?;
+        guard.active = true;
+        unsafe { SetFileAttributesW(wpath.as_ptr(), FILE_ATTRIBUTE_HIDDEN) };
 
         // Output H.264 stream type.
         let out_type: IMFMediaType = unsafe { MFCreateMediaType() }.ok()?;
@@ -121,8 +189,22 @@ impl VideoEncoder {
         };
 
         unsafe { writer.BeginWriting() }.ok()?;
+        guard.active = false;
+        drop(guard);
 
-        Some(Self { writer, stream_idx, out_w, out_h, pipeline, path, wpath, frames: 0, first_pts: None, last_pts: 0, last_out: None })
+        Some(Self {
+            writer: Some(writer),
+            stream_idx,
+            out_w,
+            out_h,
+            pipeline,
+            wpath,
+            committed: false,
+            frames: 0,
+            first_pts: None,
+            last_pts: 0,
+            last_out: None,
+        })
     }
 
     fn init_nv12(
@@ -365,6 +447,9 @@ impl VideoEncoder {
     }
 
     fn submit_texture(&self, tex: &ID3D11Texture2D, pts: i64, dur: i64) -> bool {
+        let Some(writer) = self.writer.as_ref() else {
+            return false;
+        };
         let Ok(buf) = (unsafe { MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, tex, 0, false) }) else {
             return false;
         };
@@ -380,7 +465,7 @@ impl VideoEncoder {
             sample.AddBuffer(&buf).is_ok()
                 && sample.SetSampleTime(pts).is_ok()
                 && sample.SetSampleDuration(dur).is_ok()
-                && self.writer.WriteSample(self.stream_idx, &sample).is_ok()
+                && writer.WriteSample(self.stream_idx, &sample).is_ok()
         }
     }
 
@@ -395,9 +480,11 @@ impl VideoEncoder {
                 return disk;
             }
         }
-        let mut stats = MF_SINK_WRITER_STATISTICS { cb: size_of::<MF_SINK_WRITER_STATISTICS>() as u32, ..Default::default() };
-        if unsafe { self.writer.GetStatistics(self.stream_idx, &mut stats) }.is_ok() {
-            return stats.qwByteCountProcessed;
+        if let Some(writer) = self.writer.as_ref() {
+            let mut stats = MF_SINK_WRITER_STATISTICS { cb: size_of::<MF_SINK_WRITER_STATISTICS>() as u32, ..Default::default() };
+            if unsafe { writer.GetStatistics(self.stream_idx, &mut stats) }.is_ok() {
+                return stats.qwByteCountProcessed;
+            }
         }
         0
     }
@@ -406,24 +493,32 @@ impl VideoEncoder {
         self.frames
     }
 
-    /// Finalizes the MP4 container and returns `(path, final_bytes)` if at least one frame was written.
-    /// If the screen was static at the end, duplicates the last frame at `elapsed_100ns` so the
-    /// clip's playback duration matches how long the user recorded.
-    pub fn finalize(self, elapsed_100ns: i64) -> Option<(String, u64)> {
+    /// Finalizes the MP4 container, closes the sink writer, un-hides and atomically renames the
+    /// staging file to `Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4`.
+    pub fn finalize(mut self, elapsed_100ns: i64) -> Option<(String, u64)> {
         if self.frames == 0 {
-            let _ = unsafe { windows_sys::Win32::Storage::FileSystem::DeleteFileW(self.wpath.as_ptr()) };
-            return None;
+            return None; // Drop deletes the staging file.
         }
         if elapsed_100ns > self.last_pts + 333_333
             && let Some(last) = self.last_out.as_ref()
         {
             let _ = self.submit_texture(last, elapsed_100ns, 166_667);
         }
-        if unsafe { self.writer.Finalize() }.is_err() {
+        let writer = self.writer.take()?;
+        let ok = unsafe { writer.Finalize() }.is_ok();
+        drop(writer);
+        if !ok {
             return None;
         }
         let size = self.bytes_written();
-        Some((self.path, size))
+        let final_path = make_output_path()?;
+        let final_w = to_wide(&final_path);
+        let _ = unsafe { SetFileAttributesW(self.wpath.as_ptr(), 0x80) }; // FILE_ATTRIBUTE_NORMAL
+        if !move_with_retry(&self.wpath, &final_w) {
+            return None;
+        }
+        self.committed = true;
+        Some((final_path, size))
     }
 }
 

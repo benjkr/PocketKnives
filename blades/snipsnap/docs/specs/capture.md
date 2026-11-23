@@ -71,10 +71,17 @@ are the constants at the top of `src/main.rs`. Keep it current in the same chang
 - Triggered by `Ctrl+Alt+Shift+R` / `W` / `F` (or `snipsnap rec-rect` / `rec-window` / `rec-full`).
   Pressing any recording hotkey while `snipsnap-rec.exe` is already running posts `WM_APP + 2` to
   stop it (or cancel if still armed).
-- **Load on demand with background pre-warm**: `snipsnap.exe` spawns `snipsnap-rec.exe --warm`
-  beside itself as soon as the hotkey fires. While the user drags a rectangle or picks a window on
-  SnipSnap's frozen overlay (drawn with a `#e81123` red border), the helper pre-warms D3D11, WinRT
-  Direct3D and Media Foundation on a worker thread, then receives the target via `WM_COPYDATA`.
+- **Two-stage background pre-preparation**: `snipsnap.exe` spawns `snipsnap-rec.exe --warm` beside
+  itself as soon as the hotkey fires. Stage 1 runs while the user drags a rectangle or picks a
+  window on SnipSnap's frozen overlay (drawn with a `#e81123` red border): the helper initializes
+  D3D11, WinRT Direct3D, Media Foundation and the WGC activation factory on a worker thread, then
+  receives the target via `WM_COPYDATA`. Stage 2 runs during Armed dead time: as soon as both the
+  GPU context and target are ready, a background worker initializes the WGC capture item/frame pool,
+  D3D11 Video Processor NV12 ring and hardware H.264 `IMFSinkWriter` onto a hidden staging file in
+  `Videos\SnipSnap\`. Rolling the wheel while Armed reconfigures the encoder in the background
+  after a 180 ms debounce; pressing Record only calls `StartCapture()` so capture begins
+  instantaneously. Cancelling deletes the 0-byte staging file; stopping atomically renames it to the
+  final timestamped `.mp4`.
 - **Armed stage (`H5` + `E3` + `B2`)**: the target stays framed in a muted red 2px border with 14px
   corner ticks, straddled at bottom-center by a 30px monoblock milled titanium housing with an
   embedded brushed-titanium rolling tumbler wheel (`480p`, `720p` default, `1080p`, `Native`), a

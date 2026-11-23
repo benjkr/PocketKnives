@@ -26,6 +26,8 @@ struct Inner {
     kind: RecKind,
     /// Crop rect relative to the monitor texture (for `RecKind::Rect`).
     crop: (i32, i32, i32, i32),
+    src_w: u32,
+    src_h: u32,
     last_size: SizeInt32,
 }
 
@@ -34,14 +36,19 @@ pub struct CaptureSession {
     pool: Direct3D11CaptureFramePool,
     session: GraphicsCaptureSession,
     inner: Arc<Mutex<Inner>>,
+    started: Arc<AtomicBool>,
     stopped: Arc<AtomicBool>,
     bytes: Arc<AtomicU64>,
+    quality: Quality,
 }
 
+// WinRT capture objects created in MTA (`CreateFreeThreaded`) and serialized via UI / worker handoff.
+unsafe impl Send for CaptureSession {}
+
 impl CaptureSession {
-    /// Starts capturing `target` with `quality`, consuming the pre-warmed `GpuContext`.
-    /// Posts `WM_APP_REC_ENDED` to `notify_hwnd` if the captured window closes mid-recording.
-    pub fn start(gpu: GpuContext, target: RecTarget, quality: Quality, notify_hwnd: HWND) -> Option<Self> {
+    /// Pre-builds the entire WGC + D3D11 Video Processor + Media Foundation H.264 pipeline during
+    /// Armed dead time without calling `StartCapture()` yet, so `begin()` fires instantaneously.
+    pub fn prepare(gpu: GpuContext, target: RecTarget, quality: Quality, notify_hwnd: HWND, gen_id: u32) -> Option<Self> {
         let interop = windows_core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>().ok()?;
         let kind = target.kind();
 
@@ -75,7 +82,7 @@ impl CaptureSession {
         };
 
         let (out_w, out_h) = output_size(src_w, src_h, quality);
-        let encoder = VideoEncoder::new(&gpu, src_w, src_h, out_w, out_h, quality)?;
+        let encoder = VideoEncoder::new_staged(&gpu, src_w, src_h, out_w, out_h, quality, gen_id)?;
 
         let pool =
             Direct3D11CaptureFramePool::CreateFreeThreaded(&gpu.winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, item_size)
@@ -85,17 +92,19 @@ impl CaptureSession {
         let _ = session.SetIsBorderRequired(false);
         let _ = session.SetIsCursorCaptureEnabled(true);
 
+        let started = Arc::new(AtomicBool::new(false));
         let stopped = Arc::new(AtomicBool::new(false));
         let bytes = Arc::new(AtomicU64::new(0));
-        let inner = Arc::new(Mutex::new(Inner { gpu, encoder: Some(encoder), kind, crop, last_size: item_size }));
+        let inner = Arc::new(Mutex::new(Inner { gpu, encoder: Some(encoder), kind, crop, src_w, src_h, last_size: item_size }));
 
         // FrameArrived callback (runs on WinRT free-threaded pool).
         {
             let inner_cb = Arc::clone(&inner);
+            let started_cb = Arc::clone(&started);
             let stopped_cb = Arc::clone(&stopped);
             let bytes_cb = Arc::clone(&bytes);
             let handler = TypedEventHandler::<Direct3D11CaptureFramePool, windows_core::IInspectable>::new(move |pool_ref, _| {
-                if stopped_cb.load(Ordering::Acquire) {
+                if !started_cb.load(Ordering::Acquire) || stopped_cb.load(Ordering::Acquire) {
                     return Ok(());
                 }
                 let Some(pool_ref) = pool_ref.as_ref() else {
@@ -148,7 +157,7 @@ impl CaptureSession {
             pool.FrameArrived(&handler).ok()?;
         }
 
-        // Closed callback (fires if captured window is closed mid-recording).
+        // Closed callback (fires if captured window is closed while armed or mid-recording).
         {
             let notify = notify_hwnd as usize;
             let closed_cb = TypedEventHandler::<GraphicsCaptureItem, windows_core::IInspectable>::new(move |_, _| {
@@ -160,17 +169,50 @@ impl CaptureSession {
             let _ = item.Closed(&closed_cb);
         }
 
-        session.StartCapture().ok()?;
-        Some(Self { item, pool, session, inner, stopped, bytes })
+        Some(Self { item, pool, session, inner, started, stopped, bytes, quality })
+    }
+
+    pub fn quality(&self) -> Quality {
+        self.quality
+    }
+
+    /// Swaps the pre-warmed `VideoEncoder` to a new preset while Armed, reusing the hot GPU
+    /// device and WGC frame pool. Drops the old staging encoder first to free its NVENC slot
+    /// and remove its 0-byte staging file.
+    pub fn reconfigure_quality(&mut self, quality: Quality, gen_id: u32) -> bool {
+        if self.started.load(Ordering::Acquire) || self.quality == quality {
+            return true;
+        }
+        let mut guard = self.inner.lock();
+        guard.encoder = None;
+        let (src_w, src_h) = (guard.src_w, guard.src_h);
+        let (out_w, out_h) = output_size(src_w, src_h, quality);
+        let Some(enc) = VideoEncoder::new_staged(&guard.gpu, src_w, src_h, out_w, out_h, quality, gen_id) else {
+            return false;
+        };
+        guard.encoder = Some(enc);
+        self.quality = quality;
+        true
+    }
+
+    /// Starts frame delivery on the already-prepared capture session (instantaneous).
+    pub fn begin(&mut self) -> bool {
+        self.started.store(true, Ordering::Release);
+        if self.session.StartCapture().is_err() {
+            self.started.store(false, Ordering::Release);
+            return false;
+        }
+        true
     }
 
     pub fn live_bytes(&self) -> u64 {
         self.bytes.load(Ordering::Relaxed)
     }
 
-    /// Stops capture, finalizes the MP4 file, and drops all WGC + D3D11 + Media Foundation handles
-    /// so GPU memory is freed immediately.
+    /// Stops capture, finalizes the MP4 file if recording started (else deletes the 0-byte staging
+    /// file), and drops all WGC + D3D11 + Media Foundation handles so GPU memory frees immediately.
     pub fn stop(self, elapsed_100ns: i64) -> Option<(String, u64)> {
+        let was_started = self.started.load(Ordering::Acquire);
         self.stopped.store(true, Ordering::Release);
         let _ = self.session.Close();
         let _ = self.pool.Close();
@@ -180,7 +222,12 @@ impl CaptureSession {
 
         let result = {
             let mut guard = self.inner.lock();
-            guard.encoder.take().and_then(|enc| enc.finalize(elapsed_100ns))
+            if was_started {
+                guard.encoder.take().and_then(|enc| enc.finalize(elapsed_100ns))
+            } else {
+                guard.encoder = None;
+                None
+            }
         };
         // `self.inner` drops here (along with `GpuContext` -> `MFShutdown` + D3D11 release).
         drop(self.inner);

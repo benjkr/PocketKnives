@@ -11,6 +11,7 @@ pub const WM_APP_WARM_DONE: u32 = WM_APP + 1;
 pub const WM_APP_STOP: u32 = WM_APP + 2;
 pub const WM_APP_REC_ENDED: u32 = WM_APP + 3;
 pub const WM_APP_TRAY: u32 = WM_APP + 4;
+pub const WM_APP_PREP_DONE: u32 = WM_APP + 5;
 
 /// Binary payload received via `WM_COPYDATA` from `snipsnap.exe`.
 /// Must match `RecTarget` in `blades/snipsnap/src/capture.rs` field-for-field.

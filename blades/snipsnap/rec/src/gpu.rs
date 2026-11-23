@@ -1,5 +1,6 @@
 //! Background pre-warm and ownership of the D3D11 + WinRT Direct3D + Media Foundation DXGI
 //! device manager. Dropping `GpuContext` releases all GPU / Media Foundation handles immediately.
+use windows::Graphics::Capture::GraphicsCaptureItem;
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1};
@@ -12,6 +13,7 @@ use windows::Win32::Media::MediaFoundation::{
     IMFDXGIDeviceManager, MF_VERSION, MFCreateDXGIDeviceManager, MFSTARTUP_LITE, MFShutdown, MFStartup,
 };
 use windows::Win32::System::WinRT::Direct3D11::CreateDirect3D11DeviceFromDXGIDevice;
+use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 use windows_core::Interface;
 
@@ -103,6 +105,9 @@ impl GpuContext {
             let _ = unsafe { MFShutdown() };
             return None;
         }
+
+        // Pre-load the WinRT Graphics Capture activation factory while the user selects a target.
+        let _ = windows_core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
 
         Some(Self { device, context, video_device, video_context, winrt_device, mf_dxgi_manager })
     }
