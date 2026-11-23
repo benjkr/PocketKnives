@@ -1,79 +1,93 @@
 //! Direct2D + DirectWrite + UpdateLayeredWindow UI for SnipSnap Recording:
 //! - Border overlay (`B2` Corner Lock-In: muted red + 14px corner ticks -> 340ms bright `#e81123`)
-//! - Straddling bottom-center pill (`Armed D` -> `S2` 340ms calm dissolve -> `V3 + V1 stop`)
+//! - Straddling bottom-center housing (`H5` monoblock milled titanium housing with `E3` embedded
+//!   brushed-titanium rolling tumbler wheel -> `S2` 340ms calm dissolve -> `H5` 25px recording block)
 //! Both windows set `WDA_EXCLUDEFROMCAPTURE` so nothing SnipSnap draws appears in the video.
 use crate::ipc::Quality;
 use alloc::format;
-use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::ptr::{null, null_mut};
+use libm::{cosf, sinf};
 use pk::wide::to_wide;
 use windows::Win32::Foundation::RECT as D2dRect;
-use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT};
+use windows::Win32::Graphics::Direct2D::Common::{
+    D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
+};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_RENDER_TARGET_PROPERTIES,
+    D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2,
+    D2D1_LAYER_OPTIONS_NONE, D2D1_LAYER_PARAMETERS, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES,
     D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT, D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1DCRenderTarget,
-    ID2D1Factory,
+    ID2D1Factory, ID2D1LinearGradientBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FEATURE, DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, DWRITE_FONT_STRETCH_NORMAL,
-    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
-    DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_RANGE, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory,
-    IDWriteFactory, IDWriteTextFormat,
+    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_WEIGHT_SEMI_BOLD,
+    DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_RANGE,
+    DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Gdi::HDC as WinHdc;
 use windows_core::PCWSTR;
-use windows_numerics::Vector2;
+use windows_numerics::{Matrix3x2, Vector2};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS,
     DeleteDC, DeleteObject, GetMonitorInfoW, HBITMAP, HDC, HGDIOBJ, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, SelectObject,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::SystemInformation::GetTickCount64;
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, GWLP_USERDATA, GetWindowLongPtrW, HWND_TOPMOST, IDC_ARROW, IDC_HAND, LoadCursorW,
-    MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetCursor,
-    SetWindowDisplayAffinity, SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE,
-    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_SETCURSOR, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GWLP_USERDATA, GetWindowLongPtrW, HWND_TOPMOST, IDC_ARROW, IDC_HAND, IDC_SIZENS,
+    LoadCursorW, MA_NOACTIVATE, RegisterClassW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SetCursor, SetWindowDisplayAffinity, SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow,
+    WDA_EXCLUDEFROMCAPTURE, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_SETCURSOR, WNDCLASSW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
-
-const WM_MOUSELEAVE: u32 = 0x02A3;
 
 const BORDER_CLASS: *const u16 = pk::w!("SnipSnapRecBorder");
 const PILL_CLASS: *const u16 = pk::w!("SnipSnapRecPill");
+const WM_MOUSELEAVE: u32 = 0x02A3;
 
-/// Transition duration (`S2` + `B2`), milliseconds.
+/// Transition duration (`S2` + `B2`) and drum roll duration, milliseconds.
 pub const TRANSITION_MS: f32 = 340.0;
+pub const DRUM_ROLL_MS: f32 = 280.0;
 
-// Layout constants in logical DIPs (matching the locked D + V3/V1 design).
-const PILL_H_ARMED: f32 = 26.0;
-const PILL_H_REC: f32 = 25.0;
-const PILL_W_ARMED: f32 = 196.0;
-const PILL_W_REC: f32 = 132.0;
-const PILL_PAD_X: f32 = 12.0;
-const PILL_PAD_TOP: f32 = 12.0;
-const PILL_PAD_BOT: f32 = 10.0;
-const BTN_D: f32 = 20.0;
-const BTN_RIGHT_PAD: f32 = 3.0;
+// Locked `H5` Monoblock Milled Titanium + `E3` wheel geometry in logical DIPs.
+const BLOCK_W_ARMED: f32 = 105.0;
+const BLOCK_H_ARMED: f32 = 30.0;
+const BLOCK_W_REC: f32 = 132.0;
+const BLOCK_H_REC: f32 = 25.0;
+const BLOCK_R: f32 = 9.0;
+const WIN_PAD_X: f32 = 14.0;
+const WIN_PAD_TOP: f32 = 10.0;
+const WIN_PAD_BOT: f32 = 14.0;
+
+// Embedded `E3` milled pocket & cylinder constants.
+const WELL_LEFT: f32 = 5.0;
+const WELL_W: f32 = 54.0;
+const WELL_H: f32 = 24.0;
+const WELL_R: f32 = 5.0;
+const DRUM_R: f32 = 18.0;
+const DRUM_STEP_RAD: f32 = 36.0 * core::f32::consts::PI / 180.0;
+const KNURL_W: f32 = 4.0;
+
+// `H5` seated matte-red enamel shutter / stop circle inside milled dark ring.
+const SHUT_D_ARMED: f32 = 20.0;
+const SHUT_D_REC: f32 = 17.0;
+const SHUT_R_ARMED: f32 = 8.0;
+const SHUT_R_REC: f32 = 6.0;
+
 const BORDER_W_DIP: f32 = 2.0;
 const TICK_DIP: f32 = 14.0;
-
-/// Hit zones on the pill window (in logical DIPs relative to the pill's left edge).
-const ITEM_RANGES: [(f32, f32); 4] = [
-    (6.0, 38.0),    // 480
-    (38.0, 70.0),   // 720
-    (70.0, 108.0),  // 1080
-    (108.0, 158.0), // Native
-];
 
 #[derive(Clone, Copy)]
 pub struct UiState {
     pub target: RECT,
     pub quality: Quality,
+    /// Smoothly interpolated continuous drum index (`0.0` = 480p .. `3.0` = Native).
+    pub drum_pos: f32,
     /// `false` = Armed, `true` = Recording (or transitioning into Recording).
     pub recording: bool,
     /// `0.0` (Armed) -> `1.0` (Recording), linear elapsed ratio over `TRANSITION_MS`.
@@ -85,13 +99,19 @@ pub struct UiState {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PillAction {
-    None,
-    SelectQuality(Quality),
+    StepQuality(i32),
     ToggleRecord,
 }
 
-/// Evaluates CSS `cubic-bezier(0.22, 1.0, 0.36, 1.0)` accurately with 5 Newton steps.
-fn ease_out_expo_like(x: f32) -> f32 {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HoverZone {
+    None,
+    Wheel,
+    Shutter,
+}
+
+/// Evaluates CSS `cubic-bezier(0.22, 1.0, 0.36, 1.0)`.
+pub fn ease_out_expo_like(x: f32) -> f32 {
     let x = x.clamp(0.0, 1.0);
     if x <= 0.0 {
         return 0.0;
@@ -120,6 +140,28 @@ fn color(r: u8, g: u8, b: u8, a: f32) -> D2D1_COLOR_F {
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
+}
+
+fn make_vgrad(rt: &ID2D1DCRenderTarget, y0: f32, y1: f32, stops: &[(f32, D2D1_COLOR_F)]) -> Option<ID2D1LinearGradientBrush> {
+    let mut gstops = [D2D1_GRADIENT_STOP { position: 0.0, color: D2D1_COLOR_F::default() }; 6];
+    let n = stops.len().min(gstops.len());
+    for i in 0..n {
+        gstops[i] = D2D1_GRADIENT_STOP { position: stops[i].0, color: stops[i].1 };
+    }
+    let coll = unsafe { rt.CreateGradientStopCollection(&gstops[..n], D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) }.ok()?;
+    let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: Vector2 { X: 0.0, Y: y0 }, endPoint: Vector2 { X: 0.0, Y: y1 } };
+    unsafe { rt.CreateLinearGradientBrush(&props, None, &coll) }.ok()
+}
+
+fn make_hgrad(rt: &ID2D1DCRenderTarget, x0: f32, x1: f32, stops: &[(f32, D2D1_COLOR_F)]) -> Option<ID2D1LinearGradientBrush> {
+    let mut gstops = [D2D1_GRADIENT_STOP { position: 0.0, color: D2D1_COLOR_F::default() }; 4];
+    let n = stops.len().min(gstops.len());
+    for i in 0..n {
+        gstops[i] = D2D1_GRADIENT_STOP { position: stops[i].0, color: stops[i].1 };
+    }
+    let coll = unsafe { rt.CreateGradientStopCollection(&gstops[..n], D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP) }.ok()?;
+    let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: Vector2 { X: x0, Y: 0.0 }, endPoint: Vector2 { X: x1, Y: 0.0 } };
+    unsafe { rt.CreateLinearGradientBrush(&props, None, &coll) }.ok()
 }
 
 struct LayeredSurface {
@@ -206,7 +248,6 @@ impl Drop for LayeredSurface {
     }
 }
 
-/// Callback slot stored in `GWLP_USERDATA` of the pill window.
 struct PillCallback {
     on_action: fn(*mut c_void, PillAction),
     on_hover: fn(*mut c_void, bool),
@@ -214,8 +255,9 @@ struct PillCallback {
     scale: f32,
     win_w_dip: f32,
     recording: bool,
-    over_interactive: bool,
+    hover_zone: HoverZone,
     tracking_leave: bool,
+    last_wheel_ms: u64,
 }
 
 unsafe extern "system" fn border_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -227,16 +269,37 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
     match msg {
         WM_MOUSEACTIVATE => return MA_NOACTIVATE as LRESULT,
         WM_SETCURSOR => {
-            let hand = !cb_ptr.is_null() && unsafe { (*cb_ptr).over_interactive };
-            unsafe { SetCursor(LoadCursorW(null_mut(), if hand { IDC_HAND } else { IDC_ARROW })) };
+            let zone = if cb_ptr.is_null() { HoverZone::None } else { unsafe { (*cb_ptr).hover_zone } };
+            let cur = match zone {
+                HoverZone::Shutter => IDC_HAND,
+                HoverZone::Wheel => IDC_SIZENS,
+                HoverZone::None => IDC_ARROW,
+            };
+            unsafe { SetCursor(LoadCursorW(null_mut(), cur)) };
             return 1;
         }
         WM_MOUSELEAVE => {
             if !cb_ptr.is_null() {
                 let cb = unsafe { &mut *cb_ptr };
                 cb.tracking_leave = false;
-                cb.over_interactive = false;
+                cb.hover_zone = HoverZone::None;
                 (cb.on_hover)(cb.ctx, false);
+            }
+            return 0;
+        }
+        WM_MOUSEWHEEL => {
+            if !cb_ptr.is_null() {
+                let cb = unsafe { &mut *cb_ptr };
+                if !cb.recording {
+                    let delta = ((wp >> 16) as u16) as i16;
+                    let now = unsafe { GetTickCount64() };
+                    if delta != 0 && now.saturating_sub(cb.last_wheel_ms) >= 110 {
+                        cb.last_wheel_ms = now;
+                        // Scroll down -> next (higher res), scroll up -> previous (lower res).
+                        let dir = if delta < 0 { 1 } else { -1 };
+                        (cb.on_action)(cb.ctx, PillAction::StepQuality(dir));
+                    }
+                }
             }
             return 0;
         }
@@ -252,36 +315,43 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
                 }
                 let x = (lp as u16 as i16 as f32) / cb.scale;
                 let y = ((lp >> 16) as u16 as i16 as f32) / cb.scale;
-                let pill_w = if cb.recording { PILL_W_REC } else { PILL_W_ARMED };
-                let pill_h = if cb.recording { PILL_H_REC } else { PILL_H_ARMED };
-                let pill_left = (cb.win_w_dip - pill_w) * 0.5;
-                let pill_top = PILL_PAD_TOP;
-                let rx = x - pill_left;
-                let ry = y - pill_top;
+                let bw = if cb.recording { BLOCK_W_REC } else { BLOCK_W_ARMED };
+                let bh = if cb.recording { BLOCK_H_REC } else { BLOCK_H_ARMED };
+                let b_left = (cb.win_w_dip - bw) * 0.5;
+                let b_top = WIN_PAD_TOP + (BLOCK_H_ARMED - bh) * 0.5;
+                let rx = x - b_left;
+                let ry = y - b_top;
 
-                let in_y = ry >= -4.0 && ry <= pill_h + 4.0;
-                let btn_cx = pill_w - BTN_RIGHT_PAD - BTN_D * 0.5;
-                let btn_cy = pill_h * 0.5;
-                let dx = rx - btn_cx;
-                let dy = ry - btn_cy;
-                let on_btn = dx * dx + dy * dy <= (BTN_D * 0.6) * (BTN_D * 0.6);
+                let shut_d = if cb.recording { SHUT_D_REC } else { SHUT_D_ARMED };
+                let shut_r = if cb.recording { SHUT_R_REC } else { SHUT_R_ARMED };
+                let bcx = bw - shut_r - shut_d * 0.5;
+                let bcy = bh * 0.5;
+                let dx = rx - bcx;
+                let dy = ry - bcy;
+                let on_shut = dx * dx + dy * dy <= (shut_d * 0.65) * (shut_d * 0.65);
 
-                let mut action = PillAction::None;
-                if on_btn {
-                    action = PillAction::ToggleRecord;
-                } else if !cb.recording && in_y {
-                    for (i, &(l, r)) in ITEM_RANGES.iter().enumerate() {
-                        if rx >= l && rx <= r {
-                            action = PillAction::SelectQuality(Quality::from_index(i));
-                            break;
-                        }
-                    }
-                }
-                cb.over_interactive = action != PillAction::None;
+                let well_top = (bh - WELL_H) * 0.5;
+                let on_wheel = !cb.recording && rx >= WELL_LEFT && rx <= WELL_LEFT + WELL_W && ry >= well_top && ry <= well_top + WELL_H;
+
+                cb.hover_zone = if on_shut {
+                    HoverZone::Shutter
+                } else if on_wheel {
+                    HoverZone::Wheel
+                } else {
+                    HoverZone::None
+                };
+
                 if msg == WM_MOUSEMOVE {
-                    (cb.on_hover)(cb.ctx, on_btn);
-                } else if action != PillAction::None {
-                    (cb.on_action)(cb.ctx, action);
+                    (cb.on_hover)(cb.ctx, on_shut);
+                } else if on_shut {
+                    (cb.on_action)(cb.ctx, PillAction::ToggleRecord);
+                } else if on_wheel {
+                    let frac = (ry - well_top) / WELL_H;
+                    if frac < 0.42 {
+                        (cb.on_action)(cb.ctx, PillAction::StepQuality(-1));
+                    } else if frac > 0.58 {
+                        (cb.on_action)(cb.ctx, PillAction::StepQuality(1));
+                    }
                 }
                 return 0;
             }
@@ -292,12 +362,10 @@ unsafe extern "system" fn pill_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
 }
 
 pub struct OverlayUi {
-    _d2d: ID2D1Factory,
+    d2d: ID2D1Factory,
     rt: ID2D1DCRenderTarget,
     dwrite: IDWriteFactory,
-    fmt_item: IDWriteTextFormat,
-    fmt_item_bold: IDWriteTextFormat,
-    fmt_badge: IDWriteTextFormat,
+    fmt_wheel: IDWriteTextFormat,
     fmt_timer: IDWriteTextFormat,
     fmt_size: IDWriteTextFormat,
     border_hwnd: HWND,
@@ -346,9 +414,7 @@ impl OverlayUi {
             Some(f)
         };
 
-        let fmt_item = make_fmt(11.5, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER)?;
-        let fmt_item_bold = make_fmt(11.5, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_TEXT_ALIGNMENT_CENTER)?;
-        let fmt_badge = make_fmt(8.0, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER)?;
+        let fmt_wheel = make_fmt(10.8, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_TEXT_ALIGNMENT_CENTER)?;
         let fmt_timer = make_fmt(11.5, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_TEXT_ALIGNMENT_LEADING)?;
         let fmt_size = make_fmt(10.0, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_LEADING)?;
 
@@ -413,26 +479,25 @@ impl OverlayUi {
             SetWindowDisplayAffinity(pill_hwnd, WDA_EXCLUDEFROMCAPTURE);
         }
 
-        let pill_win_w_dip = PILL_W_ARMED + PILL_PAD_X * 2.0;
+        let win_w_dip = BLOCK_W_REC.max(BLOCK_W_ARMED) + WIN_PAD_X * 2.0;
         let mut pill_cb = alloc::boxed::Box::new(PillCallback {
             on_action,
             on_hover,
             ctx,
             scale: 1.0,
-            win_w_dip: pill_win_w_dip,
+            win_w_dip,
             recording: false,
-            over_interactive: false,
+            hover_zone: HoverZone::None,
             tracking_leave: false,
+            last_wheel_ms: 0,
         });
         unsafe { SetWindowLongPtrW(pill_hwnd, GWLP_USERDATA, (&mut *pill_cb as *mut PillCallback) as isize) };
 
         Some(Self {
-            _d2d: d2d,
+            d2d,
             rt,
             dwrite,
-            fmt_item,
-            fmt_item_bold,
-            fmt_badge,
+            fmt_wheel,
             fmt_timer,
             fmt_size,
             border_hwnd,
@@ -464,8 +529,6 @@ impl OverlayUi {
             return;
         }
 
-        // On first render, move the hidden pill window onto the target monitor so GetDpiForWindow
-        // returns that monitor's DPI right from frame 0.
         if !self.visible {
             unsafe {
                 SetWindowPos(self.pill_hwnd, null_mut(), r.left, r.top, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER);
@@ -496,9 +559,7 @@ impl OverlayUi {
 
     fn render_border(&mut self, st: &UiState, scale: f32) {
         let r = st.target;
-        let bw_px = (BORDER_W_DIP * scale + 0.5) as i32;
-        let bw_px = bw_px.max(2);
-        // Draw the 2px border cleanly *outside* the target rect (clamped to screen for fullscreen).
+        let bw_px = ((BORDER_W_DIP * scale + 0.5) as i32).max(2);
         let center = POINT { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
         let mon = unsafe { MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST) };
         let mut mi: MONITORINFO = unsafe { core::mem::zeroed() };
@@ -532,29 +593,23 @@ impl OverlayUi {
             self.rt.BeginDraw();
             self.rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
 
-            // Base muted border while armed / transitioning; solid bright red once landed.
             let base_col = if eased >= 0.999 { color(232, 17, 35, 1.0) } else { color(232, 17, 35, 0.30) };
             if let Ok(br) = self.rt.CreateSolidColorBrush(&base_col, None) {
                 let rect = D2D_RECT_F { left: half, top: half, right: wf - half, bottom: hf - half };
                 self.rt.DrawRectangle(&rect, &br, bw, None);
             }
 
-            // B2 Corner Lock-In ticks / extending bright strokes.
             if eased < 0.999 {
                 let tick_col = if st.recording { color(232, 17, 35, 1.0) } else { color(232, 17, 35, 0.55) };
                 if let Ok(br) = self.rt.CreateSolidColorBrush(&tick_col, None) {
                     let hx = lerp(tick, wf * 0.5, eased);
                     let vy = lerp(tick, hf * 0.5, eased);
-                    // Top-left
                     self.rt.DrawLine(Vector2 { X: 0.0, Y: half }, Vector2 { X: hx, Y: half }, &br, bw, None);
                     self.rt.DrawLine(Vector2 { X: half, Y: 0.0 }, Vector2 { X: half, Y: vy }, &br, bw, None);
-                    // Top-right
                     self.rt.DrawLine(Vector2 { X: wf, Y: half }, Vector2 { X: wf - hx, Y: half }, &br, bw, None);
                     self.rt.DrawLine(Vector2 { X: wf - half, Y: 0.0 }, Vector2 { X: wf - half, Y: vy }, &br, bw, None);
-                    // Bottom-right
                     self.rt.DrawLine(Vector2 { X: wf, Y: hf - half }, Vector2 { X: wf - hx, Y: hf - half }, &br, bw, None);
                     self.rt.DrawLine(Vector2 { X: wf - half, Y: hf }, Vector2 { X: wf - half, Y: hf - vy }, &br, bw, None);
-                    // Bottom-left
                     self.rt.DrawLine(Vector2 { X: 0.0, Y: hf - half }, Vector2 { X: hx, Y: hf - half }, &br, bw, None);
                     self.rt.DrawLine(Vector2 { X: half, Y: hf }, Vector2 { X: half, Y: hf - vy }, &br, bw, None);
                 }
@@ -567,8 +622,8 @@ impl OverlayUi {
     }
 
     fn render_pill(&mut self, st: &UiState, dpi: u32, scale: f32) {
-        let win_w_dip = PILL_W_ARMED + PILL_PAD_X * 2.0;
-        let win_h_dip = PILL_H_ARMED + PILL_PAD_TOP + PILL_PAD_BOT;
+        let win_w_dip = BLOCK_W_REC.max(BLOCK_W_ARMED) + WIN_PAD_X * 2.0;
+        let win_h_dip = BLOCK_H_ARMED + WIN_PAD_TOP + WIN_PAD_BOT;
         let win_w = (win_w_dip * scale + 0.5) as i32;
         let win_h = (win_h_dip * scale + 0.5) as i32;
 
@@ -583,134 +638,178 @@ impl OverlayUi {
         let t = if st.recording { st.trans_t.clamp(0.0, 1.0) } else { 0.0 };
         let e = ease_out_expo_like(t);
 
-        // Smooth pill geometry (`S2` calm dissolve: 340ms width morph, soft cross-fade).
-        let pill_w = lerp(PILL_W_ARMED, PILL_W_REC, e);
-        let pill_h = lerp(PILL_H_ARMED, PILL_H_REC, e);
-        let px = (win_w_dip - pill_w) * 0.5;
-        let py = PILL_PAD_TOP + (PILL_H_ARMED - pill_h) * 0.5;
-        let pr = pill_h * 0.5;
+        // Smooth H1 CNC aluminium block morph: 104×30 -> 132×25, keeping 7px machined block corners.
+        let bw = lerp(BLOCK_W_ARMED, BLOCK_W_REC, e);
+        let bh = lerp(BLOCK_H_ARMED, BLOCK_H_REC, e);
+        let px = (win_w_dip - bw) * 0.5;
+        let py = WIN_PAD_TOP + (BLOCK_H_ARMED - bh) * 0.5;
 
-        // S2 opacity curves: armed fades out over 0..160ms, recording fades in over 110..340ms.
+        // S2 calm dissolve: wheel fades out over 0..160ms, recording readout fades in over 110..340ms.
         let armed_alpha = if !st.recording { 1.0 } else { (1.0 - (t * TRANSITION_MS) / 160.0).clamp(0.0, 1.0) };
         let rec_alpha = if !st.recording { 0.0 } else { (((t * TRANSITION_MS) - 110.0) / 230.0).clamp(0.0, 1.0) };
 
         unsafe {
-            // Set render target DPI so all DIP coordinates AND DirectWrite fonts scale identically.
             self.rt.SetDpi(dpi as f32, dpi as f32);
             self.rt.BeginDraw();
             self.rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
 
-            // Soft layered drop shadow (3 subtle concentric passes, no harsh glow).
-            for &(dy, spread, a) in &[(3.0f32, 2.5f32, 0.14f32), (2.0, 1.2, 0.18), (1.0, 0.4, 0.16)] {
+            // Soft hardware drop shadow under the CNC aluminium block.
+            for &(dy, spread, a) in &[(4.0f32, 3.0f32, 0.14f32), (2.5, 1.5, 0.18), (1.0, 0.5, 0.18)] {
                 if let Ok(sh) = self.rt.CreateSolidColorBrush(&color(0, 0, 0, a), None) {
                     let rr = D2D1_ROUNDED_RECT {
                         rect: D2D_RECT_F {
                             left: px - spread,
                             top: py + dy - spread,
-                            right: px + pill_w + spread,
-                            bottom: py + pill_h + dy + spread,
+                            right: px + bw + spread,
+                            bottom: py + bh + dy + spread,
                         },
-                        radiusX: pr + spread,
-                        radiusY: pr + spread,
+                        radiusX: BLOCK_R + spread * 0.5,
+                        radiusY: BLOCK_R + spread * 0.5,
                     };
                     self.rt.FillRoundedRectangle(&rr, &sh);
                 }
             }
 
-            // Pill body (#1e1e1e) + 1px hairline border rgba(255,255,255,0.09).
+            // H5 Monoblock milled titanium body: #353b45 -> #23272f (55%) -> #1a1d23, 9px radius.
             let body_rr = D2D1_ROUNDED_RECT {
-                rect: D2D_RECT_F { left: px, top: py, right: px + pill_w, bottom: py + pill_h },
-                radiusX: pr,
-                radiusY: pr,
+                rect: D2D_RECT_F { left: px, top: py, right: px + bw, bottom: py + bh },
+                radiusX: BLOCK_R,
+                radiusY: BLOCK_R,
             };
-            if let Ok(bg) = self.rt.CreateSolidColorBrush(&color(30, 30, 30, 0.96), None) {
+            if let Some(bg) = make_vgrad(
+                &self.rt,
+                py,
+                py + bh,
+                &[(0.0, color(53, 59, 69, 0.99)), (0.55, color(35, 39, 47, 0.99)), (1.0, color(26, 29, 35, 0.99))],
+            ) {
                 self.rt.FillRoundedRectangle(&body_rr, &bg);
             }
-            if let Ok(bd) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.09), None) {
+            // Subtle vertical brushed-titanium grain lines clipped inside the monoblock.
+            if let Ok(grain) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.028), None) {
+                let mut gx = px + 6.0;
+                while gx < px + bw - 6.0 {
+                    self.rt.DrawLine(Vector2 { X: gx, Y: py + 1.5 }, Vector2 { X: gx, Y: py + bh - 1.5 }, &grain, 0.8, None);
+                    gx += 3.0;
+                }
+            }
+            // Top milled catchlight (rgba(255,255,255,0.17)) & bottom bevel (rgba(0,0,0,0.60)).
+            if let Ok(top_hi) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.17), None) {
+                self.rt.DrawLine(
+                    Vector2 { X: px + BLOCK_R * 0.7, Y: py + 1.0 },
+                    Vector2 { X: px + bw - BLOCK_R * 0.7, Y: py + 1.0 },
+                    &top_hi,
+                    1.0,
+                    None,
+                );
+            }
+            if let Ok(bot_sh) = self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.60), None) {
+                self.rt.DrawLine(
+                    Vector2 { X: px + BLOCK_R * 0.7, Y: py + bh - 1.0 },
+                    Vector2 { X: px + bw - BLOCK_R * 0.7, Y: py + bh - 1.0 },
+                    &bot_sh,
+                    1.0,
+                    None,
+                );
+            }
+            if let Ok(bd) = self.rt.CreateSolidColorBrush(&color(11, 13, 16, 1.0), None) {
                 self.rt.DrawRoundedRectangle(&body_rr, &bd, 1.0, None);
             }
 
-            // --- Armed layer (`D`: 480 / 720 / 1080 / Native + perched 1 2 3 4) ---
+            // --- Armed layer: E3 brushed-titanium rolling drum inside H5 deep pocket + milled notch ---
             if armed_alpha > 0.01 {
-                let armed_left = (win_w_dip - PILL_W_ARMED) * 0.5;
-                let badge_dy = lerp(0.0, 3.0, 1.0 - armed_alpha);
-                for (i, q) in Quality::ALL.iter().enumerate() {
-                    let (l, r) = ITEM_RANGES[i];
-                    let active = *q == st.quality;
-                    let col = if active { color(255, 255, 255, armed_alpha) } else { color(255, 255, 255, 0.58 * armed_alpha) };
-                    if let Ok(br) = self.rt.CreateSolidColorBrush(&col, None) {
-                        let wtxt = to_wide(q.label());
-                        let fmt = if active { &self.fmt_item_bold } else { &self.fmt_item };
-                        self.draw_text(
-                            fmt,
-                            &wtxt,
-                            D2D_RECT_F { left: armed_left + l, top: py, right: armed_left + r, bottom: py + pill_h },
-                            &br,
-                            false,
-                        );
-                    }
-                    // Perched micro number `1`..`4` tucked slightly into top rim.
-                    let cx = armed_left + (l + r) * 0.5;
-                    let by = py - 5.5 + badge_dy;
-                    let bg_rr = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F { left: cx - 5.0, top: by, right: cx + 5.0, bottom: by + 9.0 },
-                        radiusX: 3.0,
-                        radiusY: 3.0,
+                let well_h = lerp(WELL_H, 12.0, e);
+                let wx = px + WELL_LEFT;
+                let wy = py + (bh - well_h) * 0.5;
+                self.draw_titanium_wheel(wx, wy, WELL_W, well_h, st.drum_pos, armed_alpha);
+
+                // H5 milled dark notch pointer (6x3, #050607) with subtle bright lower lip right off the pocket.
+                let nx = wx + WELL_W + 2.0;
+                let ny = py + bh * 0.5 - 1.5;
+                if let Ok(sh) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.24 * armed_alpha), None) {
+                    self.rt.DrawLine(Vector2 { X: nx, Y: ny + 3.5 }, Vector2 { X: nx + 5.5, Y: ny + 3.5 }, &sh, 1.0, None);
+                }
+                if let Ok(mk) = self.rt.CreateSolidColorBrush(&color(5, 6, 7, armed_alpha), None) {
+                    let nrr = D2D1_ROUNDED_RECT {
+                        rect: D2D_RECT_F { left: nx, top: ny, right: nx + 6.0, bottom: ny + 3.0 },
+                        radiusX: 1.0,
+                        radiusY: 1.0,
                     };
-                    if let Ok(bg) = self.rt.CreateSolidColorBrush(&color(30, 30, 30, armed_alpha), None) {
-                        self.rt.FillRoundedRectangle(&bg_rr, &bg);
-                    }
-                    if let Ok(br) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.50 * armed_alpha), None) {
-                        let num = [(b'1' + i as u8) as u16, 0];
-                        let txt_rect = D2D_RECT_F { left: cx - 7.0, top: by, right: cx + 7.0, bottom: by + 9.0 };
-                        self.draw_text(&self.fmt_badge, &num, txt_rect, &br, false);
-                    }
+                    self.rt.FillRoundedRectangle(&nrr, &mk);
                 }
             }
 
-            // --- Recording layer (`V3`: 5.5px red dot + tabular timer + muted smaller file size) ---
+            // --- Recording layer: pulsing red dot + tabular timer + quieter muted live file size ---
             if rec_alpha > 0.01 {
-                let rec_left = px + 8.0;
-                let cy = py + pill_h * 0.5;
-                if let Ok(dot_br) = self.rt.CreateSolidColorBrush(&color(232, 17, 35, rec_alpha), None) {
+                let rec_left = px + 9.0;
+                let cy = py + bh * 0.5;
+                let pulse = 0.68 + 0.32 * cosf((st.elapsed_ms as f32) * (core::f32::consts::TAU / 1400.0));
+                if let Ok(dot_br) = self.rt.CreateSolidColorBrush(&color(232, 17, 35, rec_alpha * pulse), None) {
                     let dot = D2D1_ELLIPSE { point: Vector2 { X: rec_left + 2.75, Y: cy }, radiusX: 2.75, radiusY: 2.75 };
                     self.rt.FillEllipse(&dot, &dot_br);
                 }
 
                 let timer_str = format_timer(st.elapsed_ms);
                 let size_str = format_size(st.bytes);
-                if let Ok(tbr) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, rec_alpha), None) {
+                if let Ok(tbr) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.90 * rec_alpha), None) {
                     let wt = to_wide(&timer_str);
                     self.draw_text(
                         &self.fmt_timer,
                         &wt,
-                        D2D_RECT_F { left: rec_left + 11.5, top: py, right: rec_left + 64.0, bottom: py + pill_h },
+                        D2D_RECT_F { left: rec_left + 11.5, top: py, right: rec_left + 64.0, bottom: py + bh },
                         &tbr,
                         true,
                     );
                 }
-                if let Ok(sbr) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.34 * rec_alpha), None) {
+                if let Ok(sbr) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.36 * rec_alpha), None) {
                     let ws = to_wide(&size_str);
                     self.draw_text(
                         &self.fmt_size,
                         &ws,
-                        D2D_RECT_F { left: rec_left + 58.0, top: py + 0.5, right: px + pill_w - BTN_D - 5.0, bottom: py + pill_h + 0.5 },
+                        D2D_RECT_F { left: rec_left + 58.0, top: py + 0.5, right: px + bw - 26.0, bottom: py + bh + 0.5 },
                         &sbr,
                         true,
                     );
                 }
             }
 
-            // --- Shared solid red shutter / stop circle (`V1` stop, right side of pill) ---
-            let bcx = px + pill_w - BTN_RIGHT_PAD - BTN_D * 0.5;
-            let bcy = py + pill_h * 0.5;
-            let btn_col = if st.btn_hover { color(209, 52, 56, 1.0) } else { color(196, 43, 28, 1.0) };
-            if let Ok(bbr) = self.rt.CreateSolidColorBrush(&btn_col, None) {
-                let circ = D2D1_ELLIPSE { point: Vector2 { X: bcx, Y: bcy }, radiusX: BTN_D * 0.5, radiusY: BTN_D * 0.5 };
-                self.rt.FillEllipse(&circ, &bbr);
+            // --- H5 seated matte-red enamel shutter / stop circle inside dark milled ring ---
+            let shut_d = lerp(SHUT_D_ARMED, SHUT_D_REC, e);
+            let shut_pad = lerp(SHUT_R_ARMED, SHUT_R_REC, e);
+            let collar = lerp(2.5, 2.0, e);
+            let bcx = px + bw - shut_pad - shut_d * 0.5;
+            let bcy = py + bh * 0.5;
+
+            // Subtle lower rim highlight around milled socket (#ffffff 11%).
+            if let Ok(rim) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.11), None) {
+                let c = D2D1_ELLIPSE {
+                    point: Vector2 { X: bcx, Y: bcy + 1.0 },
+                    radiusX: shut_d * 0.5 + collar + 0.5,
+                    radiusY: shut_d * 0.5 + collar + 0.5,
+                };
+                self.rt.FillEllipse(&c, &rim);
             }
-            // Inner white glyph morphs smoothly from 7px circle (r=3.5) -> 6.5px rounded square (r=1.5).
-            let g_sz = lerp(7.0, 6.5, e);
+            // Dark milled ring (#0b0d10).
+            if let Ok(col_br) = self.rt.CreateSolidColorBrush(&color(11, 13, 16, 1.0), None) {
+                let c = D2D1_ELLIPSE { point: Vector2 { X: bcx, Y: bcy }, radiusX: shut_d * 0.5 + collar, radiusY: shut_d * 0.5 + collar };
+                self.rt.FillEllipse(&c, &col_br);
+            }
+            // Seated matte-red enamel (#b3261a; recessed top bevel shadow instead of bright outer dome).
+            let (r_top, r_bot) = if st.btn_hover {
+                (color(192, 42, 30, 1.0), color(214, 54, 40, 1.0))
+            } else {
+                (color(150, 30, 20, 1.0), color(184, 40, 28, 1.0))
+            };
+            if let Some(pbr) = make_vgrad(&self.rt, bcy - shut_d * 0.5, bcy + shut_d * 0.5, &[(0.0, r_top), (1.0, r_bot)]) {
+                let c = D2D1_ELLIPSE { point: Vector2 { X: bcx, Y: bcy }, radiusX: shut_d * 0.5, radiusY: shut_d * 0.5 };
+                self.rt.FillEllipse(&c, &pbr);
+            }
+            // Inner seated enamel rim shadow.
+            if let Ok(in_sh) = self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.42), None) {
+                let c = D2D1_ELLIPSE { point: Vector2 { X: bcx, Y: bcy }, radiusX: shut_d * 0.5 - 0.5, radiusY: shut_d * 0.5 - 0.5 };
+                self.rt.DrawEllipse(&c, &in_sh, 1.0, None);
+            }
+            // White glyph morphing smoothly from 7px dot -> 6px rounded square.
+            let g_sz = lerp(7.0, 6.0, e);
             let g_rad = lerp(3.5, 1.5, e);
             if let Ok(wbr) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 1.0), None) {
                 let grr = D2D1_ROUNDED_RECT {
@@ -720,29 +819,11 @@ impl OverlayUi {
                 };
                 self.rt.FillRoundedRectangle(&grr, &wbr);
             }
-            // Perched `↵` badge above shutter button while Armed.
-            if armed_alpha > 0.01 {
-                let ky = py - 7.5 + lerp(0.0, 3.0, 1.0 - armed_alpha);
-                let krr = D2D1_ROUNDED_RECT {
-                    rect: D2D_RECT_F { left: bcx - 5.0, top: ky, right: bcx + 5.0, bottom: ky + 9.0 },
-                    radiusX: 3.0,
-                    radiusY: 3.0,
-                };
-                if let Ok(bg) = self.rt.CreateSolidColorBrush(&color(30, 30, 30, armed_alpha), None) {
-                    self.rt.FillRoundedRectangle(&krr, &bg);
-                }
-                if let Ok(br) = self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.52 * armed_alpha), None) {
-                    let ent = to_wide("↵");
-                    let txt_rect = D2D_RECT_F { left: bcx - 7.0, top: ky, right: bcx + 7.0, bottom: ky + 9.0 };
-                    self.draw_text(&self.fmt_badge, &ent, txt_rect, &br, false);
-                }
-            }
 
             let _ = self.rt.EndDraw(None, None);
         }
 
-        // Position straddling the bottom-center of the 2px red border; if the target touches
-        // the monitor work-area bottom (e.g. full screen or maximized), tuck cleanly inside.
+        // Straddle bottom-center of the 2px border; clamp inside monitor work area when near edges.
         let r = st.target;
         let center = POINT { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
         let mon = unsafe { MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST) };
@@ -750,8 +831,8 @@ impl OverlayUi {
         mi.cbSize = size_of::<MONITORINFO>() as u32;
         let work = if unsafe { GetMonitorInfoW(mon, &mut mi) } != 0 { mi.rcWork } else { r };
 
-        let pill_center_y_in_win = ((PILL_PAD_TOP + PILL_H_ARMED * 0.5) * scale + 0.5) as i32;
-        let ideal_y = r.bottom - pill_center_y_in_win;
+        let center_y_in_win = ((WIN_PAD_TOP + BLOCK_H_ARMED * 0.5) * scale + 0.5) as i32;
+        let ideal_y = r.bottom - center_y_in_win;
         let max_y = work.bottom - win_h - ((4.0 * scale) as i32);
         let min_y = work.top;
         let y = ideal_y.clamp(min_y, max_y.max(min_y));
@@ -761,6 +842,180 @@ impl OverlayUi {
         let x = ideal_x.clamp(work.left, max_x.max(work.left));
 
         self.pill_surf.present(self.pill_hwnd, x, y);
+    }
+
+    /// Renders `E3`'s satin-titanium rolling cylinder inside the milled pocket `(wx, wy, ww, wh)`.
+    unsafe fn draw_titanium_wheel(&self, wx: f32, wy: f32, ww: f32, wh: f32, drum_pos: f32, alpha: f32) {
+        let well_rect = D2D_RECT_F { left: wx, top: wy, right: wx + ww, bottom: wy + wh };
+        let well_rr = D2D1_ROUNDED_RECT { rect: well_rect, radiusX: WELL_R, radiusY: WELL_R };
+
+        // Outer pocket lip: dark top edge, subtle bright catchlight along bottom rim.
+        if let Ok(lip_hi) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.11 * alpha), None) } {
+            unsafe {
+                self.rt.DrawLine(
+                    Vector2 { X: wx + 2.0, Y: wy + wh + 0.8 },
+                    Vector2 { X: wx + ww - 2.0, Y: wy + wh + 0.8 },
+                    &lip_hi,
+                    1.0,
+                    None,
+                );
+            }
+        }
+        if let Ok(lip_lo) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.75 * alpha), None) } {
+            unsafe {
+                self.rt.DrawLine(Vector2 { X: wx + 2.0, Y: wy - 0.8 }, Vector2 { X: wx + ww - 2.0, Y: wy - 0.8 }, &lip_lo, 1.0, None);
+            }
+        }
+
+        // Clip all drum contents cleanly to the rounded milled pocket (`r = 4`).
+        let Ok(clip_geo) = (unsafe { self.d2d.CreateRoundedRectangleGeometry(&well_rr) }) else {
+            return;
+        };
+        let Ok(layer) = (unsafe { self.rt.CreateLayer(None) }) else {
+            return;
+        };
+        let layer_params = D2D1_LAYER_PARAMETERS {
+            contentBounds: well_rect,
+            geometricMask: core::mem::ManuallyDrop::new(Some(clip_geo.into())),
+            maskAntialiasMode: windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskTransform: Matrix3x2::identity(),
+            opacity: alpha,
+            opacityBrush: core::mem::ManuallyDrop::new(None),
+            layerOptions: D2D1_LAYER_OPTIONS_NONE,
+        };
+        unsafe { self.rt.PushLayer(&layer_params, &layer) };
+
+        // H5 brighter brushed-titanium drum (#1b1f25 -> #434a56 -> #5e6776 -> #373d48 -> #15181d).
+        if let Some(metal) = make_vgrad(
+            &self.rt,
+            wy,
+            wy + wh,
+            &[
+                (0.0, color(27, 31, 37, 1.0)),
+                (0.24, color(67, 74, 86, 1.0)),
+                (0.50, color(94, 103, 118, 1.0)),
+                (0.76, color(55, 61, 72, 1.0)),
+                (1.0, color(21, 24, 29, 1.0)),
+            ],
+        ) {
+            unsafe { self.rt.FillRectangle(&well_rect, &metal) };
+        }
+
+        // Turning cylindrical faces (-2..=5: 0..=3 carry labels, bare machined metal past both ends).
+        let mid_y = wy + wh * 0.5;
+        let face_h = 11.7f32;
+        for i in -2i32..=5i32 {
+            let theta = (i as f32 - drum_pos) * DRUM_STEP_RAD;
+            if theta.abs() >= 1.45 {
+                continue;
+            }
+            let cos_t = cosf(theta).max(0.05);
+            let cy = mid_y + DRUM_R * sinf(theta);
+            let fh_proj = face_h * cos_t;
+
+            // Left-edge machined grip ticks scrolling with the cylinder.
+            for k in 0..3 {
+                let local_y = (k as f32 - 1.0) * 3.8 * cos_t;
+                let gy = cy + local_y;
+                if let Ok(dk) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.70 * cos_t), None) } {
+                    unsafe {
+                        self.rt.DrawLine(Vector2 { X: wx, Y: gy }, Vector2 { X: wx + KNURL_W, Y: gy }, &dk, 1.0, None);
+                    }
+                }
+                if let Ok(lt) = unsafe { self.rt.CreateSolidColorBrush(&color(255, 255, 255, 0.14 * cos_t), None) } {
+                    unsafe {
+                        self.rt.DrawLine(
+                            Vector2 { X: wx, Y: gy + 1.0 * cos_t },
+                            Vector2 { X: wx + KNURL_W, Y: gy + 1.0 * cos_t },
+                            &lt,
+                            0.8,
+                            None,
+                        );
+                    }
+                }
+            }
+
+            // Horizontal face divider groove between stops.
+            let div_y = cy + fh_proj * 0.5;
+            if let Ok(grv) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.30 * cos_t), None) } {
+                unsafe { self.rt.DrawLine(Vector2 { X: wx, Y: div_y }, Vector2 { X: wx + ww, Y: div_y }, &grv, 0.9, None) };
+            }
+
+            // Preset text with real cylindrical vertical foreshortening via Direct2D transform.
+            if (0..=3).contains(&i) {
+                let q = Quality::from_index(i as usize);
+                let dist = (i as f32 - drum_pos).abs().min(1.0);
+                let txt_col = if dist < 0.35 {
+                    let k = dist / 0.35;
+                    color(lerp(255.0, 206.0, k) as u8, lerp(255.0, 214.0, k) as u8, lerp(255.0, 226.0, k) as u8, lerp(1.0, 0.62, k))
+                } else {
+                    color(206, 214, 226, 0.50 * cos_t)
+                };
+                if let Ok(tbr) = unsafe { self.rt.CreateSolidColorBrush(&txt_col, None) } {
+                    let wtxt = to_wide(q.label());
+                    // Scale vertically around (center_x, cy) for cylindrical tilt.
+                    let cx = wx + KNURL_W + (ww - KNURL_W) * 0.5;
+                    let m = Matrix3x2::translation(-cx, -cy) * Matrix3x2::scale(1.0, cos_t) * Matrix3x2::translation(cx, cy);
+                    unsafe {
+                        self.rt.SetTransform(&m);
+                        self.draw_text(
+                            &self.fmt_wheel,
+                            &wtxt,
+                            D2D_RECT_F { left: wx + KNURL_W, top: cy - face_h * 0.65, right: wx + ww, bottom: cy + face_h * 0.65 },
+                            &tbr,
+                            true,
+                        );
+                        self.rt.SetTransform(&Matrix3x2::identity());
+                    }
+                }
+            }
+        }
+
+        // Specular center sheen band over the turning metal (H5: 0.09).
+        if let Some(sheen) = make_vgrad(
+            &self.rt,
+            wy,
+            wy + wh,
+            &[(0.38, color(255, 255, 255, 0.0)), (0.50, color(255, 255, 255, 0.09)), (0.62, color(255, 255, 255, 0.0))],
+        ) {
+            unsafe { self.rt.FillRectangle(&well_rect, &sheen) };
+        }
+
+        // Deep inset top & bottom cylindrical shadow gradients where the drum enters the housing.
+        if let Some(vsh) = make_vgrad(
+            &self.rt,
+            wy,
+            wy + wh,
+            &[
+                (0.0, color(0, 0, 0, 0.88)),
+                (0.28, color(0, 0, 0, 0.14)),
+                (0.50, color(0, 0, 0, 0.0)),
+                (0.72, color(0, 0, 0, 0.14)),
+                (1.0, color(0, 0, 0, 0.88)),
+            ],
+        ) {
+            unsafe { self.rt.FillRectangle(&well_rect, &vsh) };
+        }
+        // Subtle left & right pocket wall shadows.
+        if let Some(hsh) = make_hgrad(
+            &self.rt,
+            wx,
+            wx + ww,
+            &[(0.0, color(0, 0, 0, 0.68)), (0.10, color(0, 0, 0, 0.0)), (0.90, color(0, 0, 0, 0.0)), (1.0, color(0, 0, 0, 0.68))],
+        ) {
+            unsafe { self.rt.FillRectangle(&well_rect, &hsh) };
+        }
+
+        unsafe {
+            self.rt.PopLayer();
+            let _ = core::mem::ManuallyDrop::into_inner(layer_params.geometricMask);
+            let _ = core::mem::ManuallyDrop::into_inner(layer_params.opacityBrush);
+        }
+
+        // Crisp 1px inner pocket rim.
+        if let Ok(rim) = unsafe { self.rt.CreateSolidColorBrush(&color(0, 0, 0, 0.65 * alpha), None) } {
+            unsafe { self.rt.DrawRoundedRectangle(&well_rr, &rim, 1.0, None) };
+        }
     }
 
     unsafe fn draw_text(
@@ -823,7 +1078,3 @@ pub fn format_size(bytes: u64) -> alloc::string::String {
         format!("{}.{} MB", tenths_mb / 10, tenths_mb % 10)
     }
 }
-
-/// Keeps `Vec` imported without warning if unused later.
-#[allow(dead_code)]
-fn _unused(_: Vec<u8>) {}

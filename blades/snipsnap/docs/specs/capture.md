@@ -75,13 +75,15 @@ are the constants at the top of `src/main.rs`. Keep it current in the same chang
   beside itself as soon as the hotkey fires. While the user drags a rectangle or picks a window on
   SnipSnap's frozen overlay (drawn with a `#e81123` red border), the helper pre-warms D3D11, WinRT
   Direct3D and Media Foundation on a worker thread, then receives the target via `WM_COPYDATA`.
-- **Armed stage (`D` + `B2`)**: the target stays framed in a muted red 2px border with 14px corner
-  ticks, straddled at bottom-center by a compact notch (`480`, `720` default, `1080`, `Native` with
-  perched `1`–`4` hints and a red shutter circle with `↵`). Keys `1`–`4` or clicking pick the
-  downscale-only resolution cap; `Enter`/`R` or clicking the shutter starts recording; `Esc` cancels.
-- **Recording (`S2` + `B2` -> `V3 + V1 stop`)**: over 340 ms the four corners lock into a bright
-  `#e81123` border while the notch smoothly narrows and dissolves into a 25px pill (red dot, tabular
-  timer, muted live file size, solid red circle stop button). Both overlay windows set
+- **Armed stage (`H5` + `E3` + `B2`)**: the target stays framed in a muted red 2px border with 14px
+  corner ticks, straddled at bottom-center by a 30px monoblock milled titanium housing with an
+  embedded brushed-titanium rolling tumbler wheel (`480p`, `720p` default, `1080p`, `Native`), a
+  milled notch pointer and a seated matte-red enamel shutter circle. Scroll the wheel, click its
+  upper/lower half, or press `↑`/`↓`/`1`–`4` to roll to a downscale-only preset; `Enter`/`R` or
+  clicking the shutter starts recording; `Esc` cancels.
+- **Recording (`S2` + `B2`)**: over 340 ms the four corners lock into a bright `#e81123` border
+  while the housing settles into a 25px monoblock titanium recording block (pulsing red dot,
+  tabular timer, muted live file size, seated 17px red stop circle). Both overlay windows set
   `WDA_EXCLUDEFROMCAPTURE` and follow window moves in Window mode.
 - **Capture, encode & cleanup**: Windows.Graphics.Capture (`HWND` or `HMONITOR`) -> D3D11 Video
   Processor crop/aspect-preserving scale/NV12 -> Media Foundation hardware H.264 `.mp4` in

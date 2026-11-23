@@ -57,8 +57,6 @@ pub enum Quality {
 }
 
 impl Quality {
-    pub const ALL: [Quality; 4] = [Quality::Q480, Quality::Q720, Quality::Q1080, Quality::Native];
-
     pub fn from_index(i: usize) -> Self {
         match i {
             0 => Quality::Q480,
@@ -70,11 +68,15 @@ impl Quality {
 
     pub fn label(self) -> &'static str {
         match self {
-            Quality::Q480 => "480",
-            Quality::Q720 => "720",
-            Quality::Q1080 => "1080",
+            Quality::Q480 => "480p",
+            Quality::Q720 => "720p",
+            Quality::Q1080 => "1080p",
             Quality::Native => "Native",
         }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
     }
 
     /// Maximum output height in pixels (`0` = no downscale).

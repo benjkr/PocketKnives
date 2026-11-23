@@ -31,7 +31,7 @@ use core::ptr::{null, null_mut};
 use gpu::GpuContext;
 use ipc::{COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_REC_ENDED, WM_APP_STOP, WM_APP_WARM_DONE};
 use pk::sync::Mutex;
-use ui::{OverlayUi, PillAction, TRANSITION_MS, UiState};
+use ui::{DRUM_ROLL_MS, OverlayUi, PillAction, TRANSITION_MS, UiState, ease_out_expo_like};
 use windows::Win32::System::WinRT::{RO_INIT_SINGLETHREADED, RoInitialize};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
@@ -40,7 +40,9 @@ use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::SystemInformation::GetTickCount64;
 use windows_sys::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext};
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_ESCAPE, VK_RETURN};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_DOWN, VK_ESCAPE, VK_RETURN, VK_UP,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
     GetWindowRect, HWND_MESSAGE, IsIconic, IsWindow, KillTimer, MSG, PostMessageW, PostQuitMessage, RegisterClassW, SetProcessDPIAware,
@@ -57,9 +59,11 @@ const HK_Q1: i32 = 10;
 const HK_Q2: i32 = 11;
 const HK_Q3: i32 = 12;
 const HK_Q4: i32 = 13;
-const HK_ENTER: i32 = 14;
-const HK_R: i32 = 15;
-const HK_ESC: i32 = 16;
+const HK_UP: i32 = 14;
+const HK_DOWN: i32 = 15;
+const HK_ENTER: i32 = 16;
+const HK_R: i32 = 17;
+const HK_ESC: i32 = 18;
 
 static WARM_SLOT: Mutex<Option<Option<GpuContext>>> = Mutex::new(None);
 
@@ -82,6 +86,10 @@ struct App {
     ui_state: UiState,
     armed_keys_on: bool,
     fast_timer: bool,
+    drum_from: f32,
+    drum_to: f32,
+    drum_t0: u64,
+    drum_rolling: bool,
     trans_t0: u64,
     rec_t0: u64,
     session: Option<CaptureSession>,
@@ -98,11 +106,35 @@ impl App {
             RegisterHotKey(self.host, HK_Q2, MOD_NOREPEAT, b'2' as u32);
             RegisterHotKey(self.host, HK_Q3, MOD_NOREPEAT, b'3' as u32);
             RegisterHotKey(self.host, HK_Q4, MOD_NOREPEAT, b'4' as u32);
+            RegisterHotKey(self.host, HK_UP, MOD_NOREPEAT, VK_UP as u32);
+            RegisterHotKey(self.host, HK_DOWN, MOD_NOREPEAT, VK_DOWN as u32);
             RegisterHotKey(self.host, HK_ENTER, MOD_NOREPEAT, VK_RETURN as u32);
             RegisterHotKey(self.host, HK_R, MOD_NOREPEAT, b'R' as u32);
             RegisterHotKey(self.host, HK_ESC, MOD_NOREPEAT, VK_ESCAPE as u32);
         }
         self.armed_keys_on = true;
+    }
+
+    fn set_quality(&mut self, q: Quality) {
+        if self.phase != Phase::Armed || self.ui_state.quality == q {
+            return;
+        }
+        self.ui_state.quality = q;
+        self.drum_from = self.ui_state.drum_pos;
+        self.drum_to = q.index() as f32;
+        self.drum_t0 = unsafe { GetTickCount64() };
+        self.drum_rolling = true;
+        self.fast_timer = true;
+        unsafe { SetTimer(self.host, TIMER_UI_TICK, 16, None) };
+    }
+
+    fn step_quality(&mut self, delta: i32) {
+        if self.phase != Phase::Armed {
+            return;
+        }
+        let cur = self.ui_state.quality.index() as i32;
+        let next = (cur + delta).clamp(0, 3) as usize;
+        self.set_quality(Quality::from_index(next));
     }
 
     fn unregister_armed_keys(&mut self) {
@@ -122,12 +154,16 @@ impl App {
         self.ui_state = UiState {
             target: target.rect,
             quality: Quality::Q720,
+            drum_pos: Quality::Q720.index() as f32,
             recording: false,
             trans_t: 0.0,
             elapsed_ms: 0,
             bytes: 0,
             btn_hover: false,
         };
+        self.drum_from = self.ui_state.drum_pos;
+        self.drum_to = self.ui_state.drum_pos;
+        self.drum_rolling = false;
         if self.ui.is_none() {
             self.ui = OverlayUi::new(on_pill_action, on_pill_hover, self as *mut App as *mut c_void);
         }
@@ -255,6 +291,25 @@ impl App {
             }
         }
 
+        if self.drum_rolling {
+            let t = ((now.saturating_sub(self.drum_t0)) as f32 / DRUM_ROLL_MS).clamp(0.0, 1.0);
+            let e = ease_out_expo_like(t);
+            self.ui_state.drum_pos = self.drum_from + (self.drum_to - self.drum_from) * e;
+            dirty = true;
+            if t >= 1.0 {
+                self.ui_state.drum_pos = self.drum_to;
+                self.drum_rolling = false;
+                if self.phase == Phase::Armed {
+                    self.fast_timer = false;
+                    if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) {
+                        unsafe { SetTimer(self.host, TIMER_UI_TICK, 33, None) };
+                    } else {
+                        unsafe { KillTimer(self.host, TIMER_UI_TICK) };
+                    }
+                }
+            }
+        }
+
         if self.phase == Phase::Recording {
             let trans = ((now.saturating_sub(self.trans_t0)) as f32 / TRANSITION_MS).clamp(0.0, 1.0);
             let elapsed = now.saturating_sub(self.rec_t0);
@@ -271,7 +326,7 @@ impl App {
             }
 
             // Once the 340 ms transition has settled, relax the timer once to 50 ms (or 33 ms for window tracking).
-            if trans >= 1.0 && self.fast_timer {
+            if trans >= 1.0 && self.fast_timer && !self.drum_rolling {
                 self.fast_timer = false;
                 let period = if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) { 33 } else { 50 };
                 unsafe { SetTimer(self.host, TIMER_UI_TICK, period, None) };
@@ -287,14 +342,7 @@ impl App {
 fn on_pill_action(ctx: *mut c_void, action: PillAction) {
     let app = unsafe { &mut *(ctx as *mut App) };
     match action {
-        PillAction::SelectQuality(q) => {
-            if app.phase == Phase::Armed && app.ui_state.quality != q {
-                app.ui_state.quality = q;
-                if let Some(ui) = app.ui.as_mut() {
-                    ui.render(&app.ui_state);
-                }
-            }
-        }
+        PillAction::StepQuality(delta) => app.step_quality(delta),
         PillAction::ToggleRecord => {
             if app.phase == Phase::Armed {
                 app.start_recording();
@@ -302,7 +350,6 @@ fn on_pill_action(ctx: *mut c_void, action: PillAction) {
                 app.stop_recording();
             }
         }
-        PillAction::None => {}
     }
 }
 
@@ -375,10 +422,12 @@ unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -
         }
         WM_HOTKEY => {
             match wp as i32 {
-                HK_Q1 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q480)),
-                HK_Q2 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q720)),
-                HK_Q3 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q1080)),
-                HK_Q4 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Native)),
+                HK_Q1 => app.set_quality(Quality::Q480),
+                HK_Q2 => app.set_quality(Quality::Q720),
+                HK_Q3 => app.set_quality(Quality::Q1080),
+                HK_Q4 => app.set_quality(Quality::Native),
+                HK_UP => app.step_quality(-1),
+                HK_DOWN => app.step_quality(1),
                 HK_ENTER | HK_R => app.start_recording(),
                 HK_ESC => app.cancel(),
                 _ => {}
@@ -504,6 +553,7 @@ fn run() -> u32 {
         ui_state: UiState {
             target: RECT { left: 0, top: 0, right: 0, bottom: 0 },
             quality: Quality::Q720,
+            drum_pos: Quality::Q720.index() as f32,
             recording: false,
             trans_t: 0.0,
             elapsed_ms: 0,
@@ -512,6 +562,10 @@ fn run() -> u32 {
         },
         armed_keys_on: false,
         fast_timer: false,
+        drum_from: Quality::Q720.index() as f32,
+        drum_to: Quality::Q720.index() as f32,
+        drum_t0: 0,
+        drum_rolling: false,
         trans_t0: 0,
         rec_t0: 0,
         session: None,
