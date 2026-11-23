@@ -22,9 +22,12 @@ fallbacks. A capture without one tries its list in order and keeps the first tha
 
 | Capture | Default | Fallbacks, in order |
 |---|---|---|
-| Rectangle | `Ctrl+Alt+R` | `Ctrl+PrtSc`, `Ctrl+Alt+Shift+R` |
-| Window | `Ctrl+Alt+W` | `Ctrl+Alt+Shift+W` |
-| Full screen | `Ctrl+Alt+F` | `Ctrl+Shift+PrtSc`, `Ctrl+Alt+Shift+F` |
+| Rectangle | `Ctrl+Alt+R` | `Ctrl+PrtSc` |
+| Window | `Ctrl+Alt+W` | (none) |
+| Full screen | `Ctrl+Alt+F` | `Ctrl+Shift+PrtSc` |
+| Record rectangle | `Ctrl+Alt+Shift+R` | (none) |
+| Record window | `Ctrl+Alt+Shift+W` | (none) |
+| Record full screen | `Ctrl+Alt+Shift+F` | (none) |
 
 - Plain `PrtSc`, `Win+Shift+S` and Windows' other screenshot keys are left alone.
 - From a terminal (its stdout, or the parent's console) it prints the keys it registered, with
@@ -39,8 +42,8 @@ fallbacks. A capture without one tries its list in order and keeps the first tha
 ## Settings
 
 The [blade settings contract](../../../../docs/specs/blade-settings.md), for the PocketKnives
-Settings window: `rect`, `window`, `full` (hotkeys) and `flash` (toggle, on by default;
-[capture](capture.md#flash)).
+Settings window: `rect`, `window`, `full`, `recRect`, `recWindow`, `recFull` (hotkeys) and `flash`
+(toggle, on by default; [capture](capture.md#flash)).
 
 - Saved in `%APPDATA%\SnipSnap\snipsnap.ini`, section `[SnipSnap]`, through kernel32's
   `GetPrivateProfileIntW` / `WritePrivateProfileStringW`; the folder is made on the first `set`.
@@ -67,8 +70,11 @@ loaded.
 | `rect` | Select a rectangle once, then exit |
 | `window` | Pick a window once, then exit |
 | `full` | Copy the monitor under the cursor once, then exit |
-| `quit` or `stop` | Stop the background instance: posts it `WM_CLOSE` and waits up to 3 s. Prints `SnipSnap stopped.` or `SnipSnap is not running.`; exit 0 either way |
-| `settings` | Prints the four settings, one line each, as the contract says; exit 0. Read-only. A hotkey with no saved value shows the first of its list |
+| `rec-rect` | Record a rectangle (spawns `snipsnap-rec.exe`) |
+| `rec-window` | Record a window (spawns `snipsnap-rec.exe`) |
+| `rec-full` | Record the monitor under the cursor (spawns `snipsnap-rec.exe`) |
+| `quit` or `stop` | Stop the background instance (and any running `snipsnap-rec.exe`): posts `WM_CLOSE` and waits up to 3 s. Prints `SnipSnap stopped.` or `SnipSnap is not running.`; exit 0 either way |
+| `settings` | Prints the seven settings, one line each, as the contract says; exit 0. Read-only. A hotkey with no saved value shows the first of its list |
 | `set key=value ...` | Checks every pair (known key; a number; a hotkey with a key and only Alt, Ctrl, Shift or Win; no two captures on one key; `flash` 0 or 1), then saves them and applies them. Prints one line and exits 2 if anything's wrong, changing nothing. With no pairs it just re-applies the file |
 | `help`, `h` or `?` | Usage; exit 0 (the usage doesn't list `settings` and `set`) |
 | anything else | Usage; exit 2 |

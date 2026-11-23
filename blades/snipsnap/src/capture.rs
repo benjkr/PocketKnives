@@ -1,13 +1,13 @@
 //! The captures: reading the screen, the frozen overlay with window picking, the clipboard and
 //! the flash.
 use crate::{
-    DAEMON, FLASH_ALPHA, FLASH_CLASS, FLASH_MS, FRAME_COLOR, FRAME_W, G, HK_ESC, OVERLAY_CLASS, RC_CANCEL, RC_FAIL, RC_OK, S_FLASH, SET,
-    instance, message_loop, pixels,
+    DAEMON, FLASH_ALPHA, FLASH_CLASS, FLASH_MS, FRAME_COLOR, FRAME_W, G, HK_ESC, MAX_PATH, OVERLAY_CLASS, RC_CANCEL, RC_FAIL, RC_OK,
+    REC_CLASS, REC_FRAME_COLOR, S_FLASH, SET, instance, message_loop, pixels, wide,
 };
 use core::ffi::c_void;
 use core::ptr::{null, null_mut};
 use pk::w;
-use windows_sys::Win32::Foundation::{GlobalFree, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{CloseHandle, GlobalFree, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{
     DWMWA_CLOAK, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_TRANSITIONS_FORCEDISABLED, DwmFlush, DwmGetWindowAttribute,
     DwmSetWindowAttribute,
@@ -15,25 +15,27 @@ use windows_sys::Win32::Graphics::Dwm::{
 use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BeginPaint, BitBlt, CAPTUREBLT, CreateCompatibleDC, CreateDIBSection, CreateSolidBrush,
     DIB_RGB_COLORS, DeleteDC, DeleteObject, EndPaint, EqualRect, GdiFlush, GetDC, GetMonitorInfoW, GetStockObject, HBITMAP, HBRUSH, HDC,
-    HGDIOBJ, IntersectRect, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, OffsetRect, PAINTSTRUCT, PtInRect,
-    ReleaseDC, SRCCOPY, SelectObject, UnionRect, UpdateWindow, WHITE_BRUSH,
+    HGDIOBJ, HMONITOR, IntersectRect, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, OffsetRect, PAINTSTRUCT,
+    PtInRect, ReleaseDC, SRCCOPY, SelectObject, UnionRect, UpdateWindow, WHITE_BRUSH,
 };
-use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+use windows_sys::Win32::System::DataExchange::{COPYDATASTRUCT, CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+use windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW;
 use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
 use windows_sys::Win32::System::Ole::CF_DIB;
 use windows_sys::Win32::System::SystemInformation::GetTickCount64;
-use windows_sys::Win32::System::Threading::Sleep;
+use windows_sys::Win32::System::Threading::{CreateProcessW, PROCESS_INFORMATION, STARTUPINFOW, Sleep};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     MOD_NOREPEAT, RegisterHotKey, ReleaseCapture, SetCapture, UnregisterHotKey, VK_ESCAPE,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, GWL_EXSTYLE, GetClassNameW, GetCursorPos,
     GetLayeredWindowAttributes, GetSystemMetrics, GetWindowLongW, GetWindowRect, HWND_MESSAGE, IDC_ARROW, IDC_CROSS, IsIconic,
-    IsWindowVisible, LWA_ALPHA, LoadCursorW, PostQuitMessage, RegisterClassW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN, SW_HIDE, SW_SHOWNOACTIVATE, SetCursor, SetForegroundWindow, SetLayeredWindowAttributes, SetTimer, ShowWindow,
-    USER_TIMER_MINIMUM, WA_INACTIVE, WM_ACTIVATE, WM_CAPTURECHANGED, WM_CLOSE, WM_DESTROY, WM_ERASEBKGND, WM_HOTKEY, WM_KEYDOWN,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_LAYERED,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    IsWindowVisible, LWA_ALPHA, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetCursor,
+    SetForegroundWindow, SetLayeredWindowAttributes, SetTimer, ShowWindow, USER_TIMER_MINIMUM, WA_INACTIVE, WM_ACTIVATE, WM_APP,
+    WM_CAPTURECHANGED, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_ERASEBKGND, WM_HOTKEY, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+    WM_PAINT, WM_RBUTTONDOWN, WM_SETCURSOR, WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 const NO_RECT: RECT = RECT { left: 0, top: 0, right: 0, bottom: 0 };
@@ -188,14 +190,20 @@ fn vscreen() -> RECT {
     }
 }
 
-/// The monitor containing a point.
-fn monitor_at(p: POINT) -> RECT {
+/// The monitor containing a point (handle + physical bounds).
+fn monitor_with_rect(p: POINT) -> (HMONITOR, RECT) {
+    let mon = unsafe { MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST) };
     let mut mi: MONITORINFO = unsafe { core::mem::zeroed() };
     mi.cbSize = size_of::<MONITORINFO>() as u32;
-    if unsafe { GetMonitorInfoW(MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST), &mut mi) } == 0 {
-        return vscreen();
+    if unsafe { GetMonitorInfoW(mon, &mut mi) } == 0 {
+        return (mon, vscreen());
     }
-    mi.rcMonitor
+    (mon, mi.rcMonitor)
+}
+
+/// The monitor containing a point.
+fn monitor_at(p: POINT) -> RECT {
+    monitor_with_rect(p).1
 }
 
 /// The monitor under the mouse cursor.
@@ -215,9 +223,10 @@ const MAX_WINS: usize = 512;
 #[derive(Clone, Copy)]
 struct Win {
     r: RECT,
+    hwnd: HWND,
     desktop: bool,
 }
-static WINS: G<[Win; MAX_WINS]> = G::new([Win { r: NO_RECT, desktop: false }; MAX_WINS]);
+static WINS: G<[Win; MAX_WINS]> = G::new([Win { r: NO_RECT, hwnd: null_mut(), desktop: false }; MAX_WINS]);
 static NWINS: G<usize> = G::new(0);
 
 unsafe extern "system" fn collect_window(w: HWND, _: LPARAM) -> i32 {
@@ -257,7 +266,7 @@ unsafe extern "system" fn collect_window(w: HWND, _: LPARAM) -> i32 {
     unsafe { GetClassNameW(w, cls.as_mut_ptr(), 16) };
     let desktop = cls[..8] == PROGMAN || cls[..8] == WORKERW;
     // EnumWindows calls back on this thread, one window at a time.
-    unsafe { (*WINS.ptr())[n] = Win { r, desktop } };
+    unsafe { (*WINS.ptr())[n] = Win { r, hwnd: w, desktop } };
     NWINS.set(n + 1);
     1
 }
@@ -267,10 +276,11 @@ fn collect_windows() {
     unsafe { EnumWindows(Some(collect_window), 0) };
 }
 
-/// What to capture at a screen point: the topmost window there, or the whole monitor over the
-/// bare desktop. Clipped to the screen.
-fn pick_at(p: POINT) -> RECT {
+/// What to capture at a screen point: the topmost window there (with its HWND, or null over the
+/// bare desktop where the whole monitor is picked). Clipped to the screen.
+fn pick_at(p: POINT) -> (RECT, HWND) {
     let mut r = monitor_at(p);
+    let mut hwnd = null_mut();
     let v = vscreen();
     // Read only while no window list is being taken.
     let wins = unsafe { &*WINS.ptr() };
@@ -278,15 +288,16 @@ fn pick_at(p: POINT) -> RECT {
         if unsafe { PtInRect(&win.r, p) } != 0 {
             if !win.desktop {
                 r = win.r;
+                hwnd = win.hwnd;
             }
             break;
         }
     }
     let mut out = NO_RECT;
     if unsafe { IntersectRect(&mut out, &r, &v) } == 0 {
-        return monitor_at(p);
+        return (monitor_at(p), null_mut());
     }
-    out
+    (out, hwnd)
 }
 
 fn shot_alloc(s: &mut Shot, x: i32, y: i32, w: i32, h: i32) -> bool {
@@ -428,11 +439,17 @@ static SHOT: G<Shot> = G::new(NO_SHOT);
 static DIM: G<Shot> = G::new(NO_SHOT);
 static OWNER: G<HWND> = G::new(null_mut());
 static FRAME: G<HBRUSH> = G::new(null_mut());
+static REC_FRAME: G<HBRUSH> = G::new(null_mut());
+static REC_SELECT: G<bool> = G::new(false);
 static DRAG: G<bool> = G::new(false);
 static PRESSED: G<bool> = G::new(false);
 static HAS_HOVER: G<bool> = G::new(false);
-/// The hovered window, overlay coordinates.
+/// The hovered window, overlay coordinates, and its HWND (null over desktop).
 static HOVER: G<RECT> = G::new(NO_RECT);
+static HOVER_HWND: G<HWND> = G::new(null_mut());
+/// The confirmed recording selection (screen coordinates) and window handle.
+static PICKED_RECT: G<RECT> = G::new(NO_RECT);
+static PICKED_HWND: G<HWND> = G::new(null_mut());
 static MODE: G<Mode> = G::new(Mode::Rect);
 /// The drag's anchor and its current corner, overlay coordinates.
 static ANCHOR: G<POINT> = G::new(POINT { x: 0, y: 0 });
@@ -478,28 +495,35 @@ fn track(lp: LPARAM) {
 /// Points the window pick at the window under an overlay point.
 fn hover_at(h: HWND, x: i32, y: i32) {
     let s = SHOT.get();
-    let mut r = pick_at(POINT { x: x + s.x, y: y + s.y });
+    let (mut r, hwnd) = pick_at(POINT { x: x + s.x, y: y + s.y });
     unsafe { OffsetRect(&mut r, -s.x, -s.y) }; // screen -> overlay coordinates
     let old = HOVER.get();
-    if HAS_HOVER.get() && unsafe { EqualRect(&r, &old) } != 0 {
+    if HAS_HOVER.get() && unsafe { EqualRect(&r, &old) } != 0 && hwnd == HOVER_HWND.get() {
         return;
     }
     if !h.is_null() && HAS_HOVER.get() {
         unsafe { InvalidateRect(h, &old, 0) };
     }
     HOVER.set(r);
+    HOVER_HWND.set(hwnd);
     HAS_HOVER.set(true);
     if !h.is_null() {
         unsafe { InvalidateRect(h, &r, 0) };
     }
 }
 
-/// Copies an overlay-coordinate area of the frozen image, with the flash.
+/// Copies an overlay-coordinate area of the frozen image, with the flash (or records the picked
+/// area/window for `snipsnap-rec.exe` when `REC_SELECT` is set).
 fn take(h: HWND, r: RECT) -> i32 {
     let s = SHOT.get();
     cloak(h, true); // vanish first, copy after
     let mut sr = r;
     unsafe { OffsetRect(&mut sr, s.x, s.y) }; // overlay -> screen coordinates
+    if REC_SELECT.get() {
+        PICKED_RECT.set(sr);
+        PICKED_HWND.set(if MODE.get() == Mode::Window { HOVER_HWND.get() } else { null_mut() });
+        return RC_OK;
+    }
     flash(sr);
     if to_clipboard(OWNER.get(), &s, r.left, r.top, r.right - r.left, r.bottom - r.top) { RC_OK } else { RC_FAIL }
 }
@@ -538,7 +562,8 @@ unsafe extern "system" fn overlay_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM
                 } else {
                     None
                 };
-                pixels::paint_backdrop(dc, ps.rcPaint, lit, dim.dc, shot.dc, FRAME.get(), FRAME_W);
+                let frame = if REC_SELECT.get() { REC_FRAME.get() } else { FRAME.get() };
+                pixels::paint_backdrop(dc, ps.rcPaint, lit, dim.dc, shot.dc, frame, FRAME_W);
             }
             unsafe { EndPaint(h, &ps) };
         }
@@ -629,6 +654,7 @@ fn overlay_create(s: &Shot) -> HWND {
     if !OVERLAY_CLASS_DONE.get() {
         register_class(overlay_proc, OVERLAY_CLASS, false);
         FRAME.set(unsafe { CreateSolidBrush(FRAME_COLOR) });
+        REC_FRAME.set(unsafe { CreateSolidBrush(REC_FRAME_COLOR) });
         OVERLAY_CLASS_DONE.set(true);
     }
     let h = unsafe {
@@ -654,6 +680,10 @@ fn overlay_create(s: &Shot) -> HWND {
 }
 
 pub fn snip_select(owner: HWND, mode: Mode) -> i32 {
+    select_overlay(owner, mode, false)
+}
+
+fn select_overlay(owner: HWND, mode: Mode, rec_mode: bool) -> i32 {
     let mut shot = NO_SHOT;
     let mut dim = NO_SHOT;
     if !grab(&mut shot, vscreen()) {
@@ -684,9 +714,11 @@ pub fn snip_select(owner: HWND, mode: Mode) -> i32 {
 
     OWNER.set(owner);
     MODE.set(mode);
+    REC_SELECT.set(rec_mode);
     DRAG.set(false);
     PRESSED.set(false);
     HAS_HOVER.set(false);
+    HOVER_HWND.set(null_mut());
     RESULT.set(-1);
     if mode == Mode::Window {
         // Light up the window under the cursor now.
@@ -713,8 +745,8 @@ pub fn snip_select(owner: HWND, mode: Mode) -> i32 {
         finish(h, RC_CANCEL);
     }
     unsafe { UnregisterHotKey(h, HK_ESC) };
-    if !DAEMON.get() {
-        return RESULT.get(); // a one-shot run just exits
+    if !DAEMON.get() && !rec_mode {
+        return RESULT.get(); // a one-shot screenshot run just exits
     }
 
     unsafe { DestroyWindow(h) }; // the copy is done; nobody waits for this
@@ -724,6 +756,163 @@ pub fn snip_select(owner: HWND, mode: Mode) -> i32 {
         unsafe { PostQuitMessage(code) };
     }
     RESULT.get()
+}
+
+// ----------------------------------------------------------------------------- screen recording
+//
+// `snipsnap.exe` stays tiny (four system DLLs, ~1-2 MB idle) and spawns `snipsnap-rec.exe --warm`
+// right beside itself when a recording hotkey fires. The helper pre-warms D3D11/WGC/Media
+// Foundation while the user picks a rectangle or window, then receives the target via WM_COPYDATA.
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RecKind {
+    Rect,
+    Window,
+    Full,
+}
+
+const WM_APP_STOP: u32 = WM_APP + 2;
+const COPYDATA_TARGET: usize = 0x5352_4543; // "SREC"
+
+/// Shared binary layout with `snipsnap-rec` (`blades/snipsnap/rec/src/ipc.rs`).
+#[repr(C)]
+struct RecTarget {
+    kind: u32,
+    rect: RECT,
+    hwnd: usize,
+    monitor: usize,
+    flash: u32,
+}
+
+fn find_recorder() -> HWND {
+    unsafe { FindWindowExW(HWND_MESSAGE, null_mut(), REC_CLASS, null()) }
+}
+
+/// Spawns `snipsnap-rec.exe --warm` from the same folder as this exe.
+fn spawn_recorder() -> bool {
+    const TAIL: [u16; 25] = wide(b"\\snipsnap-rec.exe --warm\0");
+    let mut cmd = [0u16; MAX_PATH + 32];
+    let mut n = unsafe { GetModuleFileNameW(null_mut(), cmd.as_mut_ptr(), MAX_PATH as u32) } as usize;
+    if n == 0 || n >= MAX_PATH {
+        return false;
+    }
+    while n > 0 {
+        n -= 1;
+        if cmd[n] == b'\\' as u16 {
+            break;
+        }
+    }
+    // Quote the exe path so spaces in the install path never split arguments.
+    let mut line = [0u16; MAX_PATH + 40];
+    line[0] = b'"' as u16;
+    let mut o = 1;
+    line[o..o + n].copy_from_slice(&cmd[..n]);
+    o += n;
+    // "\snipsnap-rec.exe"
+    line[o..o + 17].copy_from_slice(&TAIL[..17]);
+    o += 17;
+    line[o] = b'"' as u16;
+    o += 1;
+    // " --warm\0"
+    line[o..o + 8].copy_from_slice(&TAIL[17..25]);
+
+    let mut si: STARTUPINFOW = unsafe { core::mem::zeroed() };
+    si.cb = size_of::<STARTUPINFOW>() as u32;
+    let mut pi: PROCESS_INFORMATION = unsafe { core::mem::zeroed() };
+    let ok = unsafe { CreateProcessW(null(), line.as_mut_ptr(), null(), null(), 0, 0, null(), null(), &si, &mut pi) } != 0;
+    if ok {
+        unsafe {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+    }
+    ok
+}
+
+fn wait_recorder(max_ms: u32) -> HWND {
+    let mut waited = 0;
+    loop {
+        let h = find_recorder();
+        if !h.is_null() || waited >= max_ms {
+            return h;
+        }
+        unsafe { Sleep(5) };
+        waited += 5;
+    }
+}
+
+/// Starts a recording (or stops an already running one if a recording hotkey is pressed again).
+pub fn rec_trigger(owner: HWND, kind: RecKind) -> i32 {
+    let existing = find_recorder();
+    if !existing.is_null() {
+        unsafe { PostMessageW(existing, WM_APP_STOP, 0, 0) };
+        return RC_OK;
+    }
+
+    if !spawn_recorder() {
+        return RC_FAIL;
+    }
+
+    let flash_on = SET.get()[S_FLASH];
+    let target = match kind {
+        RecKind::Full => {
+            let mut p = POINT { x: 0, y: 0 };
+            unsafe { GetCursorPos(&mut p) };
+            let (mon, rect) = monitor_with_rect(p);
+            RecTarget { kind: 2, rect, hwnd: 0, monitor: mon as usize, flash: flash_on }
+        }
+        RecKind::Rect => {
+            let rc = select_overlay(owner, Mode::Rect, true);
+            if rc != RC_OK {
+                let h = wait_recorder(300);
+                if !h.is_null() {
+                    unsafe { PostMessageW(h, WM_CLOSE, 0, 0) };
+                }
+                return rc;
+            }
+            let r = PICKED_RECT.get();
+            let center = POINT { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+            let (mon, mon_r) = monitor_with_rect(center);
+            let mut clamped = NO_RECT;
+            if unsafe { IntersectRect(&mut clamped, &r, &mon_r) } == 0 {
+                clamped = mon_r;
+            }
+            RecTarget { kind: 0, rect: clamped, hwnd: 0, monitor: mon as usize, flash: flash_on }
+        }
+        RecKind::Window => {
+            let rc = select_overlay(owner, Mode::Window, true);
+            if rc != RC_OK {
+                let h = wait_recorder(300);
+                if !h.is_null() {
+                    unsafe { PostMessageW(h, WM_CLOSE, 0, 0) };
+                }
+                return rc;
+            }
+            let r = PICKED_RECT.get();
+            let hwnd = PICKED_HWND.get();
+            let center = POINT { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+            let (mon, mon_r) = monitor_with_rect(center);
+            if hwnd.is_null() {
+                RecTarget { kind: 2, rect: mon_r, hwnd: 0, monitor: mon as usize, flash: flash_on }
+            } else {
+                RecTarget { kind: 1, rect: r, hwnd: hwnd as usize, monitor: mon as usize, flash: flash_on }
+            }
+        }
+    };
+
+    let rec = wait_recorder(2000);
+    if rec.is_null() {
+        return RC_FAIL;
+    }
+    let cds = COPYDATASTRUCT {
+        dwData: COPYDATA_TARGET,
+        cbData: size_of::<RecTarget>() as u32,
+        lpData: &target as *const RecTarget as *mut c_void,
+    };
+    let mut res = 0usize;
+    let ok =
+        unsafe { SendMessageTimeoutW(rec, WM_COPYDATA, owner as usize, &cds as *const _ as isize, SMTO_ABORTIFHUNG, 5000, &mut res) } != 0;
+    if ok { RC_OK } else { RC_FAIL }
 }
 
 /// `rect`, `window` or `full` once (by its first letter), then exit.

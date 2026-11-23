@@ -15,6 +15,7 @@ rem is found by its window class, so this stops the user's installed copy too.
 if exist snipsnap.exe start "" /wait snipsnap.exe quit
 
 :build
-cargo build --release -p snipsnap --target-dir "%TARGET%" || exit /b 1
+cargo build --release -p snipsnap -p snipsnap-rec --target-dir "%TARGET%" || exit /b 1
 copy /y "%TARGET%\release\snipsnap.exe" "%OUT%\snipsnap.exe" >nul || exit /b 1
-echo Built %OUT%\snipsnap.exe
+copy /y "%TARGET%\release\snipsnap-rec.exe" "%OUT%\snipsnap-rec.exe" >nul || exit /b 1
+echo Built %OUT%\snipsnap.exe and %OUT%\snipsnap-rec.exe

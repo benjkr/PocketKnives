@@ -180,6 +180,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "snipsnap-rec"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "pk",
+ "pk-build",
+ "windows",
+ "windows-core",
+ "windows-numerics",
+ "windows-sys",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"

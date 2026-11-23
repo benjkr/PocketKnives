@@ -1,14 +1,18 @@
-//! SnipSnap - a tiny, fast screen snippet tool for Windows.
+//! SnipSnap - a tiny, fast screen snippet and recording tool for Windows.
 //!
-//! Three captures: a dragged rectangle, a window you click, or the monitor under the cursor. The
-//! result goes to the clipboard as a 24-bit CF_DIB, and the captured area flashes briefly.
+//! Three screenshot captures (rectangle, window, monitor under cursor -> clipboard 24-bit CF_DIB)
+//! and three video recordings (same three modes, delegated on demand to `snipsnap-rec.exe` ->
+//! H.264 MP4 in `Videos\SnipSnap\` + clipboard CF_HDROP).
 //!
 //! ```text
 //! snipsnap            run in the background and listen for hotkeys
 //! snipsnap rect       select a rectangle once, then exit
 //! snipsnap window     pick a window once, then exit
 //! snipsnap full       capture the monitor under the cursor once, then exit
-//! snipsnap quit       stop the background instance
+//! snipsnap rec-rect   record a rectangle (spawns snipsnap-rec.exe)
+//! snipsnap rec-window record a window (spawns snipsnap-rec.exe)
+//! snipsnap rec-full   record the monitor under the cursor (spawns snipsnap-rec.exe)
+//! snipsnap quit       stop the background instance (and any active recorder)
 //! snipsnap settings   print the settings (for PocketKnives Settings)
 //! snipsnap set k=v..  change settings and apply them to the background instance
 //! ```
@@ -59,18 +63,24 @@ pk::entry!(run);
 const RC_OK: i32 = 0;
 const RC_CANCEL: i32 = 1;
 const RC_FAIL: i32 = 2;
-/// Hotkey ids: the three captures (`HK_RECT + i` for setting `i`), and Esc on the overlay.
+/// Hotkey ids: the six captures (`HK_RECT + i` for setting `i`), and Esc on the overlay.
 const HK_RECT: i32 = 1;
 const HK_WINDOW: i32 = 2;
 const HK_FULL: i32 = 3;
-const HK_ESC: i32 = 4;
+const HK_REC_RECT: i32 = 4;
+const HK_REC_WINDOW: i32 = 5;
+const HK_REC_FULL: i32 = 6;
+const HK_ESC: i32 = 7;
 
 const DAEMON_CLASS: *const u16 = w!("SnipSnapDaemon");
 const OVERLAY_CLASS: *const u16 = w!("SnipSnapOverlay");
 const FLASH_CLASS: *const u16 = w!("SnipSnapFlash");
+const REC_CLASS: *const u16 = w!("SnipSnapRec");
 const MUTEX_NAME: *const u16 = w!("Local\\SnipSnap.Daemon");
 /// Selection / hovered-window border: its colour (0x00BBGGRR) and thickness in px.
 const FRAME_COLOR: u32 = 0x00FF_FFFF;
+/// Recording selection border: #e81123 in 0x00BBGGRR.
+const REC_FRAME_COLOR: u32 = 0x0023_11E8;
 const FRAME_W: i32 = 2;
 /// The white flash: its starting opacity and how long it takes to fade out, ms.
 const FLASH_ALPHA: u64 = 150;
@@ -102,13 +112,16 @@ static FALLBACKS: [Hotkey; 8] = [
     // Rectangle
     key(hk(CA, b'R' as u32), b"Ctrl+Alt+R\0"),
     key(hk(MOD_CONTROL, VK_SNAPSHOT as u32), b"Ctrl+PrtSc\0"),
-    key(hk(CAS, b'R' as u32), b"Ctrl+Alt+Shift+R\0"),
     // Window
     key(hk(CA, b'W' as u32), b"Ctrl+Alt+W\0"),
-    key(hk(CAS, b'W' as u32), b"Ctrl+Alt+Shift+W\0"),
     // Full screen
     key(hk(CA, b'F' as u32), b"Ctrl+Alt+F\0"),
     key(hk(MOD_CONTROL | MOD_SHIFT, VK_SNAPSHOT as u32), b"Ctrl+Shift+PrtSc\0"),
+    // Record rectangle
+    key(hk(CAS, b'R' as u32), b"Ctrl+Alt+Shift+R\0"),
+    // Record window
+    key(hk(CAS, b'W' as u32), b"Ctrl+Alt+Shift+W\0"),
+    // Record full screen
     key(hk(CAS, b'F' as u32), b"Ctrl+Alt+Shift+F\0"),
 ];
 
@@ -131,15 +144,20 @@ const fn wide<const N: usize>(s: &[u8; N]) -> [u16; N] {
     out
 }
 
-/// The settings, in the order PocketKnives Settings shows them. The first three are the hotkeys
-/// of captures `HK_RECT`, `HK_WINDOW` and `HK_FULL`; the fourth's list start is the list's end.
-const S_HOTKEYS: usize = 3;
-const S_FLASH: usize = 3;
-const S_COUNT: usize = 4;
+/// The settings, in the order PocketKnives Settings shows them. The first six are the hotkeys
+/// of `HK_RECT`..=`HK_REC_FULL`; the seventh's list start is the list's end.
+const S_HOTKEYS: usize = 6;
+const S_FLASH: usize = 6;
+const S_COUNT: usize = 7;
+const HK_MASK: i32 = (1 << S_HOTKEYS) - 1;
+const BAD_IO: i32 = 1 << S_HOTKEYS;
 static SETTINGS: [Setting; S_COUNT] = [
     Setting { key: &wide(b"rect\0"), label: b"Rectangle\0", keys: 0 },
-    Setting { key: &wide(b"window\0"), label: b"Window\0", keys: 3 },
-    Setting { key: &wide(b"full\0"), label: b"Full screen\0", keys: 5 },
+    Setting { key: &wide(b"window\0"), label: b"Window\0", keys: 2 },
+    Setting { key: &wide(b"full\0"), label: b"Full screen\0", keys: 3 },
+    Setting { key: &wide(b"recRect\0"), label: b"Record rectangle\0", keys: 5 },
+    Setting { key: &wide(b"recWindow\0"), label: b"Record window\0", keys: 6 },
+    Setting { key: &wide(b"recFull\0"), label: b"Record full screen\0", keys: 7 },
     Setting { key: &wide(b"flash\0"), label: b"Flash the captured area\0", keys: 8 },
 ];
 const INI_SECTION: *const u16 = w!("SnipSnap");
@@ -428,7 +446,7 @@ fn register_keys(h: HWND) -> i32 {
         if keys[i].is_none() {
             r |= 1 << i;
         } else if k != first {
-            r |= 0x10 << i;
+            r |= 0x100 << i;
         }
     }
     KEY.set(keys);
@@ -439,7 +457,7 @@ fn register_keys(h: HWND) -> i32 {
 /// plus a bit for each capture left without a key.
 fn reload_keys(h: HWND) -> LRESULT {
     settings_load();
-    (RELOAD_DONE | (register_keys(h) & 7) as usize) as LRESULT
+    (RELOAD_DONE | (register_keys(h) & HK_MASK) as usize) as LRESULT
 }
 
 unsafe extern "system" fn daemon_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -454,6 +472,9 @@ unsafe extern "system" fn daemon_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     HK_RECT => _ = capture::snip_select(h, capture::Mode::Rect),
                     HK_WINDOW => _ = capture::snip_select(h, capture::Mode::Window),
                     HK_FULL => _ = capture::snip_area(h, capture::cursor_monitor()),
+                    HK_REC_RECT => _ = capture::rec_trigger(h, capture::RecKind::Rect),
+                    HK_REC_WINDOW => _ = capture::rec_trigger(h, capture::RecKind::Window),
+                    HK_REC_FULL => _ = capture::rec_trigger(h, capture::RecKind::Full),
                     _ => {}
                 }
                 BUSY.set(false);
@@ -497,7 +518,7 @@ fn run_daemon() -> i32 {
     }
 
     let r = register_keys(h);
-    if r & 7 == 7 {
+    if r & HK_MASK == HK_MASK {
         const MSG: &[u8] = b"SnipSnap: none of the hotkeys could be registered (another program owns them).\n\
                              Use 'snipsnap rect' / 'window' / 'full' from a launcher instead.\n\0";
         say(&MSG[..MSG.len() - 1]);
@@ -510,10 +531,10 @@ fn run_daemon() -> i32 {
     say(b"SnipSnap running in the background.\n");
     let keys = KEY.get();
     for i in 0..S_HOTKEYS {
-        // "  Rectangle:   Ctrl+Alt+R"
-        let mut line = Buf::<32>::new();
+        // "  Record full screen:  Ctrl+Alt+Shift+F"
+        let mut line = Buf::<40>::new();
         let mut n = sprintf!(line, c"  %s:", SETTINGS[i].label.as_ptr()).len();
-        while n < 15 {
+        while n < 23 {
             line.0[n].write(b' ');
             n += 1;
         }
@@ -521,19 +542,22 @@ fn run_daemon() -> i32 {
         say(keys[i].unwrap_or(b"(unavailable - hotkeys taken)"));
         say(b"\n");
     }
-    say(b"  Stop with:   snipsnap quit\n");
+    say(b"  Stop with:           snipsnap quit\n");
     // No console to print to: speak up only if a capture didn't get its first choice (its saved
     // hotkey, or its first fallback). A saved key's name is UTF-8, so a non-ASCII one shows
     // garbled here (as in the C build, where converting it cost a 512-byte section step).
     if OUT.get() == INVALID_HANDLE_VALUE && r != 0 {
-        let mut msg = Buf::<400>::new();
+        let mut msg = Buf::<600>::new();
         let none = b"(unavailable)\0".as_slice();
         _ = sprintf!(
             msg,
-            c"Some default hotkeys are taken by another program.\n\nRectangle:\t%s\nWindow:\t\t%s\nFull screen:\t%s",
+            c"Some default hotkeys are taken by another program.\n\nRectangle:\t\t%s\nWindow:\t\t\t%s\nFull screen:\t\t%s\nRecord rectangle:\t%s\nRecord window:\t\t%s\nRecord full screen:\t%s",
             key_or(0, none),
             key_or(1, none),
-            key_or(2, none)
+            key_or(2, none),
+            key_or(3, none),
+            key_or(4, none),
+            key_or(5, none)
         );
         unsafe { MessageBoxA(null_mut(), msg.ptr(), c"SnipSnap".as_ptr().cast(), MB_ICONWARNING) };
     }
@@ -566,6 +590,10 @@ fn find_daemon() -> HWND {
 }
 
 fn quit_daemon() -> i32 {
+    let rec = unsafe { FindWindowExW(HWND_MESSAGE, null_mut(), REC_CLASS, null()) };
+    if !rec.is_null() {
+        unsafe { PostMessageW(rec, WM_CLOSE, 0, 0) };
+    }
     let h = find_daemon();
     if h.is_null() {
         say(b"SnipSnap is not running.\n");
@@ -690,7 +718,7 @@ fn set_settings(mut p: Line) -> i32 {
             }
         }
         SET.set(set);
-        bad = register_keys(null_mut()) & mask & 7;
+        bad = register_keys(null_mut()) & mask & HK_MASK;
     }
     if bad == 0 {
         let dir = INI_DIR.get();
@@ -707,7 +735,7 @@ fn set_settings(mut p: Line) -> i32 {
             if mask >> i & 1 != 0 {
                 old[i] = ini_get(i);
                 if !ini_put(i, v[i]) {
-                    bad = 8;
+                    bad = BAD_IO;
                 }
             }
         }
@@ -715,7 +743,7 @@ fn set_settings(mut p: Line) -> i32 {
     if !d.is_null() && bad == 0 {
         // The running copy applies them.
         let r = reload(d);
-        bad = if r & RELOAD_DONE != 0 { r as i32 & mask } else { 8 };
+        bad = if r & RELOAD_DONE != 0 { r as i32 & mask } else { BAD_IO };
         if bad != 0 {
             // Put the previous settings back.
             for i in 0..S_COUNT {
@@ -723,12 +751,12 @@ fn set_settings(mut p: Line) -> i32 {
                     ini_put(i, old[i]);
                 }
             }
-            if bad < 8 {
+            if bad < BAD_IO {
                 reload(d);
             }
         }
     }
-    if bad == 8 {
+    if bad == BAD_IO {
         say(b"Couldn't apply the settings.\n");
         return RC_FAIL;
     }
@@ -809,6 +837,12 @@ fn run() -> u32 {
         run_daemon()
     } else if is(arg, b"rect") || is(arg, b"window") || is(arg, b"full") {
         capture::one_shot(arg[0] as u8)
+    } else if is(arg, b"rec-rect") {
+        capture::rec_trigger(null_mut(), capture::RecKind::Rect)
+    } else if is(arg, b"rec-window") {
+        capture::rec_trigger(null_mut(), capture::RecKind::Window)
+    } else if is(arg, b"rec-full") {
+        capture::rec_trigger(null_mut(), capture::RecKind::Full)
     } else if is(arg, b"quit") || is(arg, b"stop") {
         quit_daemon()
     } else if is(arg, b"settings") {
@@ -816,15 +850,17 @@ fn run() -> u32 {
     } else if is(arg, b"set") {
         set_settings(p)
     } else {
-        say(b"SnipSnap - copy a rectangle, a window or the screen to the clipboard.\n\n\
-              \x20 snipsnap          run in the background (hotkeys below)\n\
-              \x20 snipsnap rect     select a rectangle once (Esc / right-click cancels)\n\
-              \x20 snipsnap window   pick a window once (click it; Esc / right-click cancels)\n\
-              \x20 snipsnap full     capture the monitor under the cursor once\n\
-              \x20 snipsnap quit     stop the background instance\n\n\
-              Hotkeys: Ctrl+Alt+R = rectangle, Ctrl+Alt+W = window, Ctrl+Alt+F = full screen\n\
-              \x20        (if taken: Ctrl+PrtSc / Ctrl+Alt+Shift+W / Ctrl+Shift+PrtSc, then\n\
-              \x20         Ctrl+Alt+Shift+R / - / Ctrl+Alt+Shift+F)\n");
+        say(b"SnipSnap - copy or record a rectangle, a window or the screen.\n\n\
+              \x20 snipsnap            run in the background (hotkeys below)\n\
+              \x20 snipsnap rect       select a rectangle once (Esc / right-click cancels)\n\
+              \x20 snipsnap window     pick a window once (click it; Esc / right-click cancels)\n\
+              \x20 snipsnap full       capture the monitor under the cursor once\n\
+              \x20 snipsnap rec-rect   record a rectangle (spawns snipsnap-rec.exe)\n\
+              \x20 snipsnap rec-window record a window (spawns snipsnap-rec.exe)\n\
+              \x20 snipsnap rec-full   record the monitor under the cursor\n\
+              \x20 snipsnap quit       stop the background instance\n\n\
+              Hotkeys: Ctrl+Alt+R/W/F = screenshot (fallbacks: Ctrl+PrtSc, Ctrl+Shift+PrtSc)\n\
+              \x20        Ctrl+Alt+Shift+R/W/F = record (press again to stop)\n");
         if is(arg, b"help") || is(arg, b"h") || is(arg, b"?") { RC_OK } else { RC_FAIL }
     };
     rc as u32

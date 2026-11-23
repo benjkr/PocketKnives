@@ -65,3 +65,39 @@ are the constants at the top of `src/main.rs`. Keep it current in the same chang
 - A one-shot run stays alive until the flash has faded.
 - The `flash` setting ([settings](hotkeys-and-cli.md#settings)) turns it off: nothing is shown
   and a one-shot run exits as soon as the image is on the clipboard.
+
+## Screen recording (`snipsnap-rec.exe`)
+
+- Triggered by `Ctrl+Alt+Shift+R` / `W` / `F` (or `snipsnap rec-rect` / `rec-window` / `rec-full`).
+  Pressing any recording hotkey while `snipsnap-rec.exe` is already running posts `WM_APP + 2` to
+  stop it (or cancel if still armed).
+- **Two-stage background pre-preparation**: `snipsnap.exe` spawns `snipsnap-rec.exe --warm` beside
+  itself as soon as the hotkey fires. Stage 1 runs while the user drags a rectangle or picks a
+  window on SnipSnap's frozen overlay (drawn with a `#e81123` red border): the helper initializes
+  D3D11, WinRT Direct3D, Media Foundation and the WGC activation factory on a worker thread, then
+  receives the target via `WM_COPYDATA`. Stage 2 runs during Armed dead time: as soon as both the
+  GPU context and target are ready, a background worker initializes the WGC capture item/frame pool,
+  D3D11 Video Processor NV12 ring and hardware H.264 `IMFSinkWriter` onto a hidden staging file in
+  `Videos\SnipSnap\`. Rolling the wheel while Armed reconfigures the encoder in the background
+  after a 180 ms debounce; pressing Record only calls `StartCapture()` so capture begins
+  instantaneously. Cancelling deletes the 0-byte staging file; stopping atomically renames it to the
+  final timestamped `.mp4`.
+- **Armed stage (`H5` + `F2` + `B2`)**: the target stays framed in a muted red 2px border with 14px
+  corner ticks, straddled at bottom-center by a 30px monoblock milled titanium housing with two
+  adjacent brushed-titanium rolling tumbler drums in one unified recessed slot — resolution
+  (`480p`, `720p` default, `1080p`, `Native`) and frame rate (`24f`, `30f`, `60f` default)
+  separated by a 1.5px dark parting gap with a hairline index — plus a milled notch pointer and a
+  seated matte-red enamel shutter circle. Scroll or click upper/lower half on either drum (or use
+  `↑`/`↓`/`1`–`4` for resolution, `←`/`→`/`F` for FPS); `Enter`/`R` or clicking the shutter starts
+  recording; `Esc` cancels.
+- **Recording (`S2` + `B2`)**: over 340 ms the four corners lock into a bright `#e81123` border
+  while the housing settles into a 25px monoblock titanium recording block (pulsing red dot,
+  tabular timer, muted live file size, seated 17px red stop circle). Both overlay windows set
+  `WDA_EXCLUDEFROMCAPTURE` and follow window moves in Window mode.
+- **Capture, encode & cleanup**: Windows.Graphics.Capture (`HWND` or `HMONITOR`) -> D3D11 Video
+  Processor crop/aspect-preserving scale/NV12 -> Media Foundation hardware H.264 `.mp4` in
+  `Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4`. On stop, frame capture halts immediately and
+  the border/pill hide while the 150 ms white flash starts at 0 ms; MP4 finalization, atomic rename
+  and GPU teardown finish in parallel on a worker thread (~72 ms) and copy `CF_HDROP` to the
+  clipboard mid-flash, followed by a native Windows notification (`Shell_NotifyIconW`, click to
+  reveal in Explorer), then `snipsnap-rec.exe` exits with 0 MB GPU/RAM.
