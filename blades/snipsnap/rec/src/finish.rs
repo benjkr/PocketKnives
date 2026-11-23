@@ -2,7 +2,7 @@
 //! - SnipSnap's 150 ms white flash over the recorded area
 //! - `CF_HDROP` clipboard copy so `Ctrl+V` pastes the `.mp4` immediately
 //! - Native Windows 11 notification (`Shell_NotifyIconW` `NIF_INFO`) with click-to-open-folder
-use crate::ipc::WM_APP_TRAY;
+use crate::ipc::{WM_APP_SAVE_DONE, WM_APP_TRAY};
 use crate::ui::format_size;
 use alloc::format;
 use alloc::string::String;
@@ -54,8 +54,10 @@ unsafe extern "system" fn flash_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
     unsafe { DefWindowProcW(h, msg, wp, lp) }
 }
 
-/// Shows SnipSnap's 150 ms white flash over `r` and runs messages until it fades out.
-pub fn show_flash(r: RECT) {
+/// Shows SnipSnap's 150 ms white flash over `r` and pumps messages until it fades out.
+/// Calls `on_save_done` if `WM_APP_SAVE_DONE` arrives mid-flash so clipboard copy happens as
+/// soon as the background MP4 finalize finishes (~72 ms) without waiting for the fade to end.
+pub fn show_flash<F: FnMut()>(r: RECT, mut on_save_done: F) {
     let rw = r.right - r.left;
     let rh = r.bottom - r.top;
     if rw <= 0 || rh <= 0 {
@@ -102,6 +104,10 @@ pub fn show_flash(r: RECT) {
     while !unsafe { FLASH_HWND }.is_null() {
         if unsafe { GetMessageW(&mut m, null_mut(), 0, 0) } <= 0 {
             break;
+        }
+        if m.message == WM_APP_SAVE_DONE {
+            on_save_done();
+            continue;
         }
         unsafe {
             TranslateMessage(&m);

@@ -209,13 +209,20 @@ impl CaptureSession {
         self.bytes.load(Ordering::Relaxed)
     }
 
+    /// Halts frame capture immediately (~0.2 ms) so no subsequent UI (such as the 150 ms white
+    /// flash) can ever appear in the video while `stop()` finalizes the MP4 in the background.
+    pub fn halt_capture(&self) {
+        if !self.stopped.swap(true, Ordering::AcqRel) {
+            let _ = self.session.Close();
+            let _ = self.pool.Close();
+        }
+    }
+
     /// Stops capture, finalizes the MP4 file if recording started (else deletes the 0-byte staging
     /// file), and drops all WGC + D3D11 + Media Foundation handles so GPU memory frees immediately.
     pub fn stop(self, elapsed_100ns: i64) -> Option<(String, u64)> {
         let was_started = self.started.load(Ordering::Acquire);
-        self.stopped.store(true, Ordering::Release);
-        let _ = self.session.Close();
-        let _ = self.pool.Close();
+        self.halt_capture();
         drop(self.session);
         drop(self.pool);
         drop(self.item);

@@ -31,7 +31,8 @@ use core::ptr::{null, null_mut};
 use core::sync::atomic::{AtomicBool, Ordering};
 use gpu::GpuContext;
 use ipc::{
-    COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_PREP_DONE, WM_APP_REC_ENDED, WM_APP_STOP, WM_APP_WARM_DONE,
+    COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_PREP_DONE, WM_APP_REC_ENDED, WM_APP_SAVE_DONE, WM_APP_STOP,
+    WM_APP_WARM_DONE,
 };
 use pk::sync::Mutex;
 use ui::{DRUM_ROLL_MS, OverlayUi, PillAction, TRANSITION_MS, UiState, ease_out_expo_like};
@@ -72,6 +73,7 @@ const HK_ESC: i32 = 18;
 
 static WARM_SLOT: Mutex<Option<Option<GpuContext>>> = Mutex::new(None);
 static PREP_SLOT: Mutex<Option<Option<CaptureSession>>> = Mutex::new(None);
+static SAVE_SLOT: Mutex<Option<Option<(String, u64)>>> = Mutex::new(None);
 static PREP_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -106,7 +108,7 @@ struct App {
     trans_t0: u64,
     rec_t0: u64,
     session: Option<CaptureSession>,
-    finished: Option<(String, u64, RECT, bool)>,
+    stopping: Option<(CaptureSession, i64, RECT, bool)>,
 }
 
 impl App {
@@ -337,19 +339,19 @@ impl App {
             KillTimer(self.host, TIMER_RECONFIG);
         }
         self.unregister_armed_keys();
+        let elapsed_100ns = (unsafe { GetTickCount64() }.saturating_sub(self.rec_t0) as i64) * 10_000;
+        let final_rect = self.ui_state.target;
+        let flash_on = self.target.map(|t| t.flash != 0).unwrap_or(true);
+        // Halt WGC capture right away (~0.2 ms) before hiding UI and firing the 0 ms flash so no
+        // flash frame can ever land in the video while MP4 finalize runs behind the fade.
+        if let Some(sess) = self.session.take() {
+            sess.halt_capture();
+            self.stopping = Some((sess, elapsed_100ns, final_rect, flash_on));
+        }
         if let Some(ui) = self.ui.as_mut() {
             ui.hide();
         }
-        // Drop overlay UI and capture session right now so GPU/D3D11/WGC/MF free to 0 MB immediately.
         self.ui = None;
-        let final_rect = self.ui_state.target;
-        let flash_on = self.target.map(|t| t.flash != 0).unwrap_or(true);
-        let elapsed_100ns = (unsafe { GetTickCount64() }.saturating_sub(self.rec_t0) as i64) * 10_000;
-        if let Some(sess) = self.session.take()
-            && let Some((path, bytes)) = sess.stop(elapsed_100ns)
-        {
-            self.finished = Some((path, bytes, final_rect, flash_on));
-        }
         unsafe { PostQuitMessage(0) };
     }
 
@@ -728,7 +730,7 @@ fn run() -> u32 {
         trans_t0: 0,
         rec_t0: 0,
         session: None,
-        finished: None,
+        stopping: None,
     });
     unsafe { SetWindowLongPtrW(host, GWLP_USERDATA, (&mut *app as *mut App) as isize) };
 
@@ -755,20 +757,46 @@ fn run() -> u32 {
         }
     }
 
-    // Grab finished recording info, then drop `app` so every GPU/WGC/MF/Direct2D handle is freed.
+    // Grab the halted capture session, then drop `app` so overlay Direct2D resources are freed.
     PREP_CANCELLED.store(true, Ordering::Release);
     let prep_thread = app.prep_thread.take();
-    let finished = app.finished.take();
+    let stopping = app.stopping.take();
     unsafe { SetWindowLongPtrW(host, GWLP_USERDATA, 0) };
     drop(app);
 
-    // Post-recording finish runs with 0 MB GPU memory: flash + clipboard CF_HDROP + native Win11 toast.
-    if let Some((path, bytes, rect, flash_on)) = finished {
-        let copied = finish::copy_file_to_clipboard(host, &path);
+    // Overlap the 150 ms white flash (0 ms start!) with the ~72 ms background MP4 finalize + GPU
+    // teardown; copy CF_HDROP the instant the save lands mid-flash, then show the Win11 toast.
+    if let Some((sess, elapsed_100ns, rect, flash_on)) = stopping {
+        let host_addr = host as usize;
+        let save_thread = pk::thread::spawn(move || {
+            let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+            let res = sess.stop(elapsed_100ns);
+            *SAVE_SLOT.lock() = Some(res);
+            unsafe { PostMessageW(host_addr as HWND, WM_APP_SAVE_DONE, 0, 0) };
+        });
+
+        let mut saved: Option<(String, u64)> = None;
+        let mut copied = false;
+        let mut handle_save = || {
+            if saved.is_none()
+                && let Some(res) = SAVE_SLOT.lock().take().flatten()
+            {
+                copied = finish::copy_file_to_clipboard(host, &res.0);
+                saved = Some(res);
+            }
+        };
+
         if flash_on {
-            finish::show_flash(rect);
+            finish::show_flash(rect, &mut handle_save);
         }
-        finish::show_saved_notification(host, &path, bytes, copied);
+        if let Some(t) = save_thread {
+            t.join();
+        }
+        handle_save();
+
+        if let Some((path, bytes)) = saved {
+            finish::show_saved_notification(host, &path, bytes, copied);
+        }
     }
 
     unsafe { DestroyWindow(host) };

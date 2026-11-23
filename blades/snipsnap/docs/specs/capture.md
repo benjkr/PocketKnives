@@ -94,6 +94,8 @@ are the constants at the top of `src/main.rs`. Keep it current in the same chang
   `WDA_EXCLUDEFROMCAPTURE` and follow window moves in Window mode.
 - **Capture, encode & cleanup**: Windows.Graphics.Capture (`HWND` or `HMONITOR`) -> D3D11 Video
   Processor crop/aspect-preserving scale/NV12 -> Media Foundation hardware H.264 `.mp4` in
-  `Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4`. On stop, all WGC/D3D11/MF objects drop before
-  the 150 ms flash, `CF_HDROP` clipboard copy and native Windows notification (`Shell_NotifyIconW`,
-  click to reveal in Explorer), then `snipsnap-rec.exe` exits.
+  `Videos\SnipSnap\SnipSnap_YYYY-MM-DD_HH-MM-SS.mp4`. On stop, frame capture halts immediately and
+  the border/pill hide while the 150 ms white flash starts at 0 ms; MP4 finalization, atomic rename
+  and GPU teardown finish in parallel on a worker thread (~72 ms) and copy `CF_HDROP` to the
+  clipboard mid-flash, followed by a native Windows notification (`Shell_NotifyIconW`, click to
+  reveal in Explorer), then `snipsnap-rec.exe` exits with 0 MB GPU/RAM.
