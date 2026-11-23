@@ -8,20 +8,17 @@ current in the same change, and lean.
 - Rust (the toolchain pinned in `rust-toolchain.toml` at the repo root; rustup installs it) and
   Visual Studio (or the Build Tools) with the C++ workload, for its libraries and the Windows
   SDK; cargo finds them without a developer prompt. A rebuild takes about 1 s.
-- `cargo build --release -p snipsnap`, in the workspace at the repo root, with its size-optimised
-  release profile (root `Cargo.toml`). Every warning fails the build (`.cargo/config.toml`).
-  - `no_std`, `no_main`: `pk::entry!` is the entry point (`WinMainCRTStartup`, ending in
-    `ExitProcess`), and `pk` supplies the `mem*` functions LLVM calls. `build.rs` adds `pk-build`'s
-    link flags (`/NODEFAULTLIB`, `/ENTRY`, `/SUBSYSTEM:WINDOWS`, no manifest: DPI awareness is set
-    in code) and `/DEBUG:NONE`, which keeps a debug directory out of `.rdata`.
-  - The code: `src/main.rs` (defaults, command line, output, settings, hotkeys, the background
-    instance), `src/capture.rs` (captures, overlay, clipboard, flash) and `src/pixels.rs` (the
-    dimming with SSE2 and streaming stores, which every x64 CPU has; the overlay paint; the 24-bit
-    rows with 8+4-byte stores).
-- The exe is 20,480 bytes and imports only `KERNEL32`, `USER32`, `GDI32` and `dwmapi`. Sections
-  are padded to 512 bytes, so growth comes in those steps.
-- `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window.
-- `build.bat` runs that cargo line and copies the exe out of the workspace's `target\release`.
+- `cargo build --release -p snipsnap -p snipsnap-rec`, in the workspace at the repo root, with its
+  size-optimised release profile (root `Cargo.toml`). Every warning fails the build
+  (`.cargo/config.toml`).
+  - `snipsnap.exe`: `no_std`, `no_main`, ~23.5 KB, imports only `KERNEL32`, `USER32`, `GDI32` and
+    `dwmapi`. `build.rs` adds `pk-build`'s link flags and `/DEBUG:NONE`.
+  - `snipsnap-rec.exe` (`rec/`): `no_std`, `no_main`, ~65 KB, on `pk`, `windows` and `windows-sys`
+    for D3D11, Windows.Graphics.Capture, Media Foundation, Direct2D/DirectWrite and Shell
+    notifications.
+- `assets/snipsnap.ico` is the SVG blade icon rendered for the PocketKnives settings window (and
+  embedded in `snipsnap-rec.exe` for its saved notification).
+- `build.bat` builds both exes and copies `snipsnap.exe` and `snipsnap-rec.exe` out of `target\release`.
   - `build.bat` alone (for people) runs `snipsnap.exe quit` (with `start /wait`) if an exe is
     already in the folder, and puts `snipsnap.exe` next to the source. That `quit` stops
     **any** running SnipSnap, the user's installed copy included.

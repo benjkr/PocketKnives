@@ -1,8 +1,10 @@
 # AGENTS.md: SnipSnap
 
-SnipSnap: a screen snippet tool. A hotkey copies a dragged rectangle, a window picked by hovering,
-or the monitor under the cursor to the clipboard, and the captured area flashes. No editor, no
-files, no tray icon. Rust without the standard library (`src/`), no CRT, only system DLLs.
+SnipSnap: a screen snippet and recording tool. A hotkey copies a dragged rectangle, a window picked
+by hovering, or the monitor under the cursor to the clipboard (and flashes), or records any of the
+three to H.264 `.mp4` in `Videos\SnipSnap\` (and copies `CF_HDROP` to the clipboard) via the
+on-demand `snipsnap-rec.exe` helper (`rec/`). `snipsnap.exe` itself (`src/`) is Rust without the
+standard library, no CRT, only four system DLLs.
 
 **The suite's [`AGENTS.md`](../../AGENTS.md) comes first**: its rules hold here too. This file adds
 what's specific to SnipSnap. Paths and commands here and in this blade's `docs/` are from
@@ -10,13 +12,15 @@ what's specific to SnipSnap. Paths and commands here and in this blade's `docs/`
 
 ## Rules for SnipSnap
 
-- **Small and fast is the product.** Budget: an exe of about 20 KB, about 1–2 MB private working
-  set in the background, hotkey to rectangle overlay visible in about 70 ms. A change that costs
-  any of these is measured and shown before and after.
-- **No CRT, no extra DLLs.** Only `kernel32`, `user32`, `gdi32` and `dwmapi`, through
-  `windows-sys`, `no_std` with `pk`'s entry point; no other crates. Anything that would load
-  another DLL (shell32 for argument parsing, a C runtime, COM) is left out, and `core::fmt` is
-  kept out too (user32's `wsprintfA` formats).
+- **Small and fast is the product.** Budget for `snipsnap.exe`: an exe of about 20–24 KB, about
+  1–2 MB private working set in the background, hotkey to rectangle overlay visible in about 70 ms.
+  `snipsnap-rec.exe` (`rec/`) is spawned only on demand for recording, pre-warms GPU capture/encode
+  while the user selects and arms, and exits as soon as recording stops so idle GPU/RAM stays at 0.
+- **No CRT, no extra DLLs in `snipsnap.exe`.** Only `kernel32`, `user32`, `gdi32` and `dwmapi`,
+  through `windows-sys`, `no_std` with `pk`'s entry point; no other crates. Anything that would load
+  another DLL (shell32 for argument parsing, a C runtime, COM, D3D11, Media Foundation) stays out of
+  `snipsnap.exe` (recording GPU/COM/WinRT lives in `rec/`). `core::fmt` is kept out of `snipsnap.exe`
+  too (user32's `wsprintfA` formats).
 - **Never build with `build.bat`, and don't run any `snipsnap.exe`** (a scratch build included;
   only `help`, `settings` and a scratch build's `set` in a settings preview are harmless). `build.bat` and `snipsnap quit` stop the user's running copy (found by
   window class), `rect` and `window` freeze every monitor, and every capture replaces the

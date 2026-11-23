@@ -1,0 +1,562 @@
+//! SnipSnap Recorder (`snipsnap-rec.exe`): on-demand GPU screen recorder spawned by `snipsnap.exe`.
+//!
+//! Lifecycle:
+//! 1. Spawned with `--warm` the moment a recording hotkey fires -> creates `SnipSnapRec` message
+//!    window immediately and pre-warms D3D11 + WinRT Direct3D + Media Foundation on a worker thread.
+//! 2. Receives `RecTarget` via `WM_COPYDATA` (or directly via CLI args) -> shows the Armed notch
+//!    (`D`) + `B2` muted corner-tick border (`WDA_EXCLUDEFROMCAPTURE`).
+//! 3. Keys `1`–`4` (or clicking the pill) pick `480` / `720` (default) / `1080` / `Native`;
+//!    `Enter` / `R` (or clicking the shutter circle) starts recording with the 340 ms `S2 + B2`
+//!    transition; `Esc` cancels cleanly.
+//! 4. Pressing the stop circle or re-pressing any recording hotkey stops recording, finalizes the
+//!    H.264 `.mp4` in `Videos\SnipSnap\`, drops all GPU/WGC/MF handles immediately, flashes,
+//!    copies `CF_HDROP` to the clipboard, shows a native Windows 11 notification, and exits.
+#![no_std]
+#![no_main]
+
+extern crate alloc;
+
+mod capture;
+mod encode;
+mod finish;
+mod gpu;
+mod ipc;
+mod ui;
+
+use alloc::boxed::Box;
+use alloc::string::String;
+use capture::CaptureSession;
+use core::ffi::c_void;
+use core::ptr::{null, null_mut};
+use gpu::GpuContext;
+use ipc::{COPYDATA_TARGET, Quality, REC_CLASS, REC_MUTEX, RecKind, RecTarget, WM_APP_REC_ENDED, WM_APP_STOP, WM_APP_WARM_DONE};
+use pk::sync::Mutex;
+use ui::{OverlayUi, PillAction, TRANSITION_MS, UiState};
+use windows::Win32::System::WinRT::{RO_INIT_SINGLETHREADED, RoInitialize};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
+use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint};
+use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::SystemInformation::GetTickCount64;
+use windows_sys::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_ESCAPE, VK_RETURN};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
+    GetWindowRect, HWND_MESSAGE, IsIconic, IsWindow, KillTimer, MSG, PostMessageW, PostQuitMessage, RegisterClassW, SetProcessDPIAware,
+    SetTimer, SetWindowLongPtrW, TranslateMessage, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW,
+};
+
+pk::entry!(run);
+
+const TIMER_IDLE_TIMEOUT: usize = 1;
+const TIMER_UI_TICK: usize = 2;
+
+// Temporary armed-only hotkeys (unregistered the instant recording starts or cancels).
+const HK_Q1: i32 = 10;
+const HK_Q2: i32 = 11;
+const HK_Q3: i32 = 12;
+const HK_Q4: i32 = 13;
+const HK_ENTER: i32 = 14;
+const HK_R: i32 = 15;
+const HK_ESC: i32 = 16;
+
+static WARM_SLOT: Mutex<Option<Option<GpuContext>>> = Mutex::new(None);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Warming,
+    Armed,
+    WaitingWarmToRecord,
+    Recording,
+    Done,
+}
+
+struct App {
+    host: HWND,
+    phase: Phase,
+    gpu: Option<GpuContext>,
+    warm_failed: bool,
+    target: Option<RecTarget>,
+    ui: Option<OverlayUi>,
+    ui_state: UiState,
+    armed_keys_on: bool,
+    fast_timer: bool,
+    trans_t0: u64,
+    rec_t0: u64,
+    session: Option<CaptureSession>,
+    finished: Option<(String, u64, RECT, bool)>,
+}
+
+impl App {
+    fn register_armed_keys(&mut self) {
+        if self.armed_keys_on {
+            return;
+        }
+        unsafe {
+            RegisterHotKey(self.host, HK_Q1, MOD_NOREPEAT, b'1' as u32);
+            RegisterHotKey(self.host, HK_Q2, MOD_NOREPEAT, b'2' as u32);
+            RegisterHotKey(self.host, HK_Q3, MOD_NOREPEAT, b'3' as u32);
+            RegisterHotKey(self.host, HK_Q4, MOD_NOREPEAT, b'4' as u32);
+            RegisterHotKey(self.host, HK_ENTER, MOD_NOREPEAT, VK_RETURN as u32);
+            RegisterHotKey(self.host, HK_R, MOD_NOREPEAT, b'R' as u32);
+            RegisterHotKey(self.host, HK_ESC, MOD_NOREPEAT, VK_ESCAPE as u32);
+        }
+        self.armed_keys_on = true;
+    }
+
+    fn unregister_armed_keys(&mut self) {
+        if !self.armed_keys_on {
+            return;
+        }
+        for id in HK_Q1..=HK_ESC {
+            unsafe { UnregisterHotKey(self.host, id) };
+        }
+        self.armed_keys_on = false;
+    }
+
+    fn enter_armed(&mut self, target: RecTarget) {
+        unsafe { KillTimer(self.host, TIMER_IDLE_TIMEOUT) };
+        self.target = Some(target);
+        self.phase = Phase::Armed;
+        self.ui_state = UiState {
+            target: target.rect,
+            quality: Quality::Q720,
+            recording: false,
+            trans_t: 0.0,
+            elapsed_ms: 0,
+            bytes: 0,
+            btn_hover: false,
+        };
+        if self.ui.is_none() {
+            self.ui = OverlayUi::new(on_pill_action, on_pill_hover, self as *mut App as *mut c_void);
+        }
+        if let Some(ui) = self.ui.as_mut() {
+            ui.render(&self.ui_state);
+        }
+        self.register_armed_keys();
+        // Track window moves even while armed.
+        if target.kind() == RecKind::Window {
+            unsafe { SetTimer(self.host, TIMER_UI_TICK, 33, None) };
+        }
+    }
+
+    fn start_recording(&mut self) {
+        if self.phase != Phase::Armed && self.phase != Phase::WaitingWarmToRecord {
+            return;
+        }
+        self.unregister_armed_keys();
+        let Some(target) = self.target else {
+            self.cancel();
+            return;
+        };
+        let Some(gpu) = self.gpu.take() else {
+            if self.warm_failed {
+                self.cancel();
+                return;
+            }
+            // Pre-warm still finishing (rare, e.g. instant Full Screen + Enter): start the moment it lands.
+            self.phase = Phase::WaitingWarmToRecord;
+            return;
+        };
+
+        let Some(session) = CaptureSession::start(gpu, target, self.ui_state.quality, self.host) else {
+            self.cancel();
+            return;
+        };
+
+        let now = unsafe { GetTickCount64() };
+        self.session = Some(session);
+        self.phase = Phase::Recording;
+        self.trans_t0 = now;
+        self.rec_t0 = now;
+        self.ui_state.recording = true;
+        self.ui_state.trans_t = 0.0;
+        self.ui_state.elapsed_ms = 0;
+        self.ui_state.bytes = 0;
+        if let Some(ui) = self.ui.as_mut() {
+            ui.render(&self.ui_state);
+        }
+        // ~60 Hz during the 340 ms S2 + B2 transition (and smooth window tracking + live timer).
+        self.fast_timer = true;
+        unsafe { SetTimer(self.host, TIMER_UI_TICK, 16, None) };
+    }
+
+    fn stop_recording(&mut self) {
+        if self.phase != Phase::Recording {
+            self.cancel();
+            return;
+        }
+        self.phase = Phase::Done;
+        self.fast_timer = false;
+        unsafe { KillTimer(self.host, TIMER_UI_TICK) };
+        self.unregister_armed_keys();
+        if let Some(ui) = self.ui.as_mut() {
+            ui.hide();
+        }
+        // Drop overlay UI and capture session right now so GPU/D3D11/WGC/MF free to 0 MB immediately.
+        self.ui = None;
+        let final_rect = self.ui_state.target;
+        let flash_on = self.target.map(|t| t.flash != 0).unwrap_or(true);
+        let elapsed_100ns = (unsafe { GetTickCount64() }.saturating_sub(self.rec_t0) as i64) * 10_000;
+        if let Some(sess) = self.session.take()
+            && let Some((path, bytes)) = sess.stop(elapsed_100ns)
+        {
+            self.finished = Some((path, bytes, final_rect, flash_on));
+        }
+        unsafe { PostQuitMessage(0) };
+    }
+
+    fn cancel(&mut self) {
+        self.phase = Phase::Done;
+        self.fast_timer = false;
+        unsafe {
+            KillTimer(self.host, TIMER_IDLE_TIMEOUT);
+            KillTimer(self.host, TIMER_UI_TICK);
+        }
+        self.unregister_armed_keys();
+        if let Some(ui) = self.ui.as_mut() {
+            ui.hide();
+        }
+        self.ui = None;
+        if let Some(sess) = self.session.take() {
+            let _ = sess.stop(0);
+        }
+        self.gpu = None;
+        unsafe { PostQuitMessage(0) };
+    }
+
+    fn on_tick(&mut self) {
+        let now = unsafe { GetTickCount64() };
+        let mut dirty = false;
+
+        // Track target window moves (and stop if it closes or minimizes).
+        if let Some(t) = self.target
+            && t.kind() == RecKind::Window
+        {
+            let hwnd = t.hwnd as HWND;
+            if unsafe { IsWindow(hwnd) } == 0 {
+                if self.phase == Phase::Recording {
+                    self.stop_recording();
+                } else {
+                    self.cancel();
+                }
+                return;
+            }
+            if unsafe { IsIconic(hwnd) } == 0
+                && let Some(r) = window_bounds(hwnd)
+                && (r.left != self.ui_state.target.left
+                    || r.top != self.ui_state.target.top
+                    || r.right != self.ui_state.target.right
+                    || r.bottom != self.ui_state.target.bottom)
+            {
+                self.ui_state.target = r;
+                dirty = true;
+            }
+        }
+
+        if self.phase == Phase::Recording {
+            let trans = ((now.saturating_sub(self.trans_t0)) as f32 / TRANSITION_MS).clamp(0.0, 1.0);
+            let elapsed = now.saturating_sub(self.rec_t0);
+            let bytes = self.session.as_ref().map(|s| s.live_bytes()).unwrap_or(0);
+
+            if (trans - self.ui_state.trans_t).abs() > 0.001
+                || (elapsed / 100) != (self.ui_state.elapsed_ms / 100)
+                || (bytes / 8192) != (self.ui_state.bytes / 8192)
+            {
+                self.ui_state.trans_t = trans;
+                self.ui_state.elapsed_ms = elapsed;
+                self.ui_state.bytes = bytes;
+                dirty = true;
+            }
+
+            // Once the 340 ms transition has settled, relax the timer once to 50 ms (or 33 ms for window tracking).
+            if trans >= 1.0 && self.fast_timer {
+                self.fast_timer = false;
+                let period = if self.target.map(|t| t.kind() == RecKind::Window).unwrap_or(false) { 33 } else { 50 };
+                unsafe { SetTimer(self.host, TIMER_UI_TICK, period, None) };
+            }
+        }
+
+        if dirty && let Some(ui) = self.ui.as_mut() {
+            ui.render(&self.ui_state);
+        }
+    }
+}
+
+fn on_pill_action(ctx: *mut c_void, action: PillAction) {
+    let app = unsafe { &mut *(ctx as *mut App) };
+    match action {
+        PillAction::SelectQuality(q) => {
+            if app.phase == Phase::Armed && app.ui_state.quality != q {
+                app.ui_state.quality = q;
+                if let Some(ui) = app.ui.as_mut() {
+                    ui.render(&app.ui_state);
+                }
+            }
+        }
+        PillAction::ToggleRecord => {
+            if app.phase == Phase::Armed {
+                app.start_recording();
+            } else if app.phase == Phase::Recording {
+                app.stop_recording();
+            }
+        }
+        PillAction::None => {}
+    }
+}
+
+fn on_pill_hover(ctx: *mut c_void, hover: bool) {
+    let app = unsafe { &mut *(ctx as *mut App) };
+    if app.ui_state.btn_hover != hover {
+        app.ui_state.btn_hover = hover;
+        if let Some(ui) = app.ui.as_mut() {
+            ui.render(&app.ui_state);
+        }
+    }
+}
+
+fn window_bounds(hwnd: HWND) -> Option<RECT> {
+    let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+    if unsafe { DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS as u32, &mut r as *mut RECT as *mut c_void, 16) } < 0
+        && unsafe { GetWindowRect(hwnd, &mut r) } == 0
+    {
+        return None;
+    }
+    if r.right <= r.left || r.bottom <= r.top {
+        return None;
+    }
+    Some(r)
+}
+
+unsafe extern "system" fn host_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    let ptr = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } as *mut App;
+    if ptr.is_null() {
+        return unsafe { DefWindowProcW(h, msg, wp, lp) };
+    }
+    let app = unsafe { &mut *ptr };
+    match msg {
+        WM_COPYDATA => {
+            let cds = unsafe { &*(lp as *const COPYDATASTRUCT) };
+            if cds.dwData == COPYDATA_TARGET && cds.cbData as usize == size_of::<RecTarget>() && !cds.lpData.is_null() {
+                let target = unsafe { *(cds.lpData as *const RecTarget) };
+                if app.phase == Phase::Warming {
+                    app.enter_armed(target);
+                }
+                return 1;
+            }
+            0
+        }
+        WM_APP_WARM_DONE => {
+            let result = WARM_SLOT.lock().take().flatten();
+            match result {
+                Some(gpu) => {
+                    app.gpu = Some(gpu);
+                    if app.phase == Phase::WaitingWarmToRecord {
+                        app.start_recording();
+                    }
+                }
+                None => {
+                    app.warm_failed = true;
+                    if app.phase == Phase::WaitingWarmToRecord {
+                        app.cancel();
+                    }
+                }
+            }
+            0
+        }
+        WM_APP_STOP | WM_APP_REC_ENDED => {
+            if app.phase == Phase::Recording {
+                app.stop_recording();
+            } else {
+                app.cancel();
+            }
+            0
+        }
+        WM_HOTKEY => {
+            match wp as i32 {
+                HK_Q1 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q480)),
+                HK_Q2 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q720)),
+                HK_Q3 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Q1080)),
+                HK_Q4 => on_pill_action(ptr as *mut c_void, PillAction::SelectQuality(Quality::Native)),
+                HK_ENTER | HK_R => app.start_recording(),
+                HK_ESC => app.cancel(),
+                _ => {}
+            }
+            0
+        }
+        WM_TIMER => {
+            if wp == TIMER_IDLE_TIMEOUT && app.phase == Phase::Warming {
+                app.cancel();
+            } else if wp == TIMER_UI_TICK {
+                app.on_tick();
+            }
+            0
+        }
+        WM_CLOSE => {
+            app.cancel();
+            0
+        }
+        WM_DESTROY => {
+            unsafe { PostQuitMessage(0) };
+            0
+        }
+        _ => unsafe { DefWindowProcW(h, msg, wp, lp) },
+    }
+}
+
+fn parse_i32(s: &str) -> Option<i32> {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+    let (neg, rest) = if bytes[0] == b'-' { (true, &bytes[1..]) } else { (false, bytes) };
+    if rest.is_empty() {
+        return None;
+    }
+    let mut v: i64 = 0;
+    for &b in rest {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        v = v * 10 + (b - b'0') as i64;
+    }
+    if neg { Some((-v) as i32) } else { Some(v as i32) }
+}
+
+fn cli_target() -> Option<RecTarget> {
+    let args = pk::args::args();
+    let cmd = args.first()?.as_str();
+    if cmd == "--warm" {
+        return None;
+    }
+    if cmd == "--full" {
+        let mut p = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut p) };
+        let mon = unsafe { MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST) };
+        let mut mi: MONITORINFO = unsafe { core::mem::zeroed() };
+        mi.cbSize = size_of::<MONITORINFO>() as u32;
+        if unsafe { GetMonitorInfoW(mon, &mut mi) } == 0 {
+            return None;
+        }
+        return Some(RecTarget { kind: 2, rect: mi.rcMonitor, hwnd: 0, monitor: mon as usize, flash: 1 });
+    }
+    if cmd == "--rect" && args.len() >= 5 {
+        let rect =
+            RECT { left: parse_i32(&args[1])?, top: parse_i32(&args[2])?, right: parse_i32(&args[3])?, bottom: parse_i32(&args[4])? };
+        let p = POINT { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+        let mon = unsafe { MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST) };
+        return Some(RecTarget { kind: 0, rect, hwnd: 0, monitor: mon as usize, flash: 1 });
+    }
+    None
+}
+
+fn run() -> u32 {
+    if unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) } == 0 {
+        unsafe { SetProcessDPIAware() };
+    }
+    let _ = unsafe { RoInitialize(RO_INIT_SINGLETHREADED) };
+
+    let args = pk::args::args();
+    if args.first().map(|s| s.as_str()) == Some("--help") || args.first().map(|s| s.as_str()) == Some("help") {
+        let mut out = match pk::out::stdout_kind() {
+            pk::out::StdoutKind::None => {
+                if pk::out::attach_parent_console() {
+                    pk::out::console_output().unwrap_or_else(pk::out::Writer::null)
+                } else {
+                    pk::out::Writer::null()
+                }
+            }
+            _ => pk::out::Writer::new(pk::out::stdout_handle()),
+        };
+        out.write_bytes(
+            b"snipsnap-rec - on-demand screen recorder spawned by snipsnap.exe\n\
+              \x20 snipsnap-rec --warm                pre-warm GPU and wait for snipsnap.exe\n\
+              \x20 snipsnap-rec --full                arm full-screen recording on cursor monitor\n\
+              \x20 snipsnap-rec --rect L T R B        arm rectangle recording\n",
+        );
+        return 0;
+    }
+
+    let Some(mutex) = pk::instance::NamedMutex::first(REC_MUTEX) else {
+        return 0;
+    };
+
+    let hinst = unsafe { GetModuleHandleW(null()) };
+    let mut wc: WNDCLASSW = unsafe { core::mem::zeroed() };
+    wc.lpfnWndProc = Some(host_proc);
+    wc.hInstance = hinst;
+    wc.lpszClassName = REC_CLASS;
+    unsafe { RegisterClassW(&wc) };
+
+    let host = unsafe { CreateWindowExW(0, REC_CLASS, pk::w!("SnipSnapRec"), 0, 0, 0, 0, 0, HWND_MESSAGE, null_mut(), hinst, null()) };
+    if host.is_null() {
+        return 2;
+    }
+
+    let mut app = Box::new(App {
+        host,
+        phase: Phase::Warming,
+        gpu: None,
+        warm_failed: false,
+        target: None,
+        ui: None,
+        ui_state: UiState {
+            target: RECT { left: 0, top: 0, right: 0, bottom: 0 },
+            quality: Quality::Q720,
+            recording: false,
+            trans_t: 0.0,
+            elapsed_ms: 0,
+            bytes: 0,
+            btn_hover: false,
+        },
+        armed_keys_on: false,
+        fast_timer: false,
+        trans_t0: 0,
+        rec_t0: 0,
+        session: None,
+        finished: None,
+    });
+    unsafe { SetWindowLongPtrW(host, GWLP_USERDATA, (&mut *app as *mut App) as isize) };
+
+    // Pre-warm D3D11 + WinRT Direct3D + Media Foundation on a background thread immediately.
+    let host_addr = host as usize;
+    let _ = pk::thread::spawn(move || {
+        let ctx = GpuContext::init();
+        *WARM_SLOT.lock() = Some(ctx);
+        unsafe { PostMessageW(host_addr as HWND, WM_APP_WARM_DONE, 0, 0) };
+    });
+
+    if let Some(target) = cli_target() {
+        app.enter_armed(target);
+    } else {
+        // Guard against leaked `--warm` if parent dies before handing off a target.
+        unsafe { SetTimer(host, TIMER_IDLE_TIMEOUT, 60_000, None) };
+    }
+
+    let mut m: MSG = unsafe { core::mem::zeroed() };
+    while unsafe { GetMessageW(&mut m, null_mut(), 0, 0) } > 0 {
+        unsafe {
+            TranslateMessage(&m);
+            DispatchMessageW(&m);
+        }
+    }
+
+    // Grab finished recording info, then drop `app` so every GPU/WGC/MF/Direct2D handle is freed.
+    let finished = app.finished.take();
+    unsafe { SetWindowLongPtrW(host, GWLP_USERDATA, 0) };
+    drop(app);
+
+    // Post-recording finish runs with 0 MB GPU memory: flash + clipboard CF_HDROP + native Win11 toast.
+    if let Some((path, bytes, rect, flash_on)) = finished {
+        let copied = finish::copy_file_to_clipboard(host, &path);
+        if flash_on {
+            finish::show_flash(rect);
+        }
+        finish::show_saved_notification(host, &path, bytes, copied);
+    }
+
+    unsafe { DestroyWindow(host) };
+    drop(mutex);
+    0
+}

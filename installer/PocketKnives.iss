@@ -55,6 +55,7 @@ Name: nowplaying; Description: "NowPlaying"; GroupDescription: "Start when I sig
 
 [Files]
 Source: "{#AppSource}\snipsnap.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppSource}\snipsnap-rec.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\QuickTooth.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\NowPlaying.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\pk.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -170,6 +171,8 @@ end;
 function CloseSnipSnap: Boolean;
 begin
   Result := CloseBlade('snipsnap.exe', 'quit', 'Local\SnipSnap.Daemon');
+  if Result then
+    Result := CloseBlade('snipsnap-rec.exe', '', 'Local\SnipSnap.Recorder');
 end;
 
 function CloseRunner: Boolean;
