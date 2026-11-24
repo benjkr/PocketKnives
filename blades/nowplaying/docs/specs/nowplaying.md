@@ -58,6 +58,9 @@ What it does now. Keep it current in the same change, and lean.
   (closed to the tray, Store apps) it launches the Apps-folder entry or the exe, which a running
   app answers by showing itself. A browser comes forward on its current tab, not the playing one
   unless that tab is showing.
+- Right-click opens a context menu (play/pause, previous, next, frequency meter, exit). The strip
+  is made foreground while it's open so a click anywhere outside closes it, and focus goes back to
+  the previous window unless that click moved it.
 - Hidden when no media session is active, and behind visible, uncloaked fullscreen windows
   (ignoring desktop shell windows like `Progman` and `WorkerW`).
 
