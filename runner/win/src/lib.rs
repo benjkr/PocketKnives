@@ -12,7 +12,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ptr::null;
-use runner_core::blade_settings::{ALT, CTRL, SHIFT, WIN, is_extended, join_hotkey, split_hotkey};
+use runner_core::blade_settings::{ALT, CTRL, Kind, SHIFT, Setting, WIN, is_extended, join_hotkey, split_hotkey};
 use windows_sys::Win32::Globalization::{LCMAP_UPPERCASE, LCMapStringEx, LOCALE_NAME_INVARIANT};
 use windows_sys::Win32::Security::Cryptography::{BCRYPT_SHA256_ALG_HANDLE, BCryptHash};
 use windows_sys::core::GUID;
@@ -144,9 +144,112 @@ pub fn hotkey_value(boxed: u32, saved: &str) -> String {
     join_hotkey(modifiers, key)
 }
 
+// Native (XP and Windows 10) settings window geometry, in 96-DPI pixels.
+pub const MIN_WINDOW_WIDTH: i32 = 564;
+pub const MIN_WINDOW_HEIGHT: i32 = 262;
+pub const PAGE_HOST_X: i32 = 174;
+pub const PAGE_HOST_Y: i32 = 68;
+pub const PAGE_RIGHT_MARGIN: i32 = 8;
+pub const PAGE_LOCAL_X: i32 = 4;
+pub const PAGE_LOCAL_Y: i32 = 4;
+pub const PAGE_BOTTOM_PAD: i32 = 4;
+pub const PAGE_BUTTON_GAP: i32 = 12;
+pub const BUTTON_ROW_FROM_BOTTOM: i32 = 32;
+pub const ROW_HEIGHT: i32 = 22;
+pub const ROW_STEP: i32 = 30;
+pub const CONTROL_LOCAL_X: i32 = 124; // window x = PAGE_HOST_X + 124 = 298
+pub const PICTURE_WIDTH: i32 = 76;
+pub const PICTURE_HEIGHT: i32 = 56;
+pub const PICTURE_GAP: i32 = 6;
+pub const PICTURE_SIZE: i32 = 24;
+pub const FRAME_WIDTH: i32 = 2;
+pub const SCROLLBAR_RESERVE: i32 = 24;
+
+/// A page's required content area inside `page_host` (96-DPI pixels).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PageSize {
+    pub width: i32,
+    pub height: i32,
+}
+
+/// Measures a blade page's content width and height inside `page_host` (96-DPI pixels).
+/// `has_pictures[i]` is true when setting `i` is a `Picture` whose icon files all exist.
+pub fn measure_blade_page(settings: &[Setting], has_pictures: &[bool]) -> PageSize {
+    if settings.is_empty() {
+        return PageSize { width: PAGE_LOCAL_X + 330, height: 6 + 18 + PAGE_BOTTOM_PAD };
+    }
+    let mut y = PAGE_LOCAL_Y;
+    let mut max_bottom = y;
+    let mut max_right = PAGE_LOCAL_X + 330;
+    for (i, setting) in settings.iter().enumerate() {
+        if setting.kind == Kind::Picture && has_pictures.get(i).copied().unwrap_or(false) {
+            let count = setting.choices.len() as i32;
+            if count > 0 {
+                let right = CONTROL_LOCAL_X + count * PICTURE_WIDTH + (count - 1) * PICTURE_GAP + FRAME_WIDTH;
+                max_right = max_right.max(right);
+            }
+            max_bottom = max_bottom.max(y + PICTURE_HEIGHT + FRAME_WIDTH);
+            y += PICTURE_HEIGHT + PICTURE_GAP;
+        } else {
+            max_bottom = max_bottom.max(y + ROW_HEIGHT);
+            y += ROW_STEP;
+        }
+    }
+    PageSize { width: max_right, height: max_bottom + PAGE_BOTTOM_PAD }
+}
+
+/// The native window's computed client size and derived coordinates (96-DPI pixels).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct NativeLayout {
+    pub client_width: i32,
+    pub client_height: i32,
+    pub page_host_width: i32,
+    pub page_host_height: i32,
+    pub blade_list_height: i32,
+    pub hint_y: i32,
+    pub button_y: i32,
+    pub page_icon_x: i32,
+    pub description_width: i32,
+    pub ok_x: i32,
+    pub cancel_x: i32,
+    pub apply_x: i32,
+}
+
+impl NativeLayout {
+    /// Computes the window's client layout to fit the tallest and widest page, capped to
+    /// `work_client` (the monitor work area minus non-client chrome, in 96-DPI pixels).
+    pub fn compute(pages: &[PageSize], work_client: Option<(i32, i32)>) -> Self {
+        let tallest = pages.iter().map(|p| p.height).max().unwrap_or(0);
+        let widest = pages.iter().map(|p| p.width).max().unwrap_or(0);
+        let needed_height = PAGE_HOST_Y + tallest + PAGE_BUTTON_GAP + BUTTON_ROW_FROM_BOTTOM;
+        let client_height = runner_core::fit_work_area(needed_height, MIN_WINDOW_HEIGHT, work_client.map(|(_, h)| h));
+        let page_host_height = client_height - PAGE_HOST_Y - PAGE_BUTTON_GAP - BUTTON_ROW_FROM_BOTTOM;
+        let extra_right = if tallest > page_host_height { SCROLLBAR_RESERVE } else { 8 };
+        let needed_width = PAGE_HOST_X + widest + extra_right + PAGE_RIGHT_MARGIN;
+        let client_width = runner_core::fit_work_area(needed_width, MIN_WINDOW_WIDTH, work_client.map(|(w, _)| w));
+        let page_host_width = client_width - PAGE_HOST_X - PAGE_RIGHT_MARGIN;
+        let page_icon_x = client_width - 42;
+        Self {
+            client_width,
+            client_height,
+            page_host_width,
+            page_host_height,
+            blade_list_height: client_height - 134,
+            hint_y: client_height - 64,
+            button_y: client_height - BUTTON_ROW_FROM_BOTTOM,
+            page_icon_x,
+            description_width: page_icon_x - 192,
+            ok_x: client_width - 242,
+            cancel_x: client_width - 162,
+            apply_x: client_width - 82,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use runner_core::blade_settings::Choice;
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| String::from(*s)).collect()
@@ -198,5 +301,61 @@ mod tests {
         assert_eq!(hotkey_value(0x641, "0"), join_hotkey(CTRL | ALT, 0x41));
         // The extended flag isn't a modifier.
         assert_eq!(hotkey_value(0xe2e, "0"), join_hotkey(CTRL | ALT, 0x2e));
+    }
+
+    fn setting(kind: Kind, choices: usize) -> Setting {
+        Setting {
+            key: String::from("k"),
+            kind,
+            value: String::new(),
+            label: String::from("L"),
+            choices: (0..choices).map(|_| Choice { value: String::from("v"), label: String::from("V") }).collect(),
+        }
+    }
+
+    #[test]
+    fn native_layout_sizing() {
+        // Small pages preserve the classic 564 x 262 proportions exactly.
+        let small = [
+            PageSize { width: PAGE_LOCAL_X + 200, height: 48 },
+            measure_blade_page(&[setting(Kind::Toggle, 0)], &[false]),
+        ];
+        let base = NativeLayout::compute(&small, Some((1920, 1000)));
+        assert_eq!((base.client_width, base.client_height), (564, 262));
+        assert_eq!((base.blade_list_height, base.hint_y, base.button_y), (128, 198, 230));
+        assert_eq!((base.page_icon_x, base.description_width, base.ok_x, base.cancel_x, base.apply_x), (522, 330, 322, 402, 482));
+
+        // SnipSnap's 7 settings (6 hotkeys + 1 toggle) grow the window cleanly above the buttons.
+        let snipsnap_settings = [
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Hotkey, 0),
+            setting(Kind::Toggle, 0),
+        ];
+        let snipsnap = measure_blade_page(&snipsnap_settings, &[false; 7]);
+        assert_eq!(snipsnap.height, 210);
+        let expanded = NativeLayout::compute(&[snipsnap], Some((1920, 1000)));
+        assert_eq!((expanded.client_width, expanded.client_height), (564, 322));
+        assert_eq!(expanded.page_host_height, 210);
+        assert!(PAGE_HOST_Y + snipsnap.height <= expanded.button_y - PAGE_BUTTON_GAP);
+
+        // QuickTooth's 2 choices + 2-choice picture fit without widening.
+        let qt = measure_blade_page(&[setting(Kind::Choice, 2), setting(Kind::Choice, 5), setting(Kind::Picture, 2)], &[false, false, true]);
+        assert_eq!(qt.height, 126);
+        assert_eq!(NativeLayout::compute(&[qt], Some((1920, 1000))).client_width, 564);
+
+        // A wide 4-choice picture widens the window so nothing clips horizontally.
+        let wide = measure_blade_page(&[setting(Kind::Picture, 4)], &[true]);
+        assert!(NativeLayout::compute(&[wide], Some((1920, 1000))).client_width > 564);
+
+        // A huge page caps to 85% of work area so the page host enables scrolling.
+        let huge: Vec<Setting> = (0..25).map(|_| setting(Kind::Hotkey, 0)).collect();
+        let huge_size = measure_blade_page(&huge, &[false; 25]);
+        let capped = NativeLayout::compute(&[huge_size], Some((1920, 500)));
+        assert_eq!(capped.client_height, 425);
+        assert!(huge_size.height > capped.page_host_height);
     }
 }

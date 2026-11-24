@@ -8,7 +8,10 @@ use alloc::vec::Vec;
 use core::cell::{Cell, OnceCell, RefCell};
 use core::ptr::{null, null_mut};
 use pk::wide::to_wide;
-use runner::{hotkey_box, hotkey_value};
+use runner::{
+    CONTROL_LOCAL_X, FRAME_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, NativeLayout, PAGE_HOST_X, PAGE_HOST_Y, PAGE_LOCAL_X, PAGE_LOCAL_Y,
+    PICTURE_GAP, PICTURE_HEIGHT, PICTURE_SIZE, PICTURE_WIDTH, PageSize, ROW_HEIGHT, ROW_STEP, hotkey_box, hotkey_value, measure_blade_page,
+};
 use runner_core::Result;
 use runner_core::blade_settings::{self, Kind, Setting};
 use runner_core::settings::{BLADES, BLADES_LABEL, GENERAL_DESCRIPTION, GENERAL_NAME, LOOK_LABEL, LOOK_NAMES, Look, Startup, Suite, TITLE};
@@ -22,19 +25,23 @@ use windows_sys::Win32::UI::Controls::{
     HIMAGELIST, HKM_GETHOTKEY, HKM_SETHOTKEY, HKM_SETRULES, ICC_LISTVIEW_CLASSES, ILC_COLOR24, ILC_COLOR32, INITCOMMONCONTROLSEX,
     ImageList_Add, ImageList_Create, ImageList_Destroy, ImageList_ReplaceIcon, InitCommonControlsEx, LVCF_WIDTH, LVCOLUMNW, LVIF_IMAGE,
     LVIF_TEXT, LVITEMW, LVM_GETITEMSTATE, LVM_INSERTCOLUMNW, LVM_INSERTITEMW, LVM_SETEXTENDEDLISTVIEWSTYLE, LVM_SETIMAGELIST,
-    LVM_SETITEMSTATE, LVN_ITEMCHANGED, NMHDR, NMLISTVIEW, SetWindowTheme,
+    LVM_SETITEMSTATE, LVN_ITEMCHANGED, NMHDR, NMLISTVIEW, SetScrollInfo, SetWindowTheme, ShowScrollBar,
 };
 use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForSystem, SystemParametersInfoForDpi};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyWindow, GetMessageTime, GetWindowRect, HICON, HMENU, HWND_TOP, KillTimer, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
-    STM_SETICON, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SendMessageW, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, WM_CLOSE, WM_COMMAND,
-    WM_CTLCOLORSTATIC, WM_NOTIFY, WM_SETFONT, WM_SETICON, WM_TIMER, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-    WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_EX_DLGMODALFRAME, WS_GROUP, WS_MINIMIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    DestroyWindow, GetMessageTime, GetParent, GetScrollInfo, GetWindowRect, HICON, HMENU, HWND_TOP, KillTimer, NONCLIENTMETRICSW,
+    SB_BOTTOM, SB_LINEDOWN, SB_LINEUP, SB_PAGEDOWN, SB_PAGEUP, SB_THUMBPOSITION, SB_THUMBTRACK, SB_TOP, SB_VERT, SCROLLINFO, SIF_PAGE,
+    SIF_POS, SIF_RANGE, SIF_TRACKPOS, SPI_GETNONCLIENTMETRICS, STM_SETICON, SW_ERASE, SW_HIDE, SW_INVALIDATE, SW_SCROLLCHILDREN, SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, ScrollWindowEx, SendMessageW, SetTimer, SetWindowPos, SetWindowTextW, ShowWindow, WM_CLOSE,
+    WM_COMMAND, WM_CTLCOLORSTATIC, WM_MOUSEWHEEL, WM_NOTIFY, WM_SETFONT, WM_SETICON, WM_TIMER, WM_VSCROLL, WS_BORDER, WS_CAPTION,
+    WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_EX_DLGMODALFRAME, WS_GROUP, WS_MINIMIZEBOX,
+    WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
 const CLASS_NAME: &str = "PocketKnives.Settings.Win32";
+const PAGE_CLASS_NAME: &str = "PocketKnives.Settings.Page";
 const OK_ID: usize = 1;
 const CANCEL_ID: usize = 2;
 const APPLY_ID: usize = 3;
@@ -73,14 +80,8 @@ const EN_CHANGE: u32 = 0x300;
 const DWMWCP_DONOTROUND: i32 = 1;
 const FRAME_TIMER: usize = 1;
 
-// A picture setting (96-DPI pixels): buttons PICTURE_WIDTH x PICTURE_HEIGHT, PICTURE_GAP apart,
-// each with its picture PICTURE_SIZE square above the label; a frame FRAME_WIDTH wide around the
-// chosen one slides to a new pick in FRAME_SLIDE_MS.
-const PICTURE_WIDTH: i32 = 76;
-const PICTURE_HEIGHT: i32 = 56;
-const PICTURE_GAP: i32 = 6;
-const PICTURE_SIZE: i32 = 24;
-const FRAME_WIDTH: i32 = 2;
+// Picture setting constants live in `runner` (`lib.rs`) alongside the layout math; the slide
+// duration is only used here.
 const FRAME_SLIDE_MS: u32 = 180;
 
 /// `BUTTON_IMAGELIST` (commctrl.h).
@@ -112,11 +113,18 @@ struct Native {
     icon_list: Cell<HIMAGELIST>,
     general_list: Cell<HWND>,
     blade_list: Cell<HWND>,
+    hint_label: Cell<HWND>,
+    page_host: Cell<HWND>,
     apply_button: Cell<HWND>,
     page_title: Cell<HWND>,
     description: Cell<HWND>,
     page_icon: Cell<HWND>,
     look_choice: Cell<HWND>,
+    /// Scaled content height of each page inside `page_host`, for vertical scrolling when capped.
+    page_heights: RefCell<[i32; PAGES]>,
+    viewport_height: Cell<i32>,
+    scroll_y: Cell<i32>,
+    max_scroll: Cell<i32>,
     /// Every icon this window loaded, destroyed with it.
     icons: RefCell<Vec<HICON>>,
     page_icons: RefCell<[HICON; PAGES]>,
@@ -158,7 +166,8 @@ pub fn owns_keyboard(control: HWND) -> bool {
 }
 
 pub fn initialize() -> Result<()> {
-    win::register(CLASS_NAME, window_procedure, Some(COLOR_BTNFACE))
+    win::register(CLASS_NAME, window_procedure, Some(COLOR_BTNFACE))?;
+    win::register(PAGE_CLASS_NAME, page_procedure, Some(COLOR_BTNFACE))
 }
 
 /// Opens the window in `look` (XP or Windows 10), with each blade's settings read from it now.
@@ -177,11 +186,17 @@ pub fn open(suite: &'static Suite, look: Look) -> Result<()> {
         icon_list: Cell::new(0),
         general_list: Cell::new(null_mut()),
         blade_list: Cell::new(null_mut()),
+        hint_label: Cell::new(null_mut()),
+        page_host: Cell::new(null_mut()),
         apply_button: Cell::new(null_mut()),
         page_title: Cell::new(null_mut()),
         description: Cell::new(null_mut()),
         page_icon: Cell::new(null_mut()),
         look_choice: Cell::new(null_mut()),
+        page_heights: RefCell::new([0; PAGES]),
+        viewport_height: Cell::new(0),
+        scroll_y: Cell::new(0),
+        max_scroll: Cell::new(0),
         icons: RefCell::new(Vec::new()),
         page_icons: RefCell::new([null_mut(); PAGES]),
         page_controls: RefCell::new(Default::default()),
@@ -253,8 +268,10 @@ impl Native {
         // WS_CLIPCHILDREN: a picture setting's sliding frame doesn't make the window paint over its buttons.
         let style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
         let extended_style = WS_EX_CONTROLPARENT | WS_EX_DLGMODALFRAME;
-        let mut bounds = RECT { left: 0, top: 0, right: self.scale(564), bottom: self.scale(262) };
+        let mut bounds = RECT { left: 0, top: 0, right: self.scale(MIN_WINDOW_WIDTH), bottom: self.scale(MIN_WINDOW_HEIGHT) };
         unsafe { AdjustWindowRectExForDpi(&mut bounds, style, 0, extended_style, self.dpi) };
+        let nc_width = (bounds.right - bounds.left) - self.scale(MIN_WINDOW_WIDTH);
+        let nc_height = (bounds.bottom - bounds.top) - self.scale(MIN_WINDOW_HEIGHT);
         let window = unsafe {
             CreateWindowExW(
                 extended_style,
@@ -304,14 +321,36 @@ impl Native {
         for (i, blade) in BLADES.iter().enumerate() {
             add_row(blade_list, i, blade.name, i as i32 + 1, if original[i] { 2 } else { 1 });
         }
-        self.control("STATIC", "Checked blades start when you sign in.", 0, (8, 198, 156, 36), 0, false, 0)?;
+        let hint = self.control("STATIC", "Checked blades start when you sign in.", 0, (8, 198, 156, 36), 0, false, 0)?;
+        self.hint_label.set(hint);
 
         self.page_title.set(self.control("STATIC", "", 0, (178, 8, 332, 18), 0, true, 0)?);
         self.description.set(self.control("STATIC", "", 0, (178, 28, 330, 38), 0, false, 0)?);
         self.page_icon.set(self.control("STATIC", "", SS_ICON, (522, 8, 32, 32), 0, false, 0)?);
-        let look_label = self.control("STATIC", &format!("&{LOOK_LABEL}"), 0, (178, 70, 120, 18), 0, true, 0)?;
-        let look_choice =
-            self.control("COMBOBOX", "", WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, (178, 90, 200, 160), LOOK_ID, false, 0)?;
+
+        // Child host for page controls: keeps the header and OK/Cancel/Apply fixed and scrolls
+        // vertically if a page is still taller than the work-area-capped window.
+        let page_host = self.control(
+            PAGE_CLASS_NAME,
+            "",
+            WS_CLIPCHILDREN,
+            (PAGE_HOST_X, PAGE_HOST_Y, MIN_WINDOW_WIDTH - PAGE_HOST_X - 8, 150),
+            0,
+            false,
+            WS_EX_CONTROLPARENT,
+        )?;
+        self.page_host.set(page_host);
+
+        let look_label = self.page_control("STATIC", &format!("&{LOOK_LABEL}"), 0, (PAGE_LOCAL_X, 2, 120, 18), 0, true, 0)?;
+        let look_choice = self.page_control(
+            "COMBOBOX",
+            "",
+            WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST,
+            (PAGE_LOCAL_X, 22, 200, 160),
+            LOOK_ID,
+            false,
+            0,
+        )?;
         self.look_choice.set(look_choice);
         for name in LOOK_NAMES {
             add_choice(look_choice, name);
@@ -324,15 +363,74 @@ impl Native {
         }
         *self.saved.borrow_mut() = pages.iter().map(|page: &Vec<Setting>| page.iter().map(|s| s.value.clone()).collect()).collect();
         let _ = self.blade_settings.set(pages);
+
+        // Load picture icons once so measurement knows which `picture` settings fall back to a
+        // drop-down, then size the window to fit the tallest page (within the monitor work area).
+        let mut loaded_pictures: Vec<Vec<Option<Vec<HICON>>>> = Vec::with_capacity(BLADES.len());
+        let mut page_sizes = [PageSize { width: PAGE_LOCAL_X + 200, height: 48 }; PAGES];
         for i in 0..BLADES.len() {
-            self.build_blade_page(i)?;
+            let settings = &self.blade_settings()[i];
+            let pics: Vec<Option<Vec<HICON>>> =
+                settings.iter().map(|s| (s.kind == Kind::Picture).then(|| self.pictures(i, s)).flatten()).collect();
+            let has_pics: Vec<bool> = pics.iter().map(Option::is_some).collect();
+            page_sizes[i + 1] = measure_blade_page(settings, &has_pics);
+            loaded_pictures.push(pics);
+        }
+        let dpi = self.dpi.max(96) as i64;
+        let work_client = runner_core::work_area(self.dpi).map(|(w, h)| {
+            let nc_w_logical = (nc_width as i64 * 96 + dpi - 1) / dpi;
+            let nc_h_logical = (nc_height as i64 * 96 + dpi - 1) / dpi;
+            ((w - nc_w_logical as i32).max(160), (h - nc_h_logical as i32).max(160))
+        });
+        let layout = NativeLayout::compute(&page_sizes, work_client);
+        let mut final_bounds = RECT { left: 0, top: 0, right: self.scale(layout.client_width), bottom: self.scale(layout.client_height) };
+        unsafe {
+            AdjustWindowRectExForDpi(&mut final_bounds, style, 0, extended_style, self.dpi);
+            SetWindowPos(
+                window,
+                null_mut(),
+                0,
+                0,
+                final_bounds.right - final_bounds.left,
+                final_bounds.bottom - final_bounds.top,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            SetWindowPos(blade_list, null_mut(), self.scale(8), self.scale(64), self.scale(156), self.scale(layout.blade_list_height), SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(hint, null_mut(), self.scale(8), self.scale(layout.hint_y), self.scale(156), self.scale(36), SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(
+                self.description.get(),
+                null_mut(),
+                self.scale(178),
+                self.scale(28),
+                self.scale(layout.description_width),
+                self.scale(38),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            SetWindowPos(self.page_icon.get(), null_mut(), self.scale(layout.page_icon_x), self.scale(8), self.scale(32), self.scale(32), SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(
+                page_host,
+                null_mut(),
+                self.scale(PAGE_HOST_X),
+                self.scale(PAGE_HOST_Y),
+                self.scale(layout.page_host_width),
+                self.scale(layout.page_host_height),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+        self.viewport_height.set(self.scale(layout.page_host_height));
+        for (i, ps) in page_sizes.iter().enumerate() {
+            self.page_heights.borrow_mut()[i] = self.scale(ps.height);
+        }
+
+        for (i, pics) in loaded_pictures.into_iter().enumerate() {
+            self.build_blade_page(i, &pics)?;
         }
 
         let button_style = WS_TABSTOP | if self.classic { BS_FLAT } else { 0 };
-        // WS_GROUP ends the last picture setting's group of buttons.
-        self.control("BUTTON", "OK", button_style | BS_DEFPUSHBUTTON | WS_GROUP, (322, 230, 75, 24), OK_ID, false, 0)?;
-        self.control("BUTTON", "Cancel", button_style, (402, 230, 75, 24), CANCEL_ID, false, 0)?;
-        let apply = self.control("BUTTON", "&Apply", button_style, (482, 230, 75, 24), APPLY_ID, false, 0)?;
+        // WS_GROUP ends any preceding radio-button group.
+        self.control("BUTTON", "OK", button_style | BS_DEFPUSHBUTTON | WS_GROUP, (layout.ok_x, layout.button_y, 75, 24), OK_ID, false, 0)?;
+        self.control("BUTTON", "Cancel", button_style, (layout.cancel_x, layout.button_y, 75, 24), CANCEL_ID, false, 0)?;
+        let apply = self.control("BUTTON", "&Apply", button_style, (layout.apply_x, layout.button_y, 75, 24), APPLY_ID, false, 0)?;
         self.apply_button.set(apply);
         unsafe { EnableWindow(apply, 0) };
         set_state(general_list, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
@@ -340,47 +438,79 @@ impl Native {
         Ok(())
     }
 
-    fn build_blade_page(&self, blade: usize) -> Result<()> {
+    fn build_blade_page(&self, blade: usize, pictures: &[Option<Vec<HICON>>]) -> Result<()> {
         let settings = &self.blade_settings()[blade];
         if settings.is_empty() {
             let text = format!("{} has no settings to show.", BLADES[blade].name);
-            let label = self.control("STATIC", &text, 0, (178, 74, 330, 18), 0, false, 0)?;
+            let label = self.page_control("STATIC", &text, 0, (PAGE_LOCAL_X, 6, 330, 18), 0, false, 0)?;
             self.page_controls.borrow_mut()[blade + 1].push(label);
         }
         let flat = if self.classic { BS_FLAT } else { 0 };
-        let mut y = 72;
+        let mut y = PAGE_LOCAL_Y;
+        let mut end_group = false;
         for (i, setting) in settings.iter().enumerate() {
             let id = FIRST_SETTING_ID + self.setting_controls.borrow().len();
             if setting.kind == Kind::Picture
-                && let Some(icons) = self.pictures(blade, setting)
+                && let Some(icons) = pictures.get(i).and_then(Option::as_deref)
             {
-                let label = self.control("STATIC", &setting.label, 0, (178, y + 3, 116, 18), 0, false, 0)?;
-                let (buttons, edges) = self.picker(setting, &icons, y, id)?;
+                let label = self.page_control("STATIC", &setting.label, 0, (PAGE_LOCAL_X, y + 3, 116, 18), 0, false, 0)?;
+                let (buttons, edges) = self.picker(setting, icons, y, id)?;
                 let mut pages = self.page_controls.borrow_mut();
                 pages[blade + 1].push(label);
                 pages[blade + 1].extend(buttons.iter().chain(&edges));
                 drop(pages);
                 self.setting_controls.borrow_mut().push((blade, i, buttons));
                 y += PICTURE_HEIGHT + PICTURE_GAP;
+                end_group = true;
                 continue;
             }
+            let group = if end_group {
+                end_group = false;
+                WS_GROUP
+            } else {
+                0
+            };
             let control = if setting.kind == Kind::Toggle {
-                let c = self.control("BUTTON", &setting.label, WS_TABSTOP | BS_AUTOCHECKBOX | flat, (178, y, 330, 22), id, false, 0)?;
+                let c = self.page_control(
+                    "BUTTON",
+                    &setting.label,
+                    WS_TABSTOP | BS_AUTOCHECKBOX | flat | group,
+                    (PAGE_LOCAL_X, y, 330, ROW_HEIGHT),
+                    id,
+                    false,
+                    0,
+                )?;
                 send(c, BM_SETCHECK, (setting.value == "1") as usize, 0);
                 c
             } else {
-                let label = self.control("STATIC", &setting.label, 0, (178, y + 3, 116, 18), 0, false, 0)?;
+                let label = self.page_control("STATIC", &setting.label, 0, (PAGE_LOCAL_X, y + 3, 116, 18), 0, false, 0)?;
                 self.page_controls.borrow_mut()[blade + 1].push(label);
                 if setting.kind == Kind::Hotkey {
                     let border = if self.classic { WS_BORDER } else { 0 };
                     let edge = if self.classic { 0 } else { WS_EX_CLIENTEDGE };
-                    let c = self.control("msctls_hotkey32", "", WS_TABSTOP | border, (298, y, 210, 22), id, false, edge)?;
+                    let c = self.page_control(
+                        "msctls_hotkey32",
+                        "",
+                        WS_TABSTOP | border | group,
+                        (CONTROL_LOCAL_X, y, 210, ROW_HEIGHT),
+                        id,
+                        false,
+                        edge,
+                    )?;
                     // A key with no modifier, or Shift alone, would take that key from every program.
                     send(c, HKM_SETRULES, HKCOMB_NONE | HKCOMB_S, HOTKEYF_CONTROL | HOTKEYF_ALT); // they become Ctrl+Alt
                     send(c, HKM_SETHOTKEY, hotkey_box(&setting.value), 0);
                     c
                 } else {
-                    let c = self.control("COMBOBOX", "", WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, (298, y, 210, 200), id, false, 0)?;
+                    let c = self.page_control(
+                        "COMBOBOX",
+                        "",
+                        WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST | group,
+                        (CONTROL_LOCAL_X, y, 210, 200),
+                        id,
+                        false,
+                        0,
+                    )?;
                     for choice in &setting.choices {
                         add_choice(c, &choice.label);
                     }
@@ -391,7 +521,7 @@ impl Native {
             };
             self.page_controls.borrow_mut()[blade + 1].push(control);
             self.setting_controls.borrow_mut().push((blade, i, alloc::vec![control]));
-            y += 30;
+            y += ROW_STEP;
         }
         Ok(())
     }
@@ -419,10 +549,10 @@ impl Native {
         let mut buttons = Vec::new();
         for (i, (choice, &icon)) in setting.choices.iter().zip(icons).enumerate() {
             let first = if i == 0 { WS_GROUP | WS_TABSTOP } else { 0 };
-            let x = 298 + i as i32 * (PICTURE_WIDTH + PICTURE_GAP);
+            let x = CONTROL_LOCAL_X + i as i32 * (PICTURE_WIDTH + PICTURE_GAP);
             // Clipped so the frame, sliding above them, is never painted over.
             let style = first | BS_AUTORADIOBUTTON | BS_PUSHLIKE | flat | WS_CLIPSIBLINGS;
-            let button = self.control("BUTTON", &choice.label, style, (x, y, PICTURE_WIDTH, PICTURE_HEIGHT), id, false, 0)?;
+            let button = self.page_control("BUTTON", &choice.label, style, (x, y, PICTURE_WIDTH, PICTURE_HEIGHT), id, false, 0)?;
             let images = unsafe { ImageList_Create(size, size, ILC_COLOR32, 1, 0) };
             unsafe { ImageList_ReplaceIcon(images, -1, icon) };
             self.picture_lists.borrow_mut().push(images);
@@ -434,7 +564,7 @@ impl Native {
         }
         let mut edges = [null_mut(); 4];
         for edge in &mut edges {
-            *edge = self.control("STATIC", "", 0, (0, 0, 0, 0), 0, false, 0)?;
+            *edge = self.page_control("STATIC", "", 0, (0, 0, 0, 0), 0, false, 0)?;
         }
         let chosen = setting.choices.iter().position(|c| c.value == setting.value);
         let at = chosen.map_or(NO_FRAME, |i| self.frame_around(buttons[i]));
@@ -444,12 +574,12 @@ impl Native {
         Ok((buttons, edges))
     }
 
-    /// The frame's rectangle around `button`, in the window's client coordinates.
+    /// The frame's rectangle around `button`, in `page_host`'s client coordinates.
     fn frame_around(&self, button: HWND) -> RECT {
         let mut r = NO_FRAME;
         unsafe {
             GetWindowRect(button, &mut r);
-            MapWindowPoints(null_mut(), self.window.get(), (&mut r as *mut RECT).cast(), 2);
+            MapWindowPoints(null_mut(), self.page_host.get(), (&mut r as *mut RECT).cast(), 2);
         }
         let w = self.scale(FRAME_WIDTH);
         RECT { left: r.left - w, top: r.top - w, right: r.right + w, bottom: r.bottom + w }
@@ -535,10 +665,40 @@ impl Native {
         self.bold_font.set(unsafe { CreateFontIndirectW(&metrics.lfMessageFont) });
     }
 
-    /// A child control at (x, y, width, height) in 96-DPI pixels, in the window's font.
+    /// A child control in the main window at `(x, y, width, height)` in 96-DPI pixels.
     #[allow(clippy::too_many_arguments)]
     fn control(
         &self,
+        class: &str,
+        text: &str,
+        style: u32,
+        rect: (i32, i32, i32, i32),
+        id: usize,
+        bold: bool,
+        extended_style: u32,
+    ) -> Result<HWND> {
+        self.control_in(self.window.get(), class, text, style, rect, id, bold, extended_style)
+    }
+
+    /// A child control inside `page_host` at `(x, y, width, height)` in 96-DPI pixels.
+    #[allow(clippy::too_many_arguments)]
+    fn page_control(
+        &self,
+        class: &str,
+        text: &str,
+        style: u32,
+        rect: (i32, i32, i32, i32),
+        id: usize,
+        bold: bool,
+        extended_style: u32,
+    ) -> Result<HWND> {
+        self.control_in(self.page_host.get(), class, text, style, rect, id, bold, extended_style)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn control_in(
+        &self,
+        parent: HWND,
         class: &str,
         text: &str,
         style: u32,
@@ -557,7 +717,7 @@ impl Native {
                 self.scale(y),
                 self.scale(width),
                 self.scale(height),
-                self.window.get(),
+                parent,
                 id as HMENU,
                 win::module(),
                 null(),
@@ -640,6 +800,7 @@ impl Native {
     }
 
     fn show_page(&self, page: usize) {
+        self.scroll_to(0);
         let blade = page.checked_sub(1).map(|i| &BLADES[i]);
         let title = blade.map_or(GENERAL_NAME, |b| b.name);
         let description = blade.map_or(GENERAL_DESCRIPTION, |b| b.description);
@@ -669,6 +830,94 @@ impl Native {
                 unsafe { ShowWindow(control, if i == page { SW_SHOW } else { SW_HIDE }) };
             }
         }
+        self.configure_scroll(page);
+    }
+
+    fn configure_scroll(&self, page: usize) {
+        let host = self.page_host.get();
+        let content_h = self.page_heights.borrow()[page];
+        let view_h = self.viewport_height.get();
+        let max_scroll = (content_h - view_h).max(0);
+        self.max_scroll.set(max_scroll);
+        self.scroll_y.set(0);
+        let info = SCROLLINFO {
+            cbSize: size_of::<SCROLLINFO>() as u32,
+            fMask: SIF_RANGE | SIF_PAGE | SIF_POS,
+            nMin: 0,
+            nMax: (content_h - 1).max(0),
+            nPage: view_h.max(0) as u32,
+            nPos: 0,
+            nTrackPos: 0,
+        };
+        unsafe {
+            SetScrollInfo(host, SB_VERT, &info, 1);
+            ShowScrollBar(host, SB_VERT, (max_scroll > 0) as i32);
+        }
+    }
+
+    fn scroll_to(&self, pos: i32) {
+        let new_pos = pos.clamp(0, self.max_scroll.get());
+        let old_pos = self.scroll_y.get();
+        if new_pos == old_pos {
+            return;
+        }
+        let dy = old_pos - new_pos;
+        let host = self.page_host.get();
+        self.scroll_y.set(new_pos);
+        unsafe {
+            ScrollWindowEx(host, 0, dy, null(), null(), null_mut(), null_mut(), SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+        }
+        for picker in self.pickers.borrow().iter() {
+            picker.from.set(offset_y(picker.from.get(), dy));
+            picker.to.set(offset_y(picker.to.get(), dy));
+        }
+        let info = SCROLLINFO {
+            cbSize: size_of::<SCROLLINFO>() as u32,
+            fMask: SIF_POS,
+            nMin: 0,
+            nMax: 0,
+            nPage: 0,
+            nPos: new_pos,
+            nTrackPos: 0,
+        };
+        unsafe { SetScrollInfo(host, SB_VERT, &info, 1) };
+    }
+
+    fn on_vscroll(&self, code: i32) {
+        let step = self.scale(ROW_STEP);
+        let page = (self.viewport_height.get() - step).max(step);
+        let target = match code {
+            SB_LINEUP => self.scroll_y.get() - step,
+            SB_LINEDOWN => self.scroll_y.get() + step,
+            SB_PAGEUP => self.scroll_y.get() - page,
+            SB_PAGEDOWN => self.scroll_y.get() + page,
+            SB_TOP => 0,
+            SB_BOTTOM => self.max_scroll.get(),
+            SB_THUMBTRACK | SB_THUMBPOSITION => {
+                let mut info = SCROLLINFO {
+                    cbSize: size_of::<SCROLLINFO>() as u32,
+                    fMask: SIF_TRACKPOS,
+                    nMin: 0,
+                    nMax: 0,
+                    nPage: 0,
+                    nPos: 0,
+                    nTrackPos: 0,
+                };
+                unsafe { GetScrollInfo(self.page_host.get(), SB_VERT, &mut info) };
+                info.nTrackPos
+            }
+            _ => return,
+        };
+        self.scroll_to(target);
+    }
+
+    fn on_mousewheel(&self, delta: i16) -> bool {
+        if self.max_scroll.get() <= 0 {
+            return false;
+        }
+        let step = self.scale(ROW_STEP) * 2;
+        self.scroll_to(self.scroll_y.get() - (delta as i32 * step) / 120);
+        true
     }
 
     /// Which blade rows are checked.
@@ -776,6 +1025,10 @@ fn rect_eq(a: RECT, b: RECT) -> bool {
     (a.left, a.top, a.right, a.bottom) == (b.left, b.top, b.right, b.bottom)
 }
 
+fn offset_y(r: RECT, dy: i32) -> RECT {
+    if rect_eq(r, NO_FRAME) { r } else { RECT { left: r.left, top: r.top + dy, right: r.right, bottom: r.bottom + dy } }
+}
+
 /// Where a picker's frame is now: partway from `from` to `to`, easing out. With nothing chosen
 /// before, it appears where it's going.
 fn frame_now(picker: &Picker) -> RECT {
@@ -853,8 +1106,39 @@ unsafe extern "system" fn window_procedure(window: HWND, message: u32, wparam: W
         WM_CTLCOLORSTATIC if settings.is_frame_edge(lparam as HWND) => {
             return unsafe { GetSysColorBrush(COLOR_HIGHLIGHT) } as LRESULT;
         }
+        WM_MOUSEWHEEL => {
+            if settings.on_mousewheel((wparam >> 16 & 0xffff) as i16) {
+                return 0;
+            }
+        }
         WM_NOTIFY if !settings.apply_button.get().is_null() => {
             if settings.item_changed(unsafe { &*(lparam as *const NMHDR) }) {
+                return 0;
+            }
+        }
+        _ => {}
+    }
+    unsafe { DefWindowProcW(window, message, wparam, lparam) }
+}
+
+unsafe extern "system" fn page_procedure(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    match message {
+        WM_COMMAND | WM_CTLCOLORSTATIC => {
+            let parent = unsafe { GetParent(window) };
+            if !parent.is_null() {
+                return send(parent, message, wparam, lparam);
+            }
+        }
+        WM_VSCROLL => {
+            if let Some(settings) = current().filter(|s| s.page_host.get() == window) {
+                settings.on_vscroll((wparam & 0xffff) as i32);
+                return 0;
+            }
+        }
+        WM_MOUSEWHEEL => {
+            if let Some(settings) = current().filter(|s| s.page_host.get() == window)
+                && settings.on_mousewheel((wparam >> 16 & 0xffff) as i16)
+            {
                 return 0;
             }
         }
