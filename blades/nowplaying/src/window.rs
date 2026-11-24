@@ -29,11 +29,12 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     EVENT_SYSTEM_FOREGROUND, FindWindowW, GW_HWNDPREV, GWLP_HWNDPARENT, GWLP_USERDATA, GetClassNameW, GetCursorPos,
     GetForegroundWindow, GetMessageW, GetShellWindow, GetSystemMetrics, GetWindow, GetWindowLongPtrW, GetWindowRect, IDC_ARROW,
     IDC_HAND, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, MA_NOACTIVATE, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG,
-    PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SM_CYSCREEN, SW_HIDE, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_BOTTOMALIGN,
-    TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_APP,
-    WM_CAPTURECHANGED, WM_DESTROY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_RBUTTONUP, WM_SETCURSOR,
-    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SM_CYSCREEN, SW_HIDE, SWP_HIDEWINDOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetForegroundWindow, SetTimer,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    TrackPopupMenu, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_APP, WM_CAPTURECHANGED, WM_DESTROY, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NULL, WM_RBUTTONUP, WM_SETCURSOR, WM_SETTINGCHANGE, WM_TIMER,
+    WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const WM_SMTC_UPDATED: u32 = WM_APP + 1;
@@ -231,7 +232,7 @@ unsafe extern "system" fn win_event_proc(
 ) {
     let hwnd = unsafe { GLOBAL_HWND };
     if !hwnd.is_null() {
-        unsafe { windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(hwnd, WM_FG_CHANGED, fg_hwnd as usize, 0) };
+        unsafe { PostMessageW(hwnd, WM_FG_CHANGED, fg_hwnd as usize, 0) };
     }
 }
 
@@ -680,6 +681,11 @@ impl AppState {
 
         let mut pt = POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut pt) };
+        // Win32 quirk (KB135788): a popup menu only closes on a click outside it when its owner is
+        // the foreground window, and the posted WM_NULL lets the menu loop exit cleanly. The strip
+        // is WS_EX_NOACTIVATE, so make it foreground for the menu and hand focus back afterwards.
+        let prev_fg = unsafe { GetForegroundWindow() };
+        unsafe { SetForegroundWindow(self.hwnd) };
         let cmd = unsafe {
             TrackPopupMenu(
                 menu,
@@ -691,7 +697,14 @@ impl AppState {
                 null(),
             ) as usize
         };
-        unsafe { DestroyMenu(menu) };
+        unsafe {
+            PostMessageW(self.hwnd, WM_NULL, 0, 0);
+            DestroyMenu(menu);
+            // Clicking elsewhere already moved focus there; only return it when the strip kept it.
+            if !prev_fg.is_null() && prev_fg != self.hwnd && GetForegroundWindow() == self.hwnd {
+                SetForegroundWindow(prev_fg);
+            }
+        }
 
         match cmd {
             MENU_PLAY_PAUSE => self.smtc.send(MediaCommand::PlayPause),

@@ -48,6 +48,9 @@ What it does now. Keep it current in the same change, and lean.
   it (such as after a fullscreen window or SnipSnap overlay closes).
 - `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` and `WM_MOUSEACTIVATE -> MA_NOACTIVATE` on left-clicks so
   clicking controls or scrubbing never steals focus.
+- Right-click opens a context menu (play/pause, previous, next, frequency meter, exit). The strip
+  is made foreground while it's open so a click anywhere outside closes it, and focus goes back to
+  the previous window unless that click moved it.
 - Hidden when no media session is active, and behind visible, uncloaked fullscreen windows
   (ignoring desktop shell windows like `Progman` and `WorkerW`).
 
