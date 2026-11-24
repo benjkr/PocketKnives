@@ -10,31 +10,31 @@ use alloc::vec::Vec;
 use core::ptr::{null, null_mut};
 use pk::wide::to_wide;
 use windows_numerics::{Matrix3x2, Vector2};
-use windows::Win32::Foundation::RECT;
-use windows::Win32::Graphics::Direct2D::Common::{
+use pk_windows::Win32::Foundation::RECT;
+use pk_windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
-use windows::Win32::Graphics::Direct2D::{
+use pk_windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_DRAW_TEXT_OPTIONS_NONE,
     D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2,
     D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT,
     D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1Bitmap, ID2D1DCRenderTarget, ID2D1Factory, ID2D1PathGeometry,
     ID2D1RoundedRectangleGeometry,
 };
-use windows::Win32::Graphics::DirectWrite::{
+use pk_windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FEATURE, DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, DWRITE_FONT_STRETCH_NORMAL,
     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_SEMI_BOLD,
     DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TEXT_METRICS,
     DWRITE_TEXT_RANGE, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory,
     IDWriteFactory, IDWriteTextFormat, IDWriteTextLayout,
 };
-use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::Win32::Graphics::Gdi::HDC as WinHdc;
-use windows::Win32::Graphics::Imaging::{
+use pk_windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+use pk_windows::Win32::Graphics::Gdi::HDC as WinHdc;
+use pk_windows::Win32::Graphics::Imaging::{
     CLSID_WICImagingFactory, GUID_ContainerFormatPng, GUID_WICPixelFormat32bppPBGRA, IWICImagingFactory,
     IWICBitmapSource, WICBitmapDitherTypeNone, WICBitmapUseAlpha, WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
 };
-use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
+use pk_windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows_core::{GUID, Interface, PCWSTR};
 use windows_sys::Win32::Foundation::{GENERIC_WRITE, HWND, POINT, SIZE};
 use windows_sys::Win32::Graphics::Gdi::{
@@ -635,14 +635,14 @@ impl Renderer {
         let dest = D2D_RECT_F { left: 0.0, top: 0.0, right: COVER_SIZE, bottom: COVER_SIZE };
         let mut pushed = false;
         if let Ok(layer) = unsafe { self.rt.CreateLayer(None) } {
-            let lp = windows::Win32::Graphics::Direct2D::D2D1_LAYER_PARAMETERS {
+            let lp = pk_windows::Win32::Graphics::Direct2D::D2D1_LAYER_PARAMETERS {
                 contentBounds: dest,
                 geometricMask: core::mem::ManuallyDrop::new(Some(self.cover_clip.cast().unwrap())),
-                maskAntialiasMode: windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                maskAntialiasMode: pk_windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                 maskTransform: Matrix3x2::identity(),
                 opacity: 1.0,
                 opacityBrush: core::mem::ManuallyDrop::new(None),
-                layerOptions: windows::Win32::Graphics::Direct2D::D2D1_LAYER_OPTIONS_NONE,
+                layerOptions: pk_windows::Win32::Graphics::Direct2D::D2D1_LAYER_OPTIONS_NONE,
             };
             unsafe { self.rt.PushLayer(&lp, &layer) };
             let mut m = lp.geometricMask;
@@ -964,7 +964,7 @@ impl Renderer {
         }
     }
 
-    fn draw_prev_icon(&self, cx: f32, cy: f32, br: &windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
+    fn draw_prev_icon(&self, cx: f32, cy: f32, br: &pk_windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
         let bar = D2D1_ROUNDED_RECT {
             rect: D2D_RECT_F { left: cx - 4.0, top: cy - 3.8, right: cx - 2.6, bottom: cy + 3.8 },
             radiusX: 0.5,
@@ -976,7 +976,7 @@ impl Renderer {
         }
     }
 
-    fn draw_next_icon(&self, cx: f32, cy: f32, br: &windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
+    fn draw_next_icon(&self, cx: f32, cy: f32, br: &pk_windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
         let bar = D2D1_ROUNDED_RECT {
             rect: D2D_RECT_F { left: cx + 2.6, top: cy - 3.8, right: cx + 4.0, bottom: cy + 3.8 },
             radiusX: 0.5,
@@ -988,7 +988,7 @@ impl Renderer {
         }
     }
 
-    fn draw_play_pause_icon(&self, cx: f32, cy: f32, playing: bool, br: &windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
+    fn draw_play_pause_icon(&self, cx: f32, cy: f32, playing: bool, br: &pk_windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush) {
         if playing {
             for dx in [-3.4f32, 1.0f32] {
                 let rr = D2D1_ROUNDED_RECT {
@@ -1049,11 +1049,11 @@ fn make_polygon(d2d: &ID2D1Factory, pts: &[(f32, f32)]) -> Option<ID2D1PathGeome
     let geo = unsafe { d2d.CreatePathGeometry() }.ok()?;
     let sink = unsafe { geo.Open() }.ok()?;
     if let Some(&(x0, y0)) = pts.first() {
-        unsafe { sink.BeginFigure(Vector2::new(x0, y0), windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_BEGIN_FILLED) };
+        unsafe { sink.BeginFigure(Vector2::new(x0, y0), pk_windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_BEGIN_FILLED) };
         for &(x, y) in &pts[1..] {
             unsafe { sink.AddLine(Vector2::new(x, y)) };
         }
-        unsafe { sink.EndFigure(windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_END_CLOSED) };
+        unsafe { sink.EndFigure(pk_windows::Win32::Graphics::Direct2D::Common::D2D1_FIGURE_END_CLOSED) };
     }
     let _ = unsafe { sink.Close() };
     Some(geo)
@@ -1138,7 +1138,7 @@ fn write_png_wic(wic: &IWICImagingFactory, path: &str, bgra: &[u8], w: u32, h: u
         .map_err(|e| alloc::format!("WIC InitializeFromFilename: {}", e.message()))?;
     let encoder = unsafe { wic.CreateEncoder(&GUID_ContainerFormatPng, null()) }
         .map_err(|e| alloc::format!("WIC CreateEncoder: {}", e.message()))?;
-    unsafe { encoder.Initialize(&stream, windows::Win32::Graphics::Imaging::WICBitmapEncoderNoCache) }
+    unsafe { encoder.Initialize(&stream, pk_windows::Win32::Graphics::Imaging::WICBitmapEncoderNoCache) }
         .map_err(|e| alloc::format!("WIC encoder init: {}", e.message()))?;
     let mut frame = None;
     let mut props = None;

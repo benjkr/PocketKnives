@@ -8,16 +8,16 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 use core::ptr::null;
 use pk::wide::to_wide;
-use windows::Win32::Foundation::RECT as WinRect;
-use windows::Win32::Graphics::Direct3D11::{
+use pk_windows::Win32::Foundation::RECT as WinRect;
+use pk_windows::Win32::Graphics::Direct3D11::{
     D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_BOX, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
     D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
     D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0,
     D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D, ID3D11Texture2D, ID3D11VideoProcessor,
     ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorOutputView,
 };
-use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC};
-use windows::Win32::Media::MediaFoundation::{
+use pk_windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC};
+use pk_windows::Win32::Media::MediaFoundation::{
     IMF2DBuffer, IMFAttributes, IMFMediaType, IMFSinkWriter, MF_LOW_LATENCY, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE,
     MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE, MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE,
     MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, MF_SINK_WRITER_D3D_MANAGER, MF_SINK_WRITER_STATISTICS, MF_TRANSCODE_CONTAINERTYPE,
@@ -272,7 +272,7 @@ impl VideoEncoder {
         let ov_desc = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC {
             ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
             Anonymous: D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0 {
-                Texture2D: windows::Win32::Graphics::Direct3D11::D3D11_TEX2D_VPOV { MipSlice: 0 },
+                Texture2D: pk_windows::Win32::Graphics::Direct3D11::D3D11_TEX2D_VPOV { MipSlice: 0 },
             },
         };
 
@@ -395,7 +395,7 @@ impl VideoEncoder {
                     FourCC: 0,
                     ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,
                     Anonymous: D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0 {
-                        Texture2D: windows::Win32::Graphics::Direct3D11::D3D11_TEX2D_VPIV { MipSlice: 0, ArraySlice: 0 },
+                        Texture2D: pk_windows::Win32::Graphics::Direct3D11::D3D11_TEX2D_VPIV { MipSlice: 0, ArraySlice: 0 },
                     },
                 };
                 let mut iv = None;

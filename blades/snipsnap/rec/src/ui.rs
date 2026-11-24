@@ -9,24 +9,24 @@ use core::ffi::c_void;
 use core::ptr::{null, null_mut};
 use libm::{cosf, sinf};
 use pk::wide::to_wide;
-use windows::Win32::Foundation::RECT as D2dRect;
-use windows::Win32::Graphics::Direct2D::Common::{
+use pk_windows::Win32::Foundation::RECT as D2dRect;
+use pk_windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
-use windows::Win32::Graphics::Direct2D::{
+use pk_windows::Win32::Graphics::Direct2D::{
     D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ELLIPSE, D2D1_EXTEND_MODE_CLAMP, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2,
     D2D1_LAYER_OPTIONS_NONE, D2D1_LAYER_PARAMETERS, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES,
     D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_ROUNDED_RECT, D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE, D2D1CreateFactory, ID2D1DCRenderTarget,
     ID2D1Factory, ID2D1LinearGradientBrush,
 };
-use windows::Win32::Graphics::DirectWrite::{
+use pk_windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_FEATURE, DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, DWRITE_FONT_STRETCH_NORMAL,
     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_WEIGHT_SEMI_BOLD,
     DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_RANGE,
     DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
 };
-use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::Win32::Graphics::Gdi::HDC as WinHdc;
+use pk_windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+use pk_windows::Win32::Graphics::Gdi::HDC as WinHdc;
 use windows_core::PCWSTR;
 use windows_numerics::{Matrix3x2, Vector2};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
@@ -996,7 +996,7 @@ impl OverlayUi {
         let layer_params = D2D1_LAYER_PARAMETERS {
             contentBounds: slot_rect,
             geometricMask: core::mem::ManuallyDrop::new(Some(clip_geo.into())),
-            maskAntialiasMode: windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskAntialiasMode: pk_windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
             maskTransform: Matrix3x2::identity(),
             opacity: alpha,
             opacityBrush: core::mem::ManuallyDrop::new(None),
@@ -1068,7 +1068,7 @@ impl OverlayUi {
         fmt: &IDWriteTextFormat,
         wtxt: &[u16],
         rect: D2D_RECT_F,
-        brush: &windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush,
+        brush: &pk_windows::Win32::Graphics::Direct2D::ID2D1SolidColorBrush,
         tabular: bool,
     ) {
         let len = wtxt.iter().position(|&c| c == 0).unwrap_or(wtxt.len());

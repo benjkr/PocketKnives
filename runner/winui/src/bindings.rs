@@ -7,7 +7,7 @@ pub mod Microsoft {
         pub struct Colors(windows_core::IUnknown);
         windows_core::imp::interface_hierarchy!(Colors, windows_core::IUnknown, windows_core::IInspectable);
         impl Colors {
-            pub fn Gray() -> windows_core::Result<windows::UI::Color> {
+            pub fn Gray() -> windows_core::Result<pk_windows::UI::Color> {
                 Self::IColorsStatics(|this| unsafe {
                     let mut result__ = core::mem::zeroed();
                     (windows_core::Interface::vtable(this).Gray)(windows_core::Interface::as_raw(this), &mut result__).map(|| result__)
@@ -47,147 +47,147 @@ pub mod Microsoft {
         #[doc(hidden)]
         pub struct IColorsStatics_Vtbl {
             pub base__: windows_core::IInspectable_Vtbl,
-            pub AliceBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub AntiqueWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Aqua: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Aquamarine: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Azure: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Beige: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Bisque: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Black: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub BlanchedAlmond: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Blue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub BlueViolet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Brown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub BurlyWood: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub CadetBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Chartreuse: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Chocolate: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Coral: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub CornflowerBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Cornsilk: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Crimson: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Cyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkCyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkGoldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkKhaki: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkMagenta: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkOliveGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkOrange: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkOrchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkSalmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkSlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkSlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DarkViolet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DeepPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DeepSkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DimGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub DodgerBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Firebrick: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub FloralWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub ForestGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Fuchsia: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Gainsboro: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub GhostWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Gold: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Goldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Gray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Green: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub GreenYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Honeydew: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub HotPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub IndianRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Indigo: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Ivory: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Khaki: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Lavender: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LavenderBlush: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LawnGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LemonChiffon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightCoral: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightCyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightGoldenrodYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightSalmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightSkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightSlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightSteelBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LightYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Lime: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub LimeGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Linen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Magenta: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Maroon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumAquamarine: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumOrchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumPurple: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumSlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumSpringGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MediumVioletRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MidnightBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MintCream: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub MistyRose: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Moccasin: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub NavajoWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Navy: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub OldLace: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Olive: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub OliveDrab: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Orange: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub OrangeRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Orchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PaleGoldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PaleGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PaleTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PaleVioletRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PapayaWhip: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PeachPuff: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Peru: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Pink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Plum: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub PowderBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Purple: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Red: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub RosyBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub RoyalBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SaddleBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Salmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SandyBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SeaShell: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Sienna: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Silver: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Snow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SpringGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub SteelBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Tan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Teal: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Thistle: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Tomato: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Transparent: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Turquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Violet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Wheat: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub White: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub WhiteSmoke: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub Yellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-            pub YellowGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
+            pub AliceBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub AntiqueWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Aqua: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Aquamarine: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Azure: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Beige: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Bisque: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Black: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub BlanchedAlmond: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Blue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub BlueViolet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Brown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub BurlyWood: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub CadetBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Chartreuse: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Chocolate: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Coral: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub CornflowerBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Cornsilk: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Crimson: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Cyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkCyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkGoldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkKhaki: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkMagenta: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkOliveGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkOrange: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkOrchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkSalmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkSlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkSlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DarkViolet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DeepPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DeepSkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DimGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub DodgerBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Firebrick: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub FloralWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub ForestGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Fuchsia: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Gainsboro: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub GhostWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Gold: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Goldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Gray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Green: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub GreenYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Honeydew: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub HotPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub IndianRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Indigo: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Ivory: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Khaki: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Lavender: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LavenderBlush: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LawnGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LemonChiffon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightCoral: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightCyan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightGoldenrodYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightPink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightSalmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightSkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightSlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightSteelBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LightYellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Lime: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub LimeGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Linen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Magenta: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Maroon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumAquamarine: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumOrchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumPurple: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumSeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumSlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumSpringGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MediumVioletRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MidnightBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MintCream: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub MistyRose: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Moccasin: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub NavajoWhite: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Navy: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub OldLace: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Olive: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub OliveDrab: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Orange: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub OrangeRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Orchid: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PaleGoldenrod: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PaleGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PaleTurquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PaleVioletRed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PapayaWhip: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PeachPuff: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Peru: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Pink: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Plum: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub PowderBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Purple: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Red: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub RosyBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub RoyalBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SaddleBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Salmon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SandyBrown: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SeaGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SeaShell: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Sienna: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Silver: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SkyBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SlateBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SlateGray: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Snow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SpringGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub SteelBlue: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Tan: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Teal: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Thistle: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Tomato: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Transparent: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Turquoise: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Violet: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Wheat: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub White: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub WhiteSmoke: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub Yellow: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+            pub YellowGreen: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
         }
         pub mod Composition {
             windows_core::imp::define_interface!(IAnimationObject, IAnimationObject_Vtbl, 0x8f56119d_b96d_58d0_9916_d1c5e390f890);
@@ -265,7 +265,7 @@ pub mod Microsoft {
             pub struct FontWeights(windows_core::IUnknown);
             windows_core::imp::interface_hierarchy!(FontWeights, windows_core::IUnknown, windows_core::IInspectable);
             impl FontWeights {
-                pub fn SemiBold() -> windows_core::Result<windows::UI::Text::FontWeight> {
+                pub fn SemiBold() -> windows_core::Result<pk_windows::UI::Text::FontWeight> {
                     Self::IFontWeightsStatics(|this| unsafe {
                         let mut result__ = core::mem::zeroed();
                         (windows_core::Interface::vtable(this).SemiBold)(windows_core::Interface::as_raw(this), &mut result__)
@@ -309,22 +309,22 @@ pub mod Microsoft {
             #[doc(hidden)]
             pub struct IFontWeightsStatics_Vtbl {
                 pub base__: windows_core::IInspectable_Vtbl,
-                pub Black: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
-                pub Bold: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Black: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Bold: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                 pub ExtraBlack:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                 pub ExtraBold:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                 pub ExtraLight:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
-                pub Light: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
-                pub Medium: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
-                pub Normal: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Light: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Medium: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Normal: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                 pub SemiBold:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                 pub SemiLight:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
-                pub Thin: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                pub Thin: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
             }
         }
         pub mod Windowing {
@@ -333,7 +333,7 @@ pub mod Microsoft {
             pub struct AppWindow(windows_core::IUnknown);
             windows_core::imp::interface_hierarchy!(AppWindow, windows_core::IUnknown, windows_core::IInspectable);
             impl AppWindow {
-                pub fn Size(&self) -> windows_core::Result<windows::Graphics::SizeInt32> {
+                pub fn Size(&self) -> windows_core::Result<pk_windows::Graphics::SizeInt32> {
                     let this = self;
                     unsafe {
                         let mut result__ = core::mem::zeroed();
@@ -350,7 +350,7 @@ pub mod Microsoft {
                         .ok()
                     }
                 }
-                pub fn Resize(&self, size: windows::Graphics::SizeInt32) -> windows_core::Result<()> {
+                pub fn Resize(&self, size: pk_windows::Graphics::SizeInt32) -> windows_core::Result<()> {
                     let this = self;
                     unsafe { (windows_core::Interface::vtable(this).Resize)(windows_core::Interface::as_raw(this), size).ok() }
                 }
@@ -401,18 +401,18 @@ pub mod Microsoft {
                 pub IsVisible: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                 OwnerWindowId: usize,
                 pub Position:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Graphics::PointInt32) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Graphics::PointInt32) -> windows_core::HRESULT,
                 Presenter: usize,
-                pub Size: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Graphics::SizeInt32) -> windows_core::HRESULT,
+                pub Size: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Graphics::SizeInt32) -> windows_core::HRESULT,
                 pub Title: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub SetTitle: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
                 TitleBar: usize,
                 pub Destroy: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub Hide: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
-                pub Move: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Graphics::PointInt32) -> windows_core::HRESULT,
-                pub MoveAndResize: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Graphics::RectInt32) -> windows_core::HRESULT,
+                pub Move: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Graphics::PointInt32) -> windows_core::HRESULT,
+                pub MoveAndResize: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Graphics::RectInt32) -> windows_core::HRESULT,
                 MoveAndResizeRelativeToDisplayArea: usize,
-                pub Resize: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Graphics::SizeInt32) -> windows_core::HRESULT,
+                pub Resize: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Graphics::SizeInt32) -> windows_core::HRESULT,
                 pub SetIcon: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
                 SetIconWithIconId: usize,
                 SetPresenter: usize,
@@ -436,11 +436,11 @@ pub mod Microsoft {
             pub struct IAppWindow2_Vtbl {
                 pub base__: windows_core::IInspectable_Vtbl,
                 pub ClientSize:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Graphics::SizeInt32) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Graphics::SizeInt32) -> windows_core::HRESULT,
                 pub MoveInZOrderAtBottom: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub MoveInZOrderAtTop: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
                 MoveInZOrderBelow: usize,
-                pub ResizeClient: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Graphics::SizeInt32) -> windows_core::HRESULT,
+                pub ResizeClient: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Graphics::SizeInt32) -> windows_core::HRESULT,
                 pub ShowOnceWithRequestedStartupState: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
             }
             windows_core::imp::define_interface!(IAppWindow3, IAppWindow3_Vtbl, 0x2f260cea_193d_5dd6_a904_d7649a608d2f);
@@ -1354,13 +1354,13 @@ pub mod Microsoft {
                 pub base__: windows_core::IInspectable_Vtbl,
                 pub MeasureOverride: unsafe extern "system" fn(
                     *mut core::ffi::c_void,
-                    windows::Foundation::Size,
-                    *mut windows::Foundation::Size,
+                    pk_windows::Foundation::Size,
+                    *mut pk_windows::Foundation::Size,
                 ) -> windows_core::HRESULT,
                 pub ArrangeOverride: unsafe extern "system" fn(
                     *mut core::ffi::c_void,
-                    windows::Foundation::Size,
-                    *mut windows::Foundation::Size,
+                    pk_windows::Foundation::Size,
+                    *mut pk_windows::Foundation::Size,
                 ) -> windows_core::HRESULT,
                 pub OnApplyTemplate: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub GoToElementStateCore:
@@ -1536,7 +1536,7 @@ pub mod Microsoft {
             #[doc(hidden)]
             pub struct IUIElement_Vtbl {
                 pub base__: windows_core::IInspectable_Vtbl,
-                pub DesiredSize: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::Size) -> windows_core::HRESULT,
+                pub DesiredSize: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Foundation::Size) -> windows_core::HRESULT,
                 pub AllowDrop: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                 pub SetAllowDrop: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
                 pub Opacity: unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
@@ -1550,14 +1550,14 @@ pub mod Microsoft {
                 Transform3D: usize,
                 SetTransform3D: usize,
                 pub RenderTransformOrigin:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::Point) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Foundation::Point) -> windows_core::HRESULT,
                 pub SetRenderTransformOrigin:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, windows::Foundation::Point) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Foundation::Point) -> windows_core::HRESULT,
                 pub IsHitTestVisible: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                 pub SetIsHitTestVisible: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
                 Visibility: usize,
                 SetVisibility: usize,
-                pub RenderSize: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::Size) -> windows_core::HRESULT,
+                pub RenderSize: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Foundation::Size) -> windows_core::HRESULT,
                 pub UseLayoutRounding: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                 pub SetUseLayoutRounding: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
                 Transitions: usize,
@@ -1757,8 +1757,8 @@ pub mod Microsoft {
                 pub RemovePreviewKeyUp: unsafe extern "system" fn(*mut core::ffi::c_void, i64) -> windows_core::HRESULT,
                 BringIntoViewRequested: usize,
                 pub RemoveBringIntoViewRequested: unsafe extern "system" fn(*mut core::ffi::c_void, i64) -> windows_core::HRESULT,
-                pub Measure: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Foundation::Size) -> windows_core::HRESULT,
-                pub Arrange: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Foundation::Rect) -> windows_core::HRESULT,
+                pub Measure: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Foundation::Size) -> windows_core::HRESULT,
+                pub Arrange: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Foundation::Rect) -> windows_core::HRESULT,
                 CapturePointer: usize,
                 ReleasePointerCapture: usize,
                 pub ReleasePointerCaptures: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
@@ -1807,8 +1807,8 @@ pub mod Microsoft {
                 pub OnDisconnectVisualChildren: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub FindSubElementsForTouchTargeting: unsafe extern "system" fn(
                     *mut core::ffi::c_void,
-                    windows::Foundation::Point,
-                    windows::Foundation::Rect,
+                    pk_windows::Foundation::Point,
+                    pk_windows::Foundation::Rect,
                     *mut *mut core::ffi::c_void,
                 ) -> windows_core::HRESULT,
                 pub GetChildrenInTabFocusOrder:
@@ -1999,8 +1999,8 @@ pub mod Microsoft {
             pub struct IVector3Transition_Vtbl {
                 pub base__: windows_core::IInspectable_Vtbl,
                 pub Duration:
-                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::TimeSpan) -> windows_core::HRESULT,
-                pub SetDuration: unsafe extern "system" fn(*mut core::ffi::c_void, windows::Foundation::TimeSpan) -> windows_core::HRESULT,
+                    unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Foundation::TimeSpan) -> windows_core::HRESULT,
+                pub SetDuration: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::Foundation::TimeSpan) -> windows_core::HRESULT,
                 Components: usize,
                 SetComponents: usize,
             }
@@ -2031,7 +2031,7 @@ pub mod Microsoft {
             #[doc(hidden)]
             pub struct IWindow_Vtbl {
                 pub base__: windows_core::IInspectable_Vtbl,
-                pub Bounds: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::Foundation::Rect) -> windows_core::HRESULT,
+                pub Bounds: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::Foundation::Rect) -> windows_core::HRESULT,
                 pub Visible: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                 pub Content: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
                 pub SetContent: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
@@ -2174,7 +2174,7 @@ pub mod Microsoft {
                 }
                 pub fn SetSource<P0>(&self, value: P0) -> windows_core::Result<()>
                 where
-                    P0: windows_core::Param<windows::Foundation::Uri>,
+                    P0: windows_core::Param<pk_windows::Foundation::Uri>,
                 {
                     let this = self;
                     unsafe {
@@ -3028,7 +3028,7 @@ pub mod Microsoft {
                 impl BitmapIcon {
                     pub fn SetUriSource<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
-                        P0: windows_core::Param<windows::Foundation::Uri>,
+                        P0: windows_core::Param<pk_windows::Foundation::Uri>,
                     {
                         let this = self;
                         unsafe {
@@ -3586,7 +3586,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -4021,7 +4021,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -4382,7 +4382,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -4664,7 +4664,7 @@ pub mod Microsoft {
                         let this = self;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = self;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -5618,17 +5618,17 @@ pub mod Microsoft {
                     FontFamily: usize,
                     SetFontFamily: usize,
                     pub FontWeight:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                     pub SetFontWeight:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                     pub FontStyle:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontStyle) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontStyle) -> windows_core::HRESULT,
                     pub SetFontStyle:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontStyle) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontStyle) -> windows_core::HRESULT,
                     pub FontStretch:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontStretch) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontStretch) -> windows_core::HRESULT,
                     pub SetFontStretch:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontStretch) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontStretch) -> windows_core::HRESULT,
                     pub CharacterSpacing: unsafe extern "system" fn(*mut core::ffi::c_void, *mut i32) -> windows_core::HRESULT,
                     pub SetCharacterSpacing: unsafe extern "system" fn(*mut core::ffi::c_void, i32) -> windows_core::HRESULT,
                     pub Foreground: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
@@ -6122,7 +6122,7 @@ pub mod Microsoft {
                 pub trait IInsertionPanel_Impl: windows_core::IUnknownImpl {
                     fn GetInsertionIndexes(
                         &self,
-                        position: &windows::Foundation::Point,
+                        position: &pk_windows::Foundation::Point,
                         first: &mut i32,
                         second: &mut i32,
                     ) -> windows_core::Result<()>;
@@ -6131,7 +6131,7 @@ pub mod Microsoft {
                     pub const fn new<Identity: IInsertionPanel_Impl, const OFFSET: isize>() -> Self {
                         unsafe extern "system" fn GetInsertionIndexes<Identity: IInsertionPanel_Impl, const OFFSET: isize>(
                             this: *mut core::ffi::c_void,
-                            position: windows::Foundation::Point,
+                            position: pk_windows::Foundation::Point,
                             first: *mut i32,
                             second: *mut i32,
                         ) -> windows_core::HRESULT {
@@ -6161,7 +6161,7 @@ pub mod Microsoft {
                     pub base__: windows_core::IInspectable_Vtbl,
                     pub GetInsertionIndexes: unsafe extern "system" fn(
                         *mut core::ffi::c_void,
-                        windows::Foundation::Point,
+                        pk_windows::Foundation::Point,
                         *mut i32,
                         *mut i32,
                     ) -> windows_core::HRESULT,
@@ -7436,17 +7436,17 @@ pub mod Microsoft {
                     FontFamily: usize,
                     SetFontFamily: usize,
                     pub FontWeight:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                     pub SetFontWeight:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontWeight) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontWeight) -> windows_core::HRESULT,
                     pub FontStyle:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontStyle) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontStyle) -> windows_core::HRESULT,
                     pub SetFontStyle:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontStyle) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontStyle) -> windows_core::HRESULT,
                     pub FontStretch:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::FontStretch) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::FontStretch) -> windows_core::HRESULT,
                     pub SetFontStretch:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::FontStretch) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::FontStretch) -> windows_core::HRESULT,
                     pub CharacterSpacing: unsafe extern "system" fn(*mut core::ffi::c_void, *mut i32) -> windows_core::HRESULT,
                     pub SetCharacterSpacing: unsafe extern "system" fn(*mut core::ffi::c_void, i32) -> windows_core::HRESULT,
                     pub Foreground: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
@@ -7492,9 +7492,9 @@ pub mod Microsoft {
                     pub IsTextScaleFactorEnabled: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                     pub SetIsTextScaleFactorEnabled: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
                     pub TextDecorations:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Text::TextDecorations) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Text::TextDecorations) -> windows_core::HRESULT,
                     pub SetTextDecorations:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Text::TextDecorations) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Text::TextDecorations) -> windows_core::HRESULT,
                     pub IsTextTrimmed: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                     HorizontalTextAlignment: usize,
                     SetHorizontalTextAlignment: usize,
@@ -8392,7 +8392,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -8727,7 +8727,7 @@ pub mod Microsoft {
                     ItemCollection,
                     windows_core::IUnknown,
                     windows_core::IInspectable,
-                    windows::Foundation::Collections::IObservableVector<windows_core::IInspectable>
+                    pk_windows::Foundation::Collections::IObservableVector<windows_core::IInspectable>
                 );
                 windows_core::imp::required_hierarchy!(
                     ItemCollection,
@@ -8772,13 +8772,13 @@ pub mod Microsoft {
                 impl windows_core::RuntimeType for ItemCollection {
                     const SIGNATURE: windows_core::imp::ConstBuffer = windows_core::imp::ConstBuffer::for_class::<
                         Self,
-                        windows::Foundation::Collections::IObservableVector<windows_core::IInspectable>,
+                        pk_windows::Foundation::Collections::IObservableVector<windows_core::IInspectable>,
                     >();
                 }
                 unsafe impl windows_core::Interface for ItemCollection {
-                    type Vtable = < windows::Foundation::Collections:: IObservableVector < windows_core::IInspectable > as windows_core::Interface >::Vtable ;
+                    type Vtable = < pk_windows::Foundation::Collections:: IObservableVector < windows_core::IInspectable > as windows_core::Interface >::Vtable ;
                     const IID: windows_core::GUID =
-                        <windows::Foundation::Collections::IObservableVector<windows_core::IInspectable> as windows_core::Interface>::IID;
+                        <pk_windows::Foundation::Collections::IObservableVector<windows_core::IInspectable> as windows_core::Interface>::IID;
                 }
                 impl windows_core::RuntimeName for ItemCollection {
                     const NAME: &'static str = "Microsoft.UI.Xaml.Controls.ItemCollection";
@@ -8819,7 +8819,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -9133,7 +9133,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -9383,7 +9383,7 @@ pub mod Microsoft {
                     pub fn SelectionChanged<P0>(&self, handler: P0) -> windows_core::Result<i64>
                     where
                         P0: windows_core::Param<
-                            windows::Foundation::TypedEventHandler<NavigationView, NavigationViewSelectionChangedEventArgs>,
+                            pk_windows::Foundation::TypedEventHandler<NavigationView, NavigationViewSelectionChangedEventArgs>,
                         >,
                     {
                         let this = self;
@@ -9560,7 +9560,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -9898,7 +9898,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -10187,7 +10187,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -10787,7 +10787,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -11631,7 +11631,7 @@ pub mod Microsoft {
                         let this = self;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = self;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -11793,7 +11793,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                    pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                         let this = &windows_core::Interface::cast::<IControl>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok() }
                     }
@@ -12235,7 +12235,7 @@ pub mod Microsoft {
                     }
                     pub fn SetSource<P0>(&self, value: P0) -> windows_core::Result<()>
                     where
-                        P0: windows_core::Param<windows::Foundation::Uri>,
+                        P0: windows_core::Param<pk_windows::Foundation::Uri>,
                     {
                         let this = &windows_core::Interface::cast::<super::IResourceDictionary>(self)?;
                         unsafe {
@@ -12349,7 +12349,7 @@ pub mod Microsoft {
                                 (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok()
                             }
                         }
-                        pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                        pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
                                 (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok()
@@ -12711,12 +12711,12 @@ pub mod Microsoft {
                         fn AreVerticalSnapPointsRegular(&self) -> windows_core::Result<bool>;
                         fn HorizontalSnapPointsChanged(
                             &self,
-                            handler: windows_core::Ref<windows::Foundation::EventHandler<windows_core::IInspectable>>,
+                            handler: windows_core::Ref<pk_windows::Foundation::EventHandler<windows_core::IInspectable>>,
                         ) -> windows_core::Result<i64>;
                         fn RemoveHorizontalSnapPointsChanged(&self, token: i64) -> windows_core::Result<()>;
                         fn VerticalSnapPointsChanged(
                             &self,
-                            handler: windows_core::Ref<windows::Foundation::EventHandler<windows_core::IInspectable>>,
+                            handler: windows_core::Ref<pk_windows::Foundation::EventHandler<windows_core::IInspectable>>,
                         ) -> windows_core::Result<i64>;
                         fn RemoveVerticalSnapPointsChanged(&self, token: i64) -> windows_core::Result<()>;
                     }
@@ -12939,7 +12939,7 @@ pub mod Microsoft {
                                 (windows_core::Interface::vtable(this).SetFontSize)(windows_core::Interface::as_raw(this), value).ok()
                             }
                         }
-                        pub fn SetFontWeight(&self, value: windows::UI::Text::FontWeight) -> windows_core::Result<()> {
+                        pub fn SetFontWeight(&self, value: pk_windows::UI::Text::FontWeight) -> windows_core::Result<()> {
                             let this = &windows_core::Interface::cast::<super::IControl>(self)?;
                             unsafe {
                                 (windows_core::Interface::vtable(this).SetFontWeight)(windows_core::Interface::as_raw(this), value).ok()
@@ -13280,15 +13280,15 @@ pub mod Microsoft {
                 #[doc(hidden)]
                 pub struct IKeyRoutedEventArgs_Vtbl {
                     pub base__: windows_core::IInspectable_Vtbl,
-                    pub Key: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::System::VirtualKey) -> windows_core::HRESULT,
+                    pub Key: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::System::VirtualKey) -> windows_core::HRESULT,
                     pub KeyStatus: unsafe extern "system" fn(
                         *mut core::ffi::c_void,
-                        *mut windows::UI::Core::CorePhysicalKeyStatus,
+                        *mut pk_windows::UI::Core::CorePhysicalKeyStatus,
                     ) -> windows_core::HRESULT,
                     pub Handled: unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
                     pub SetHandled: unsafe extern "system" fn(*mut core::ffi::c_void, bool) -> windows_core::HRESULT,
                     pub OriginalKey:
-                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::System::VirtualKey) -> windows_core::HRESULT,
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::System::VirtualKey) -> windows_core::HRESULT,
                     pub DeviceId: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
                 }
                 windows_core::imp::define_interface!(KeyEventHandler, KeyEventHandler_Vtbl, 0xdb68e7cc_9a2b_527d_9989_25284daccc03);
@@ -13416,7 +13416,7 @@ pub mod Microsoft {
                 windows_core::imp::interface_hierarchy!(KeyRoutedEventArgs, windows_core::IUnknown, windows_core::IInspectable);
                 windows_core::imp::required_hierarchy!(KeyRoutedEventArgs, super::RoutedEventArgs);
                 impl KeyRoutedEventArgs {
-                    pub fn Key(&self) -> windows_core::Result<windows::System::VirtualKey> {
+                    pub fn Key(&self) -> windows_core::Result<pk_windows::System::VirtualKey> {
                         let this = self;
                         unsafe {
                             let mut result__ = core::mem::zeroed();
@@ -14137,8 +14137,8 @@ pub mod Microsoft {
                 #[doc(hidden)]
                 pub struct ISolidColorBrush_Vtbl {
                     pub base__: windows_core::IInspectable_Vtbl,
-                    pub Color: unsafe extern "system" fn(*mut core::ffi::c_void, *mut windows::UI::Color) -> windows_core::HRESULT,
-                    pub SetColor: unsafe extern "system" fn(*mut core::ffi::c_void, windows::UI::Color) -> windows_core::HRESULT,
+                    pub Color: unsafe extern "system" fn(*mut core::ffi::c_void, *mut pk_windows::UI::Color) -> windows_core::HRESULT,
+                    pub SetColor: unsafe extern "system" fn(*mut core::ffi::c_void, pk_windows::UI::Color) -> windows_core::HRESULT,
                 }
                 windows_core::imp::define_interface!(
                     ISolidColorBrushFactory,
@@ -14154,7 +14154,7 @@ pub mod Microsoft {
                     pub base__: windows_core::IInspectable_Vtbl,
                     pub CreateInstanceWithColor: unsafe extern "system" fn(
                         *mut core::ffi::c_void,
-                        windows::UI::Color,
+                        pk_windows::UI::Color,
                         *mut *mut core::ffi::c_void,
                     ) -> windows_core::HRESULT,
                 }
@@ -14307,7 +14307,7 @@ pub mod Microsoft {
                         let this = &windows_core::Interface::cast::<IBrush>(self)?;
                         unsafe { (windows_core::Interface::vtable(this).SetOpacity)(windows_core::Interface::as_raw(this), value).ok() }
                     }
-                    pub fn CreateInstanceWithColor(color: windows::UI::Color) -> windows_core::Result<SolidColorBrush> {
+                    pub fn CreateInstanceWithColor(color: pk_windows::UI::Color) -> windows_core::Result<SolidColorBrush> {
                         Self::ISolidColorBrushFactory(|this| unsafe {
                             let mut result__ = core::mem::zeroed();
                             (windows_core::Interface::vtable(this).CreateInstanceWithColor)(
@@ -14402,7 +14402,7 @@ pub mod Microsoft {
                         }
                         pub fn SetUriSource<P0>(&self, value: P0) -> windows_core::Result<()>
                         where
-                            P0: windows_core::Param<windows::Foundation::Uri>,
+                            P0: windows_core::Param<pk_windows::Foundation::Uri>,
                         {
                             let this = self;
                             unsafe {
@@ -14429,7 +14429,7 @@ pub mod Microsoft {
                         }
                         pub fn CreateInstanceWithUriSource<P0>(urisource: P0) -> windows_core::Result<BitmapImage>
                         where
-                            P0: windows_core::Param<windows::Foundation::Uri>,
+                            P0: windows_core::Param<pk_windows::Foundation::Uri>,
                         {
                             Self::IBitmapImageFactory(|this| unsafe {
                                 let mut result__ = core::mem::zeroed();
@@ -14443,7 +14443,7 @@ pub mod Microsoft {
                         }
                         pub fn SetSource<P0>(&self, streamsource: P0) -> windows_core::Result<()>
                         where
-                            P0: windows_core::Param<windows::Storage::Streams::IRandomAccessStream>,
+                            P0: windows_core::Param<pk_windows::Storage::Streams::IRandomAccessStream>,
                         {
                             let this = &windows_core::Interface::cast::<IBitmapSource>(self)?;
                             unsafe {
@@ -14489,7 +14489,7 @@ pub mod Microsoft {
                     impl BitmapSource {
                         pub fn SetSource<P0>(&self, streamsource: P0) -> windows_core::Result<()>
                         where
-                            P0: windows_core::Param<windows::Storage::Streams::IRandomAccessStream>,
+                            P0: windows_core::Param<pk_windows::Storage::Streams::IRandomAccessStream>,
                         {
                             let this = self;
                             unsafe {

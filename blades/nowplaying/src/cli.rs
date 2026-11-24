@@ -6,7 +6,7 @@ use crate::ipc;
 use alloc::string::String;
 use core::fmt::Write;
 use pk::out::{StdoutKind, Writer, attach_parent_console, console_output, stdout_handle, stdout_kind};
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+use pk_windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 
 macro_rules! wl {
     ($out:expr) => { $out.write_bytes(b"\r\n") };

@@ -141,7 +141,7 @@ fn main() {
     // Windows.Foundation.Collections to windows-collections, whose 0.3 (windows 0.62's) has only
     // some of it. The first reference that matches a type wins.
     bindgen.push("--no-deps".into());
-    for reference in REFERENCES.iter().map(|r| r.to_string()).chain(WINDOWS.iter().map(|n| format!("windows,skip-root,{n}"))) {
+    for reference in REFERENCES.iter().map(|r| r.to_string()).chain(WINDOWS.iter().map(|n| format!("pk_windows,skip-root,{n}"))) {
         bindgen.extend(["--reference".into(), reference]);
     }
     bindgen.extend(["--no-comment".into(), "--filter".into()]);

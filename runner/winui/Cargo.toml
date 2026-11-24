@@ -25,19 +25,11 @@ windows-sys = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 # The Windows.* types the generated Microsoft.* bindings (src/bindings.rs) use.
-windows = { workspace = true, features = [
-    "Foundation",
-    "Foundation_Collections",
-    "Graphics",
-    "Storage_Streams",
-    "System",
-    "UI_Core",
-    "UI_Text",
-] }
+pk-windows.workspace = true
 windows-core.workspace = true
 # The generated bindings name these windows-rs crates directly (collections, vectors).
-windows-collections = { version = "0.3", default-features = false }
-windows-numerics = { version = "0.3", default-features = false }
+windows-collections.workspace = true
+windows-numerics.workspace = true
 
 [build-dependencies]
 pk-build = { path = "../../crates/pk-build" }

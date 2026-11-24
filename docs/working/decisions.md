@@ -36,7 +36,8 @@ blade's own decisions are in its `docs/working/decisions.md`.
   statics); the pictures come from the blade, drawn at build time, never copied into the repo.
 - **Blades and the runner are written in Rust**, `no_std`, each its own small exe on the shared
   `crates/pk` (entry point, heap, arguments, console, registry, single instance, threads); COM and
-  WinRT through the `windows` crate. QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.2 MB to about
+  WinRT through `crates/pk-windows` (lean `windows-bindgen` bindings, regenerated with
+  `cargo run -p pk-windows-gen`, replacing the full `windows` crate). QuickTooth was ported from C# / .NET Native AOT: its exe went from 5.2 MB to about
   0.27 MB with the same behaviour, log lines and pixels, checked against recordings of the C# build.
   SnipSnap was ported from one C file for safety at the same size and speed: 20,480 bytes against
   19,456, the same four system DLLs and 115 imported functions, its per-pixel loops (the dimming,

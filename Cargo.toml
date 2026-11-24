@@ -4,6 +4,8 @@ resolver = "3"
 members = [
     "crates/pk",
     "crates/pk-build",
+    "crates/pk-windows",
+    "crates/pk-windows/gen",
     "blades/quicktooth/core",
     "blades/quicktooth/win",
     "blades/quicktooth/web",
@@ -19,6 +21,7 @@ members = [
 default-members = [
     "crates/pk",
     "crates/pk-build",
+    "crates/pk-windows",
     "blades/quicktooth/core",
     "blades/quicktooth/win",
     "blades/snipsnap",
@@ -36,11 +39,13 @@ publish = false
 
 [workspace.dependencies]
 pk = { path = "crates/pk" }
+pk-windows = { path = "crates/pk-windows" }
 runner-core = { path = "runner/core" }
 quicktooth-core = { path = "blades/quicktooth/core" }
 windows-sys = "0.61"
-windows = { version = "0.62", default-features = false }
 windows-core = { version = "0.62", default-features = false }
+windows-collections = { version = "0.3", default-features = false }
+windows-future = { version = "0.3", default-features = false }
 windows-numerics = { version = "0.3", default-features = false }
 libm = "0.2"
 
@@ -56,6 +61,13 @@ codegen-units = 1
 panic = "abort"
 strip = true
 debug = false
+
+# Faster local release builds for iteration (~2x faster link, ~13-29% larger exes).
+# Shipping builds always use [profile.release].
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
 
 [profile.dev]
 panic = "abort"

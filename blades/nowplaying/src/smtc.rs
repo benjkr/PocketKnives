@@ -7,13 +7,13 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicBool, Ordering};
 use pk::sync::Mutex;
-use windows::Foundation::TypedEventHandler;
-use windows::Media::Control::{
+use pk_windows::Foundation::TypedEventHandler;
+use pk_windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
-use windows::Storage::Streams::{Buffer, InputStreamOptions};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use pk_windows::Storage::Streams::{Buffer, InputStreamOptions};
+use pk_windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, HWND};
 use windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows_sys::Win32::System::Threading::{CreateEventW, INFINITE, SetEvent, WaitForSingleObject};
@@ -389,7 +389,7 @@ fn read_session(session: &GlobalSystemMediaTransportControlsSession, out: &mut M
     out.last_updated_ft = last_updated_ft;
 }
 
-fn read_thumbnail_bytes(thumb_ref: &windows::Storage::Streams::IRandomAccessStreamReference) -> Option<Vec<u8>> {
+fn read_thumbnail_bytes(thumb_ref: &pk_windows::Storage::Streams::IRandomAccessStreamReference) -> Option<Vec<u8>> {
     let stream = thumb_ref.OpenReadAsync().ok()?.join().ok()?;
     let size = stream.Size().ok()?;
     if size == 0 || size > 4 * 1024 * 1024 {
@@ -402,7 +402,7 @@ fn read_thumbnail_bytes(thumb_ref: &windows::Storage::Streams::IRandomAccessStre
     if len == 0 {
         return None;
     }
-    let reader = windows::Storage::Streams::DataReader::FromBuffer(&read_buf).ok()?;
+    let reader = pk_windows::Storage::Streams::DataReader::FromBuffer(&read_buf).ok()?;
     let mut out = vec![0u8; len];
     reader.ReadBytes(&mut out).ok()?;
     Some(out)

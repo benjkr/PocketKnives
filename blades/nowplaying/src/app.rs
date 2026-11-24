@@ -4,11 +4,11 @@
 //! instead (Spotify: `Spotify.exe`) aren't in that folder, so their icon and window come from the
 //! running process's exe.
 use pk::wide::{from_buf, to_wide};
-use windows::Win32::Foundation::SIZE;
-use windows::Win32::Graphics::Gdi::HBITMAP;
-use windows::Win32::Storage::EnhancedStorage::PKEY_Link_TargetParsingPath;
-use windows::Win32::System::Com::CoTaskMemFree;
-use windows::Win32::UI::Shell::{
+use pk_windows::Win32::Foundation::SIZE;
+use pk_windows::Win32::Graphics::Gdi::HBITMAP;
+use pk_windows::Win32::Storage::EnhancedStorage::PKEY_Link_TargetParsingPath;
+use pk_windows::Win32::System::Com::CoTaskMemFree;
+use pk_windows::Win32::UI::Shell::{
     FOLDERID_AppsFolder, IShellItem2, IShellItemImageFactory, KF_FLAG_DEFAULT, SHCreateItemFromParsingName,
     SHCreateItemInKnownFolder, SIIGBF_ICONONLY, SIIGBF_RESIZETOFIT,
 };

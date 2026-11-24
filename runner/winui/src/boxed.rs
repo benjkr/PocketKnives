@@ -3,7 +3,7 @@
 //! the same way. windows-rs has no box for delegates, so this is one. Only `Value` matters; the
 //! `IPropertyValue` part reports "other type" and refuses every conversion, like any other box.
 use crate::bindings::Microsoft::UI::Xaml::Input::KeyEventHandler;
-use windows::Foundation::{
+use pk_windows::Foundation::{
     DateTime, IPropertyValue, IPropertyValue_Impl, IReference, IReference_Impl, Point, PropertyType, Rect, Size, TimeSpan,
 };
 use windows_core::{Array, Error, GUID, HSTRING, IInspectable, Result, implement};
