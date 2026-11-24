@@ -1,7 +1,7 @@
 //! Direct2D + DirectWrite + WIC renderer for NowPlaying (C1 Pure Clear + P1 + White M2 Spectrum).
 //! Draws into a 32-bit premultiplied BGRA DIB for `UpdateLayeredWindow`, and also supports
 //! offline PNG export (`--preview-render`) through WIC.
-use crate::appicon;
+use crate::app;
 use crate::fft::BANDS;
 use crate::smtc::MediaSnapshot;
 use alloc::format;
@@ -26,7 +26,7 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_SEMI_BOLD,
     DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_TEXT_METRICS,
     DWRITE_TEXT_RANGE, DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory,
-    IDWriteFactory, IDWriteTextFormat,
+    IDWriteFactory, IDWriteTextFormat, IDWriteTextLayout,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Gdi::HDC as WinHdc;
@@ -68,6 +68,11 @@ pub fn window_metrics(dpi: u32, taskbar_h_px: i32) -> WindowMetrics {
 }
 /// The app icon before the title, in DIPs.
 const APP_ICON_SIZE: f32 = 13.0;
+const APP_ICON_LEFT: f32 = 48.0;
+const TITLE_LEFT: f32 = 66.0;
+/// Row 1's controls (the app icon and title, the transport buttons) span these DIPs.
+const ROW1_TOP: f32 = 3.0;
+const ROW1_BOTTOM: f32 = 21.0;
 /// Scrubber accent when neither the cover nor the app icon gives one.
 const DEFAULT_ACCENT: D2D1_COLOR_F = D2D1_COLOR_F { r: 1.0, g: 107.0 / 255.0, b: 139.0 / 255.0, a: 1.0 };
 
@@ -89,6 +94,8 @@ pub enum HoverTarget {
     Play,
     Next,
     Scrub,
+    /// The app icon and title: a click brings the playing app to the front.
+    App,
 }
 
 pub struct FrameState<'a> {
@@ -98,6 +105,8 @@ pub struct FrameState<'a> {
     pub bands: [f32; BANDS],
     pub strip_hover_alpha: f32,
     pub btn_hover_alpha: [f32; 3], // prev, play, next
+    /// The pointer is on the app icon or title: the text is underlined like a link.
+    pub app_hover: bool,
     pub btn_pressed: Option<usize>,
     pub scrub_active_alpha: f32,
     pub scrub_hover: bool,
@@ -277,6 +286,40 @@ impl Renderer {
         (SCRUB_LEFT, SCRUB_TOP, right, SCRUB_BOTTOM)
     }
 
+    /// The app icon and the drawn `Title · Artist` text: the click target that opens the app.
+    pub fn app_rect(&self, media: &MediaSnapshot, show_visualizer: bool) -> (f32, f32, f32, f32) {
+        let mut metrics = DWRITE_TEXT_METRICS::default();
+        let w = match self.title_layout(media, show_visualizer) {
+            Some((layout, _)) if unsafe { layout.GetMetrics(&mut metrics) }.is_ok() => metrics.width,
+            _ => 0.0,
+        };
+        (APP_ICON_LEFT - 3.0, ROW1_TOP, TITLE_LEFT + w.min(title_max_w(show_visualizer)) + 3.0, ROW1_BOTTOM)
+    }
+
+    /// `Title · Artist` laid out to its trimmed width, with the dot's and artist's ranges.
+    fn title_layout(
+        &self,
+        media: &MediaSnapshot,
+        show_visualizer: bool,
+    ) -> Option<(IDWriteTextLayout, Option<(DWRITE_TEXT_RANGE, DWRITE_TEXT_RANGE)>)> {
+        let title = if media.title.is_empty() { "Nothing playing" } else { media.title.as_str() };
+        let has_artist = !media.artist.is_empty();
+        let full = if has_artist { format!("{title} · {}", media.artist) } else { alloc::string::String::from(title) };
+        let wide: Vec<u16> = full.encode_utf16().collect();
+        let layout =
+            unsafe { self.dwrite.CreateTextLayout(&wide, &self.fmt_title, title_max_w(show_visualizer), ROW1_BOTTOM - ROW1_TOP) }
+                .ok()?;
+        if !has_artist {
+            return Some((layout, None));
+        }
+        let title_len = title.encode_utf16().count() as u32;
+        let dot = DWRITE_TEXT_RANGE { startPosition: title_len, length: 3 };
+        let artist = DWRITE_TEXT_RANGE { startPosition: title_len + 3, length: (wide.len() as u32).saturating_sub(title_len + 3) };
+        let _ = unsafe { layout.SetFontWeight(DWRITE_FONT_WEIGHT_MEDIUM, artist) };
+        let _ = unsafe { layout.SetFontSize(10.5, artist) };
+        Some((layout, Some((dot, artist))))
+    }
+
     fn time_slot_width(&mut self, is_live: bool, dur: f64, cur: f64) -> f32 {
         let key = if is_live {
             (true, 0, 0)
@@ -403,7 +446,7 @@ impl Renderer {
         self.icon_bmp = None;
         self.icon_accent = None;
         let px = ((APP_ICON_SIZE * (self.dpi / 96.0)) + 0.5) as u32;
-        let Some(hbmp) = appicon::bitmap(aumid, px) else { return };
+        let Some(hbmp) = app::bitmap(aumid, px) else { return };
         let source = unsafe { self.wic.CreateBitmapFromHBITMAP(hbmp, Default::default(), WICBitmapUseAlpha) };
         unsafe { DeleteObject(hbmp.0 as HGDIOBJ) };
         if let Some((bmp, accent)) = source.ok().and_then(|s| self.d2d_bitmap(&s.cast().ok()?, px)) {
@@ -665,39 +708,25 @@ impl Renderer {
         let fg_sub = if state.light_taskbar { rgba(20, 23, 29, 0.65) } else { rgba(255, 255, 255, 0.70) };
         let fg_dim = if state.light_taskbar { rgba(20, 23, 29, 0.44) } else { rgba(255, 255, 255, 0.46) };
 
-        // App icon at (48, 5.5) size 13x13
-        self.draw_app_icon(48.0, 5.5, state.light_taskbar);
+        self.draw_app_icon(APP_ICON_LEFT, 5.5, state.light_taskbar);
 
-        // Title · Artist text layout spanning from x=66 up to the EQ meter (or controls if EQ hidden)
-        let text_left = 66.0f32;
-        let text_right = if state.show_visualizer { EQ_RECT.0 - 6.0 } else { PREV_RECT.0 - 6.0 };
-        let max_w = (text_right - text_left).max(20.0);
-
-        let title = if state.media.title.is_empty() { "Nothing playing" } else { state.media.title.as_str() };
-        let has_artist = !state.media.artist.is_empty();
-        let full = if has_artist { format!("{title} · {}", state.media.artist) } else { alloc::string::String::from(title) };
-        let wide: Vec<u16> = full.encode_utf16().collect();
-        let title_u16_len = title.encode_utf16().count() as u32;
-
-        if let Ok(layout) = unsafe { self.dwrite.CreateTextLayout(&wide, &self.fmt_title, max_w, 18.0) } {
-            if has_artist {
+        // Title · Artist text up to the EQ meter (or the controls if the EQ is hidden)
+        if let Some((layout, ranges)) = self.title_layout(state.media, state.show_visualizer) {
+            // Hovering the icon or title underlines the text like a link: a click opens the app.
+            if state.app_hover {
+                let _ = unsafe { layout.SetUnderline(true, DWRITE_TEXT_RANGE { startPosition: 0, length: u32::MAX }) };
+            }
+            if let Some((dot, artist)) = ranges {
                 if let Ok(dot_brush) = unsafe { self.rt.CreateSolidColorBrush(&fg_dim, None) } {
-                    let _ = unsafe {
-                        layout.SetDrawingEffect(&dot_brush, DWRITE_TEXT_RANGE { startPosition: title_u16_len, length: 3 })
-                    };
+                    let _ = unsafe { layout.SetDrawingEffect(&dot_brush, dot) };
                 }
                 if let Ok(art_brush) = unsafe { self.rt.CreateSolidColorBrush(&fg_sub, None) } {
-                    let art_start = title_u16_len + 3;
-                    let art_len = (wide.len() as u32).saturating_sub(art_start);
-                    let range = DWRITE_TEXT_RANGE { startPosition: art_start, length: art_len };
-                    let _ = unsafe { layout.SetDrawingEffect(&art_brush, range) };
-                    let _ = unsafe { layout.SetFontWeight(DWRITE_FONT_WEIGHT_MEDIUM, range) };
-                    let _ = unsafe { layout.SetFontSize(10.5, range) };
+                    let _ = unsafe { layout.SetDrawingEffect(&art_brush, artist) };
                 }
             }
             if let Ok(fg_brush) = unsafe { self.rt.CreateSolidColorBrush(&fg, None) } {
                 unsafe {
-                    self.rt.DrawTextLayout(Vector2::new(text_left, 3.0), &layout, &fg_brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    self.rt.DrawTextLayout(Vector2::new(TITLE_LEFT, ROW1_TOP), &layout, &fg_brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
                 }
             }
         }
@@ -711,22 +740,7 @@ impl Renderer {
         let rects = [PREV_RECT, PLAY_RECT, NEXT_RECT];
         for (idx, &(l, t, r, b)) in rects.iter().enumerate() {
             let hover_a = state.btn_hover_alpha[idx];
-            let pressed = state.btn_pressed == Some(idx);
-            if hover_a > 0.01 || pressed {
-                let bg = if state.light_taskbar {
-                    rgba(0, 0, 0, if pressed { 0.13 } else { 0.08 * hover_a })
-                } else {
-                    rgba(255, 255, 255, if pressed { 0.17 } else { 0.11 * hover_a })
-                };
-                if let Ok(br) = unsafe { self.rt.CreateSolidColorBrush(&bg, None) } {
-                    let rr = D2D1_ROUNDED_RECT {
-                        rect: D2D_RECT_F { left: l, top: t, right: r, bottom: b },
-                        radiusX: 4.0,
-                        radiusY: 4.0,
-                    };
-                    unsafe { self.rt.FillRoundedRectangle(&rr, &br) };
-                }
-            }
+            self.draw_hover_plate((l, t, r, b), state.light_taskbar, hover_a, state.btn_pressed == Some(idx));
 
             let icon_col = if state.light_taskbar {
                 rgba(20, 23, 29, 0.85 + 0.15 * hover_a)
@@ -910,6 +924,22 @@ impl Renderer {
         }
     }
 
+    /// A control's rounded hover plate, fading in with `hover_a` and darker while pressed.
+    fn draw_hover_plate(&self, (l, t, r, b): (f32, f32, f32, f32), light: bool, hover_a: f32, pressed: bool) {
+        if hover_a <= 0.01 && !pressed {
+            return;
+        }
+        let bg = if light {
+            rgba(0, 0, 0, if pressed { 0.13 } else { 0.08 * hover_a })
+        } else {
+            rgba(255, 255, 255, if pressed { 0.17 } else { 0.11 * hover_a })
+        };
+        if let Ok(br) = unsafe { self.rt.CreateSolidColorBrush(&bg, None) } {
+            let rr = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: l, top: t, right: r, bottom: b }, radiusX: 4.0, radiusY: 4.0 };
+            unsafe { self.rt.FillRoundedRectangle(&rr, &br) };
+        }
+    }
+
     /// The playing app's own icon, or a neutral play glyph when the shell has none for it.
     fn draw_app_icon(&self, x: f32, y: f32, light: bool) {
         let size = APP_ICON_SIZE;
@@ -978,6 +1008,12 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         self.free_dib();
     }
+}
+
+/// Width of the `Title · Artist` text, which ends before the EQ meter (or the controls without it).
+fn title_max_w(show_visualizer: bool) -> f32 {
+    let right = if show_visualizer { EQ_RECT.0 - 6.0 } else { PREV_RECT.0 - 6.0 };
+    (right - TITLE_LEFT).max(20.0)
 }
 
 fn rgba(r: u8, g: u8, b: u8, a: f32) -> D2D1_COLOR_F {

@@ -50,16 +50,18 @@ pub fn run(args: &[String]) -> u32 {
         "--autostart" => autostart_cmd(&mut out, args.get(1).map_or("status", String::as_str)),
         "--preview-render" => match args.get(1) {
             Some(path) => {
-                let hovered = args.get(2).is_some_and(|a| a.eq_ignore_ascii_case("--hover"));
+                let flag = args.get(2).map(|a| a.to_ascii_lowercase());
+                let app_hovered = flag.as_deref() == Some("--hover-app");
+                let hovered = app_hovered || flag.as_deref() == Some("--hover");
                 if args.len() > 3 || (args.len() == 3 && !hovered) {
-                    wl!(out, "Usage: NowPlaying.exe --preview-render <path.png> [--hover]");
+                    wl!(out, "Usage: NowPlaying.exe --preview-render <path.png> [--hover | --hover-app]");
                     2
                 } else {
-                    preview_render_cmd(&mut out, path, hovered)
+                    preview_render_cmd(&mut out, path, hovered, app_hovered)
                 }
             }
             None => {
-                wl!(out, "Usage: NowPlaying.exe --preview-render <path.png> [--hover]");
+                wl!(out, "Usage: NowPlaying.exe --preview-render <path.png> [--hover | --hover-app]");
                 2
             }
         },
@@ -161,7 +163,7 @@ fn autostart_cmd(out: &mut Writer, arg: &str) -> u32 {
     }
 }
 
-fn preview_render_cmd(out: &mut Writer, path: &str, hovered: bool) -> u32 {
+fn preview_render_cmd(out: &mut Writer, path: &str, hovered: bool, app_hovered: bool) -> u32 {
     let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
     let Some(mut renderer) = Renderer::new(192) else {
         wl!(out, "Error: could not initialize Direct2D/WIC renderer.");
@@ -188,6 +190,7 @@ fn preview_render_cmd(out: &mut Writer, path: &str, hovered: bool) -> u32 {
         bands: [0.82, 0.94, 0.42, 0.78, 0.54],
         strip_hover_alpha: if hovered { 1.0 } else { 0.0 },
         btn_hover_alpha: [0.0; 3],
+        app_hover: app_hovered,
         btn_pressed: None,
         scrub_active_alpha: 0.0,
         scrub_hover: false,
