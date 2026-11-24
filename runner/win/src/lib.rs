@@ -26,9 +26,10 @@ pub const TRAY_IDENTITY: GUID = GUID::from_u128(0xc86c4d67_f167_4393_a49a_935298
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Command {
-    /// No command: run the tray, or do nothing if it runs.
+    /// No command: run the tray (if not already running) and ensure enabled blades are running.
     Run,
-    /// `settings`: open Settings in the running tray, starting it first if needed.
+    /// `settings`: ensure enabled blades are running and open Settings in the running tray,
+    /// starting it first if needed.
     Settings,
     /// `--exit`: close the running tray and Settings.
     Exit,

@@ -28,7 +28,7 @@ use core::ptr::{null, null_mut};
 use core::sync::atomic::{AtomicPtr, Ordering};
 use pk::wide::to_wide;
 use runner::{Command, TRAY_IDENTITY};
-use runner_core::link::{self, EXIT_MESSAGE, OPEN_MESSAGE, REOPEN_MESSAGE};
+use runner_core::link::{self, EXIT_MESSAGE, OPEN_MESSAGE, REOPEN_MESSAGE, START_BLADES_MESSAGE};
 use runner_core::process::{self, Child};
 use runner_core::settings::{Look, PREVIEW_VARIABLE, Suite};
 use runner_core::{Result, join};
@@ -82,16 +82,31 @@ fn main() -> u32 {
         return 2;
     }
     if !first {
+        if unsafe { WaitForSingleObject(ready, 5000) } != WAIT_OBJECT_0 {
+            return 2;
+        }
+        let host = unsafe { FindWindowW(to_wide(&instance).as_ptr(), null()) };
         return match command {
-            Command::Run => 0,
-            _ if unsafe { WaitForSingleObject(ready, 5000) } != WAIT_OBJECT_0 => 2,
-            _ => {
-                let host = unsafe { FindWindowW(to_wide(&instance).as_ptr(), null()) };
+            Command::Run => {
+                if link::post(host, START_BLADES_MESSAGE) {
+                    0
+                } else {
+                    2
+                }
+            }
+            Command::Settings => {
                 let mut pid = 0;
-                if command == Command::Settings && unsafe { GetWindowThreadProcessId(host, &mut pid) } != 0 {
+                if unsafe { GetWindowThreadProcessId(host, &mut pid) } != 0 {
                     unsafe { AllowSetForegroundWindow(pid) };
                 }
-                if link::post(host, if command == Command::Exit { EXIT_MESSAGE } else { OPEN_MESSAGE }) { 0 } else { 2 }
+                if link::post(host, START_BLADES_MESSAGE) && link::post(host, OPEN_MESSAGE) { 0 } else { 2 }
+            }
+            Command::Exit => {
+                if link::post(host, EXIT_MESSAGE) {
+                    0
+                } else {
+                    2
+                }
             }
         };
     }
@@ -146,6 +161,7 @@ struct App {
     open: u32,
     reopen: u32,
     exit: u32,
+    start_blades: u32,
     window: Cell<HWND>,
     tray: RefCell<Option<TrayIcon>>,
     win_ui: RefCell<Option<WinUi>>,
@@ -165,6 +181,7 @@ impl App {
             open: link::register(OPEN_MESSAGE),
             reopen: link::register(REOPEN_MESSAGE),
             exit: link::register(EXIT_MESSAGE),
+            start_blades: link::register(START_BLADES_MESSAGE),
             window: Cell::new(null_mut()),
             tray: RefCell::new(None),
             win_ui: RefCell::new(None),
@@ -192,6 +209,7 @@ impl App {
         *self.tray.borrow_mut() = Some(TrayIcon::new(window, identity));
         self.refresh_tray();
         unsafe { SetEvent(ready) };
+        self.suite.start_enabled_blades();
         if show_settings {
             self.open_settings(None);
         }
@@ -415,6 +433,12 @@ unsafe extern "system" fn window_procedure(window: HWND, message: u32, wparam: W
     }
     if message == app.open {
         app.open_settings(None);
+        return 0;
+    }
+    if message == app.start_blades {
+        if !app.stopping.get() {
+            app.suite.start_enabled_blades();
+        }
         return 0;
     }
     if message == app.reopen {

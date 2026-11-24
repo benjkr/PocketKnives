@@ -72,10 +72,10 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\pk.exe"
 Name: "{userstartup}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Tasks: snipsnap
 
 [Run]
-Filename: "{app}\pk.exe"; Flags: nowait
-; QuickTooth and NowPlaying write their own Run values.
+; QuickTooth and NowPlaying write their own Run values before pk.exe checks which blades are enabled.
 Filename: "{app}\QuickTooth.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: quicktooth
 Filename: "{app}\NowPlaying.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: nowplaying
+Filename: "{app}\pk.exe"; Flags: nowait
 ; No skipifsilent: a silent update should leave the blades running, as they were before.
 Filename: "{app}\snipsnap.exe"; Description: "Start SnipSnap now"; Flags: nowait postinstall
 Filename: "{app}\QuickTooth.exe"; Description: "Start QuickTooth now"; Flags: nowait postinstall
