@@ -25,20 +25,23 @@
   shortcut and uses QuickTooth's and NowPlaying's `--autostart` commands for their Run entries. Windows launches
   enabled blades at the next sign-in.
 - Each blade's page shows that blade's own settings, read from the blade when Settings opens and
-  changed through it ([blade settings](blade-settings.md)): SnipSnap's three hotkeys and the
+  changed through it ([blade settings](blade-settings.md)): SnipSnap's six hotkeys and the
   flash, QuickTooth's headset, low-battery level and tray icon, NowPlaying's frequency meter. A hotkey is a hotkey box in XP and Windows
   10 (Alt+key goes to the box, not to the window's access keys; the box can't take PrtSc or Win,
   and keeps a saved key it can't show). In Windows 11 the hotkey is a button: click it, press the
   keys, Esc cancels; Ctrl, Alt or Win is required. When a blade refuses a change (a hotkey taken
   by another program), Settings shows the blade's reason and the blade keeps its old value; Windows
   11 puts the control back, XP and Windows 10 leave the edit in place to fix or Cancel.
+- All three looks size the window on open to fit the tallest and widest blade page (keeping the
+  default minimum size and capping to 85% of the monitor's work area). If a page still overflows
+  the capped height, the page area scrolls vertically while the header and buttons stay fixed.
 - A `picture` setting is a row of buttons, each its picture above its label, with a frame in the
   highlight colour (Windows 11: the accent colour) around the chosen one that slides to a new
   pick. XP and Windows 10: push-like radio buttons (arrow keys move between them) and four thin
   statics for the frame, moved by a timer; the window clips its children so the frame never
   flickers over the buttons. Windows 11: buttons with the picture tinted like the text (dark
   mode too) and a frame that slides by an implicit animation. With a picture missing, the setting
-  is a drop-down, like a `choice`. Sizes are constants in `runner/win/src/native.rs` and
+  is a drop-down, like a `choice`. Sizes are constants in `runner/win/src/lib.rs` and
   `runner/winui/src/ui.rs`.
 - XP and Windows 10 save changes with OK or Apply, and apply pending changes before switching
   looks. Windows 11 applies each change at once.
