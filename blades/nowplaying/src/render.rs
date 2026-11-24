@@ -707,9 +707,10 @@ impl Renderer {
         let fg_dim = if state.light_taskbar { rgba(20, 23, 29, 0.44) } else { rgba(255, 255, 255, 0.46) };
 
         // App icon and Title · Artist share one hover plate: a click opens the app.
-        if !state.media.aumid.is_empty() {
+        let (app_hover, app_pressed) = (state.btn_hover_alpha[3], state.btn_pressed == Some(3));
+        if !state.media.aumid.is_empty() && (app_hover > 0.01 || app_pressed) {
             let rect = self.app_rect(state.media, state.show_visualizer);
-            self.draw_hover_plate(rect, state.light_taskbar, state.btn_hover_alpha[3], state.btn_pressed == Some(3));
+            self.draw_hover_plate(rect, state.light_taskbar, app_hover, app_pressed);
         }
         self.draw_app_icon(APP_ICON_LEFT, 5.5, state.light_taskbar);
 
