@@ -21,8 +21,8 @@ What it does now. Keep it current in the same change, and lean.
   AppUserModelID in `shell:AppsFolder`, else the running process whose exe has that name, as for
   Spotify's `Spotify.exe`; a neutral play glyph when neither has one), `Title · Artist` with ellipsis trimming, **white M2 5-pill
   center-expanding frequency meter** (dark ink on Light taskbar, collapses to 5 soft dots when
-  paused), and `Prev / Play-Pause / Next` buttons with animated hover plates. The icon and the
-  drawn text share one such plate and open the playing app on click (see below).
+  paused), and `Prev / Play-Pause / Next` buttons with animated hover plates. Hovering the icon or
+  the drawn text underlines the text like a link, and a click opens the playing app (see below).
 - **Row 2**: **P1 Spotify hover-reveal progress bar** — fixed `4 px` track centered in a `14 px`
   hit target (zero vertical jump), white fill at rest transitioning to album accent on hover/drag,
   cursor ghost seek fill, `10 px` smooth fade/scale knob, and tabular `cur / dur` with live hover

@@ -104,7 +104,9 @@ pub struct FrameState<'a> {
     pub show_visualizer: bool,
     pub bands: [f32; BANDS],
     pub strip_hover_alpha: f32,
-    pub btn_hover_alpha: [f32; 4], // prev, play, next, app
+    pub btn_hover_alpha: [f32; 3], // prev, play, next
+    /// The pointer is on the app icon or title: the text is underlined like a link.
+    pub app_hover: bool,
     pub btn_pressed: Option<usize>,
     pub scrub_active_alpha: f32,
     pub scrub_hover: bool,
@@ -284,7 +286,7 @@ impl Renderer {
         (SCRUB_LEFT, SCRUB_TOP, right, SCRUB_BOTTOM)
     }
 
-    /// The app icon and the drawn `Title · Artist` text, with the transport buttons' plate margin.
+    /// The app icon and the drawn `Title · Artist` text: the click target that opens the app.
     pub fn app_rect(&self, media: &MediaSnapshot, show_visualizer: bool) -> (f32, f32, f32, f32) {
         let mut metrics = DWRITE_TEXT_METRICS::default();
         let w = match self.title_layout(media, show_visualizer) {
@@ -706,16 +708,14 @@ impl Renderer {
         let fg_sub = if state.light_taskbar { rgba(20, 23, 29, 0.65) } else { rgba(255, 255, 255, 0.70) };
         let fg_dim = if state.light_taskbar { rgba(20, 23, 29, 0.44) } else { rgba(255, 255, 255, 0.46) };
 
-        // App icon and Title · Artist share one hover plate: a click opens the app.
-        let (app_hover, app_pressed) = (state.btn_hover_alpha[3], state.btn_pressed == Some(3));
-        if !state.media.aumid.is_empty() && (app_hover > 0.01 || app_pressed) {
-            let rect = self.app_rect(state.media, state.show_visualizer);
-            self.draw_hover_plate(rect, state.light_taskbar, app_hover, app_pressed);
-        }
         self.draw_app_icon(APP_ICON_LEFT, 5.5, state.light_taskbar);
 
         // Title · Artist text up to the EQ meter (or the controls if the EQ is hidden)
         if let Some((layout, ranges)) = self.title_layout(state.media, state.show_visualizer) {
+            // Hovering the icon or title underlines the text like a link: a click opens the app.
+            if state.app_hover {
+                let _ = unsafe { layout.SetUnderline(true, DWRITE_TEXT_RANGE { startPosition: 0, length: u32::MAX }) };
+            }
             if let Some((dot, artist)) = ranges {
                 if let Ok(dot_brush) = unsafe { self.rt.CreateSolidColorBrush(&fg_dim, None) } {
                     let _ = unsafe { layout.SetDrawingEffect(&dot_brush, dot) };

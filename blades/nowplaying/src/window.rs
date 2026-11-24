@@ -79,7 +79,7 @@ struct AppState {
     scrub_hover_ratio: f32,
     drag_pos_sec: f64,
     strip_hover_alpha: f32,
-    btn_hover_alpha: [f32; 4],
+    btn_hover_alpha: [f32; 3],
     scrub_active_alpha: f32,
     last_frame_ms: u64,
     fast_timer_on: bool,
@@ -168,7 +168,7 @@ pub fn run() -> u32 {
         scrub_hover_ratio: 0.0,
         drag_pos_sec: 0.0,
         strip_hover_alpha: 0.0,
-        btn_hover_alpha: [0.0; 4],
+        btn_hover_alpha: [0.0; 3],
         scrub_active_alpha: 0.0,
         last_frame_ms: unsafe { GetTickCount64() },
         fast_timer_on: false,
@@ -498,7 +498,7 @@ impl AppState {
         if (self.scrub_active_alpha - target_scrub).abs() > 0.005 {
             return true;
         }
-        for i in 0..4 {
+        for i in 0..3 {
             let t = if btn_index(self.hover_target) == Some(i) { 1.0 } else { 0.0 };
             if (self.btn_hover_alpha[i] - t).abs() > 0.005 {
                 return true;
@@ -528,7 +528,7 @@ impl AppState {
         let target_strip = if self.strip_hovered || self.scrub_dragging { 1.0 } else { 0.0 };
         self.strip_hover_alpha = step_fade(self.strip_hover_alpha, target_strip, dt_ms, 85.0, 167.0);
 
-        for i in 0..4 {
+        for i in 0..3 {
             let t = if btn_index(self.hover_target) == Some(i) { 1.0 } else { 0.0 };
             self.btn_hover_alpha[i] = step_fade(self.btn_hover_alpha[i], t, dt_ms, 85.0, 150.0);
         }
@@ -552,6 +552,7 @@ impl AppState {
             bands,
             strip_hover_alpha: self.strip_hover_alpha,
             btn_hover_alpha: self.btn_hover_alpha,
+            app_hover: self.hover_target == HoverTarget::App || self.pressed == HoverTarget::App,
             btn_pressed: btn_index(self.pressed),
             scrub_active_alpha: self.scrub_active_alpha,
             scrub_hover: self.hover_target == HoverTarget::Scrub,
@@ -724,7 +725,6 @@ fn btn_index(t: HoverTarget) -> Option<usize> {
         HoverTarget::Prev => Some(0),
         HoverTarget::Play => Some(1),
         HoverTarget::Next => Some(2),
-        HoverTarget::App => Some(3),
         _ => None,
     }
 }
