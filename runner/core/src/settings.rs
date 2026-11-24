@@ -57,6 +57,8 @@ pub struct Blade {
     /// Its icon's file name in the `icons` folder.
     pub icon: &'static str,
     pub exe: &'static str,
+    /// The single-instance mutex the blade holds while running.
+    pub mutex: &'static str,
     pub stop_command: &'static str,
     pub settings_command: &'static str,
     pub set_command: &'static str,
@@ -70,6 +72,7 @@ pub const BLADES: [Blade; 3] = [
         description: "Copies a rectangle, a window or the screen to the clipboard.",
         icon: "snipsnap.ico",
         exe: "snipsnap.exe",
+        mutex: "Local\\SnipSnap.Daemon",
         stop_command: "quit",
         settings_command: "settings",
         set_command: "set",
@@ -79,6 +82,7 @@ pub const BLADES: [Blade; 3] = [
         description: "Connects or disconnects your AirPods with one click.",
         icon: "quicktooth.ico",
         exe: "QuickTooth.exe",
+        mutex: "Local\\QuickTooth.Tray.6F0C2B1E",
         stop_command: "--exit",
         settings_command: "--settings",
         set_command: "--set",
@@ -88,6 +92,7 @@ pub const BLADES: [Blade; 3] = [
         description: "Shows the current media cover, seekable timeline and frequency meter in the taskbar.",
         icon: "nowplaying.ico",
         exe: "NowPlaying.exe",
+        mutex: "Local\\PocketKnives.NowPlaying.v1",
         stop_command: "--exit",
         settings_command: "--settings",
         set_command: "--set",
@@ -234,6 +239,27 @@ impl Suite {
         Ok(())
     }
 
+    /// Starts each enabled blade that isn't already running (checked by its single-instance
+    /// mutex). A preview never starts blades: their mutexes are session-wide and would collide
+    /// with the user's installed copies. A missing or unstartable blade is skipped.
+    pub fn start_enabled_blades(&self) {
+        if self.preview {
+            return;
+        }
+        let Ok(enabled) = self.read_startup() else {
+            return;
+        };
+        for (blade, on) in BLADES.iter().zip(enabled) {
+            if !should_start(on, blade.mutex) {
+                continue;
+            }
+            let exe = self.blade_exe(blade);
+            if files::exists(&exe) {
+                let _ = process::start(&exe, &[]);
+            }
+        }
+    }
+
     /// Asks each blade to stop, through its own stop command (Exit in the tray menu). A preview
     /// never does: the commands find the running copy by window or mutex, not by path, so they
     /// would stop the user's installed blades. A blade that can't be asked keeps running.
@@ -248,6 +274,11 @@ impl Suite {
             }
         }
     }
+}
+
+/// True when a blade is enabled and no process in this session currently holds its mutex.
+fn should_start(enabled: bool, mutex: &str) -> bool {
+    enabled && !pk::instance::NamedMutex::exists(pk::wide::to_wide(mutex).as_ptr())
 }
 
 /// SnipSnap's sign-in shortcut, in the user's Startup folder.
@@ -295,13 +326,29 @@ mod tests {
         suite.apply_startup(&mut original, &[true, false, true]).unwrap();
         assert_eq!(std::fs::read(&file).unwrap(), b"xp\r\noff\r\noff\r\noff\r\n");
 
-        // A preview's Exit leaves the blades alone, even with their exes in its folder.
+        // A preview's start/Exit leave the blades alone, even with their exes in its folder.
         std::fs::write(dir.join("snipsnap.exe"), b"not a program").unwrap();
         std::fs::write(dir.join("QuickTooth.exe"), b"not a program").unwrap();
         std::fs::write(dir.join("NowPlaying.exe"), b"not a program").unwrap();
+        suite.start_enabled_blades();
         suite.stop_blades();
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn start_checks_enabled_and_mutex() {
+        let name = std::format!("Local\\PocketKnives.Test.ShouldStart.{}", std::process::id());
+        assert!(!should_start(false, &name));
+        assert!(should_start(true, &name));
+
+        let wide = pk::wide::to_wide(&name);
+        let guard = pk::instance::NamedMutex::first(wide.as_ptr()).expect("create test mutex");
+        assert!(!should_start(false, &name));
+        assert!(!should_start(true, &name));
+
+        drop(guard);
+        assert!(should_start(true, &name));
     }
 
     #[test]

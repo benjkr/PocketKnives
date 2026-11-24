@@ -4,14 +4,18 @@
   in the Windows notification area, available under the hidden icons arrow unless the user pins
   it to the taskbar. Windows retains the user's placement. The icon comes back after Explorer
   recreates the taskbar.
+- Running `pk.exe` (or `pk settings`) ensures every enabled blade is running, whether the runner is
+  starting fresh or already running: for each blade whose sign-in entry is enabled, it checks the
+  blade's single-instance mutex and starts the blade's exe if it isn't already running (disabled
+  blades stay off).
 - One click, Enter, or Space on the icon opens PocketKnives Settings or restores its existing
   window. Right-click, Shift+F10 or the menu key on the icon shows **Settings** (the default
   item) and **Exit**. Exit closes Settings, the icon and the running blades, each through its own
-  stop command (`snipsnap quit`, `QuickTooth.exe --exit`). The installer's `pk --exit` closes
-  only Settings and the icon; Setup stops the blades itself. The Start menu shortcut runs
-  `pk settings` and opens the same window, and starts the runner again after Exit; each blade
-  starts again from its own Start menu entry or at the next sign-in. Closing Settings leaves the
-  icon available.
+  stop command (`snipsnap quit`, `QuickTooth.exe --exit`, `NowPlaying.exe --exit`). The installer's
+  `pk --exit` closes only Settings and the icon; Setup stops the blades itself. The Start menu
+  shortcut runs `pk settings` and opens the same window, and starts the runner and enabled blades
+  again after Exit; any blade can also be started on its own from its Start menu entry. Closing
+  Settings leaves the icon available.
 - General offers **Look**. Choosing XP, Windows 10, or Windows 11 saves the look under
   `HKCU\Software\PocketKnives` and reopens Settings on General. XP uses classic Win32
   controls and Windows 10 enables visual styles. Windows 11 is a separate WinUI window with Mica
@@ -51,5 +55,6 @@ From a scratch copy of that stage, run `pk --preview`, then click the tray icon 
 `pk --preview settings`. Preview instances use their own tray identity and save changes to
 `preview-settings.txt` next to the scratch executable, and the scratch blades keep their settings
 next to their own exes ([blade settings](blade-settings.md#preview)). They never write the
-installed settings or change what starts with Windows, and their Exit leaves the blades running.
+installed settings, start blades or change what starts with Windows, and their Exit leaves the
+blades running.
 To close the preview and its tray icon, run `pk --preview --exit` from the same folder.

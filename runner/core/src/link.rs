@@ -7,6 +7,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, RegisterWindowMe
 pub const OPEN_MESSAGE: &str = "PocketKnives.OpenSettings.v1";
 pub const REOPEN_MESSAGE: &str = "PocketKnives.ReopenSettings.v1";
 pub const EXIT_MESSAGE: &str = "PocketKnives.Exit.v1";
+pub const START_BLADES_MESSAGE: &str = "PocketKnives.StartBlades.v1";
 
 /// The message's ID in this session.
 pub fn register(name: &str) -> u32 {
