@@ -8725,6 +8725,16 @@ pub mod Windows {
                             .ok()
                         }
                     }
+                    pub unsafe fn SetUnderline(&self, hasunderline: bool, textrange: DWRITE_TEXT_RANGE) -> windows_core::Result<()> {
+                        unsafe {
+                            (windows_core::Interface::vtable(self).SetUnderline)(
+                                windows_core::Interface::as_raw(self),
+                                hasunderline.into(),
+                                core::mem::transmute(textrange),
+                            )
+                            .ok()
+                        }
+                    }
                     pub unsafe fn SetDrawingEffect<P0>(&self, drawingeffect: P0, textrange: DWRITE_TEXT_RANGE) -> windows_core::Result<()>
                     where
                         P0: windows_core::Param<windows_core::IUnknown>,
@@ -8962,6 +8972,16 @@ pub mod Windows {
                 windows_core::imp::define_interface!(IDXGIObject, IDXGIObject_Vtbl, 0xaec22fb8_76f3_4639_9be0_28eb43a67a2e);
                 windows_core::imp::interface_hierarchy!(IDXGIObject, windows_core::IUnknown);
                 impl IDXGIObject {
+                    pub unsafe fn GetParent<T>(&self) -> windows_core::Result<T>
+                    where
+                        T: windows_core::Interface,
+                    {
+                        let mut result__ = core::ptr::null_mut();
+                        unsafe {
+                            (windows_core::Interface::vtable(self).GetParent)(windows_core::Interface::as_raw(self), &T::IID, &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
                 }
                 #[repr(C)]
                 #[doc(hidden)]
@@ -11245,6 +11265,14 @@ pub mod Windows {
                 pub const eAVEncH264VProfile_Main: eAVEncH264VProfile = eAVEncH264VProfile(77i32);
             }
         }
+        pub mod Storage {
+            pub mod EnhancedStorage {
+                pub const PKEY_Link_TargetParsingPath: super::super::Foundation::PROPERTYKEY = super::super::Foundation::PROPERTYKEY {
+                    fmtid: windows_core::GUID::from_u128(0xb9b4b3fc_2b51_4a42_b5d8_324146afcf25),
+                    pid: 2,
+                };
+            }
+        }
         pub mod System {
             pub mod Com {
                 #[inline]
@@ -12319,6 +12347,132 @@ pub mod Windows {
                     }
                 }
                 pub const FOLDERID_AppsFolder: windows_core::GUID = windows_core::GUID::from_u128(0x1e87508d_89c2_42f0_8a7e_645a0f50ca58);
+                windows_core::imp::define_interface!(IShellItem, IShellItem_Vtbl, 0x43826d1e_e718_42ee_bc55_a1e261c37bfe);
+                windows_core::imp::interface_hierarchy!(IShellItem, windows_core::IUnknown);
+                impl IShellItem {
+                    pub unsafe fn GetParent(&self) -> windows_core::Result<IShellItem> {
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(self).GetParent)(windows_core::Interface::as_raw(self), &mut result__)
+                                .and_then(|| windows_core::Type::from_abi(result__))
+                        }
+                    }
+                }
+                #[repr(C)]
+                #[doc(hidden)]
+                pub struct IShellItem_Vtbl {
+                    pub base__: windows_core::IUnknown_Vtbl,
+                    pub BindToHandler: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *mut core::ffi::c_void,
+                        *const windows_core::GUID,
+                        *const windows_core::GUID,
+                        *mut *mut core::ffi::c_void,
+                    ) -> windows_core::HRESULT,
+                    pub GetParent: unsafe extern "system" fn(*mut core::ffi::c_void, *mut *mut core::ffi::c_void) -> windows_core::HRESULT,
+                    GetDisplayName: usize,
+                    GetAttributes: usize,
+                    pub Compare:
+                        unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void, u32, *mut i32) -> windows_core::HRESULT,
+                }
+                impl windows_core::RuntimeName for IShellItem {}
+                windows_core::imp::define_interface!(IShellItem2, IShellItem2_Vtbl, 0x7e9fb0d3_919f_4307_ab2e_9b1860310c93);
+                impl core::ops::Deref for IShellItem2 {
+                    type Target = IShellItem;
+                    fn deref(&self) -> &Self::Target {
+                        unsafe { core::mem::transmute(self) }
+                    }
+                }
+                windows_core::imp::interface_hierarchy!(IShellItem2, windows_core::IUnknown, IShellItem);
+                impl IShellItem2 {
+                    pub unsafe fn GetInt32(&self, key: *const super::super::Foundation::PROPERTYKEY) -> windows_core::Result<i32> {
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(self).GetInt32)(windows_core::Interface::as_raw(self), key, &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub unsafe fn GetString(
+                        &self,
+                        key: *const super::super::Foundation::PROPERTYKEY,
+                    ) -> windows_core::Result<windows_core::PWSTR> {
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(self).GetString)(windows_core::Interface::as_raw(self), key, &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub unsafe fn GetUInt32(&self, key: *const super::super::Foundation::PROPERTYKEY) -> windows_core::Result<u32> {
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(self).GetUInt32)(windows_core::Interface::as_raw(self), key, &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                    pub unsafe fn GetUInt64(&self, key: *const super::super::Foundation::PROPERTYKEY) -> windows_core::Result<u64> {
+                        unsafe {
+                            let mut result__ = core::mem::zeroed();
+                            (windows_core::Interface::vtable(self).GetUInt64)(windows_core::Interface::as_raw(self), key, &mut result__)
+                                .map(|| result__)
+                        }
+                    }
+                }
+                #[repr(C)]
+                #[doc(hidden)]
+                pub struct IShellItem2_Vtbl {
+                    pub base__: IShellItem_Vtbl,
+                    GetPropertyStore: usize,
+                    GetPropertyStoreWithCreateObject: usize,
+                    GetPropertyStoreForKeys: usize,
+                    pub GetPropertyDescriptionList: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *const windows_core::GUID,
+                        *mut *mut core::ffi::c_void,
+                    ) -> windows_core::HRESULT,
+                    pub Update: unsafe extern "system" fn(*mut core::ffi::c_void, *mut core::ffi::c_void) -> windows_core::HRESULT,
+                    pub GetProperty: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut super::super::System::Com::StructuredStorage::PROPVARIANT,
+                    ) -> windows_core::HRESULT,
+                    pub GetCLSID: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut windows_core::GUID,
+                    ) -> windows_core::HRESULT,
+                    pub GetFileTime: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut super::super::Foundation::FILETIME,
+                    ) -> windows_core::HRESULT,
+                    pub GetInt32: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut i32,
+                    ) -> windows_core::HRESULT,
+                    pub GetString: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut windows_core::PWSTR,
+                    ) -> windows_core::HRESULT,
+                    pub GetUInt32: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut u32,
+                    ) -> windows_core::HRESULT,
+                    pub GetUInt64: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut u64,
+                    ) -> windows_core::HRESULT,
+                    pub GetBool: unsafe extern "system" fn(
+                        *mut core::ffi::c_void,
+                        *const super::super::Foundation::PROPERTYKEY,
+                        *mut windows_core::BOOL,
+                    ) -> windows_core::HRESULT,
+                }
+                impl windows_core::RuntimeName for IShellItem2 {}
                 windows_core::imp::define_interface!(
                     IShellItemImageFactory,
                     IShellItemImageFactory_Vtbl,

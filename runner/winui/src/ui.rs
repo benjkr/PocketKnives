@@ -120,9 +120,49 @@ pub fn launched(app: &Application) -> Result<()> {
     // AppWindow.Resize uses physical pixels.
     let mut hwnd = 0isize;
     unsafe { ui.window.cast::<IWindowNative>()?.window_handle(&mut hwnd) }.ok()?;
-    let scale = unsafe { GetDpiForWindow(hwnd as _) } as f64 / 96.0;
-    ui.window.AppWindow()?.Resize(SizeInt32 { Width: (830.0 * scale) as i32, Height: (500.0 * scale) as i32 })?;
+    let dpi = unsafe { GetDpiForWindow(hwnd as _) };
+    let scale = dpi as f64 / 96.0;
+    let (width, height) = initial_window_size(&ui.suite, &ui.settings, dpi);
+    ui.window.AppWindow()?.Resize(SizeInt32 { Width: (width as f64 * scale) as i32, Height: (height as f64 * scale) as i32 })?;
     ui.window.Activate()
+}
+
+// Initial window and card sizing (effective pixels). The window opens tall enough for the tallest
+// blade page (capped to 85% of the monitor work area); ScrollViewer handles anything taller.
+const MIN_WIDTH: i32 = 830;
+const MIN_HEIGHT: i32 = 500;
+const CARD_SPACING: f64 = 8.0;
+const STANDARD_CARD_HEIGHT: i32 = 64;
+const PICTURE_CARD_HEIGHT: i32 = 96;
+const CHROME_AND_HEADER_HEIGHT: i32 = 180;
+
+fn initial_window_size(suite: &Suite, pages: &[Vec<Setting>], dpi: u32) -> (i32, i32) {
+    let mut needed_width = MIN_WIDTH;
+    let mut needed_height = MIN_HEIGHT;
+    for (blade, settings) in pages.iter().enumerate() {
+        if settings.is_empty() {
+            continue;
+        }
+        let mut cards_h = (settings.len() as i32 - 1) * CARD_SPACING as i32;
+        for setting in settings {
+            if setting.kind == Kind::Picture && blade_settings::pictures(suite, &BLADES[blade], setting).is_some() {
+                cards_h += PICTURE_CARD_HEIGHT;
+                let count = setting.choices.len() as i32;
+                if count > 0 {
+                    let row_w = count * PICTURE_WIDTH as i32 + (count - 1) * PICTURE_GAP as i32;
+                    needed_width = needed_width.max(524 + row_w);
+                }
+            } else {
+                cards_h += STANDARD_CARD_HEIGHT;
+            }
+        }
+        needed_height = needed_height.max(CHROME_AND_HEADER_HEIGHT + cards_h);
+    }
+    let work = runner_core::work_area(dpi);
+    (
+        runner_core::fit_work_area(needed_width, MIN_WIDTH, work.map(|(w, _)| w)),
+        runner_core::fit_work_area(needed_height, MIN_HEIGHT, work.map(|(_, h)| h)),
+    )
 }
 
 fn unreadable(error: &str) -> ! {
@@ -266,9 +306,13 @@ fn show_page(index: usize) -> Result<()> {
             content.Children()?.Append(&text(&format!("{} has no settings to show.", blade.name))?)?
         }
         Some(_) => {
+            let cards = StackPanel::new()?;
+            cards.SetSpacing(CARD_SPACING)?;
+            let children = cards.Children()?;
             for i in 0..ui.settings[index - 1].len() {
-                content.Children()?.Append(&setting_card(index - 1, i)?)?;
+                children.Append(&setting_card(index - 1, i)?)?;
             }
+            content.Children()?.Append(&cards)?;
         }
     }
     ui.page.SetContent(&content)

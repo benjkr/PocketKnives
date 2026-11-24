@@ -1,6 +1,7 @@
 //! Taskbar-docked layered Win32 window for NowPlaying.
 //! Owns the message loop, atomic `GWLP_HWNDPARENT = Shell_TrayWnd` Z-order docking, adaptive
 //! 60fps animation timer, mouse hover/scrub hit-testing, and dark/light right-click context menu.
+use crate::app;
 use crate::audio::AudioMeter;
 use crate::ipc;
 use crate::render::{
@@ -29,11 +30,12 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     EVENT_SYSTEM_FOREGROUND, FindWindowW, GW_HWNDPREV, GWLP_HWNDPARENT, GWLP_USERDATA, GetClassNameW, GetCursorPos,
     GetForegroundWindow, GetMessageW, GetShellWindow, GetSystemMetrics, GetWindow, GetWindowLongPtrW, GetWindowRect, IDC_ARROW,
     IDC_HAND, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, MA_NOACTIVATE, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG,
-    PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SM_CYSCREEN, SW_HIDE, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_BOTTOMALIGN,
-    TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_APP,
-    WM_CAPTURECHANGED, WM_DESTROY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_RBUTTONUP, WM_SETCURSOR,
-    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SM_CYSCREEN, SW_HIDE, SWP_HIDEWINDOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetCursor, SetForegroundWindow, SetTimer,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    TrackPopupMenu, TranslateMessage, WINEVENT_OUTOFCONTEXT, WM_APP, WM_CAPTURECHANGED, WM_DESTROY, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NULL, WM_RBUTTONUP, WM_SETCURSOR, WM_SETTINGCHANGE, WM_TIMER,
+    WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const WM_SMTC_UPDATED: u32 = WM_APP + 1;
@@ -73,7 +75,7 @@ struct AppState {
     strip_hovered: bool,
     tracking_leave: bool,
     hover_target: HoverTarget,
-    btn_pressed: Option<usize>,
+    pressed: HoverTarget,
     scrub_dragging: bool,
     scrub_hover_ratio: f32,
     drag_pos_sec: f64,
@@ -162,7 +164,7 @@ pub fn run() -> u32 {
         strip_hovered: false,
         tracking_leave: false,
         hover_target: HoverTarget::None,
-        btn_pressed: None,
+        pressed: HoverTarget::None,
         scrub_dragging: false,
         scrub_hover_ratio: 0.0,
         drag_pos_sec: 0.0,
@@ -231,7 +233,7 @@ unsafe extern "system" fn win_event_proc(
 ) {
     let hwnd = unsafe { GLOBAL_HWND };
     if !hwnd.is_null() {
-        unsafe { windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(hwnd, WM_FG_CHANGED, fg_hwnd as usize, 0) };
+        unsafe { PostMessageW(hwnd, WM_FG_CHANGED, fg_hwnd as usize, 0) };
     }
 }
 
@@ -268,11 +270,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             }
         }
         WM_SETCURSOR => {
-            let cursor = if matches!(st.hover_target, HoverTarget::Prev | HoverTarget::Play | HoverTarget::Next | HoverTarget::Scrub) {
-                IDC_HAND
-            } else {
-                IDC_ARROW
-            };
+            let cursor = if st.hover_target == HoverTarget::None { IDC_ARROW } else { IDC_HAND };
             unsafe { SetCursor(LoadCursorW(null_mut(), cursor)) };
             return 1;
         }
@@ -360,7 +358,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             st.strip_hovered = false;
             if !st.scrub_dragging {
                 st.hover_target = HoverTarget::None;
-                st.btn_pressed = None;
+                st.pressed = HoverTarget::None;
             }
             st.sync_frame_timer();
             return 0;
@@ -376,16 +374,8 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                     st.sync_frame_timer();
                     st.render_now();
                 }
-                HoverTarget::Prev => {
-                    st.btn_pressed = Some(0);
-                    st.render_now();
-                }
-                HoverTarget::Play => {
-                    st.btn_pressed = Some(1);
-                    st.render_now();
-                }
-                HoverTarget::Next => {
-                    st.btn_pressed = Some(2);
+                t @ (HoverTarget::Prev | HoverTarget::Play | HoverTarget::Next | HoverTarget::App) => {
+                    st.pressed = t;
                     st.render_now();
                 }
                 _ => {}
@@ -410,13 +400,16 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 st.render_now();
                 return 0;
             }
-            if let Some(pressed) = st.btn_pressed.take() {
-                let hit = st.hit_test(x, y);
-                match (pressed, hit) {
-                    (0, HoverTarget::Prev) => st.smtc.send(MediaCommand::Previous),
-                    (1, HoverTarget::Play) => st.smtc.send(MediaCommand::PlayPause),
-                    (2, HoverTarget::Next) => st.smtc.send(MediaCommand::Next),
-                    _ => {}
+            let pressed = core::mem::replace(&mut st.pressed, HoverTarget::None);
+            if pressed != HoverTarget::None {
+                if st.hit_test(x, y) == pressed {
+                    match pressed {
+                        HoverTarget::Prev => st.smtc.send(MediaCommand::Previous),
+                        HoverTarget::Play => st.smtc.send(MediaCommand::PlayPause),
+                        HoverTarget::Next => st.smtc.send(MediaCommand::Next),
+                        HoverTarget::App => app::activate(&st.media.aumid, &st.media.title),
+                        _ => {}
+                    }
                 }
                 st.render_now();
             }
@@ -424,7 +417,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_CAPTURECHANGED => {
             st.scrub_dragging = false;
-            st.btn_pressed = None;
+            st.pressed = HoverTarget::None;
             st.sync_frame_timer();
             return 0;
         }
@@ -458,6 +451,8 @@ impl AppState {
             HoverTarget::Next
         } else if in_rect(x, y, scrub) {
             HoverTarget::Scrub
+        } else if !self.media.aumid.is_empty() && in_rect(x, y, self.renderer.app_rect(&self.media, self.settings.visualizer)) {
+            HoverTarget::App
         } else {
             HoverTarget::None
         }
@@ -558,7 +553,8 @@ impl AppState {
             bands,
             strip_hover_alpha: self.strip_hover_alpha,
             btn_hover_alpha: self.btn_hover_alpha,
-            btn_pressed: self.btn_pressed,
+            app_hover: self.hover_target == HoverTarget::App || self.pressed == HoverTarget::App,
+            btn_pressed: btn_index(self.pressed),
             scrub_active_alpha: self.scrub_active_alpha,
             scrub_hover: self.hover_target == HoverTarget::Scrub,
             scrub_dragging: self.scrub_dragging,
@@ -680,6 +676,11 @@ impl AppState {
 
         let mut pt = POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut pt) };
+        // Win32 quirk (KB135788): a popup menu only closes on a click outside it when its owner is
+        // the foreground window, and the posted WM_NULL lets the menu loop exit cleanly. The strip
+        // is WS_EX_NOACTIVATE, so make it foreground for the menu and hand focus back afterwards.
+        let prev_fg = unsafe { GetForegroundWindow() };
+        unsafe { SetForegroundWindow(self.hwnd) };
         let cmd = unsafe {
             TrackPopupMenu(
                 menu,
@@ -691,7 +692,14 @@ impl AppState {
                 null(),
             ) as usize
         };
-        unsafe { DestroyMenu(menu) };
+        unsafe {
+            PostMessageW(self.hwnd, WM_NULL, 0, 0);
+            DestroyMenu(menu);
+            // Clicking elsewhere already moved focus there; only return it when the strip kept it.
+            if !prev_fg.is_null() && prev_fg != self.hwnd && GetForegroundWindow() == self.hwnd {
+                SetForegroundWindow(prev_fg);
+            }
+        }
 
         match cmd {
             MENU_PLAY_PAUSE => self.smtc.send(MediaCommand::PlayPause),

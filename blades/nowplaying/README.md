@@ -9,7 +9,7 @@ Live media cover, seekable timeline and 5-band audio frequency meter docked in t
   taskbars).
 - **Live SMTC control**: displays title, artist, source app icon, album art (decoded at native DPI),
   play/pause, previous/next, and an interpolated, click-and-drag seekable progress bar with hover
-  timestamp preview.
+  timestamp preview. Clicking the title or app icon brings the playing app to the front.
 - **Live audio frequency meter**: reads PC audio via WASAPI loopback through a 512-point FFT into
   5 center-expanding white pills (pauses capture automatically when nothing is playing).
 - **Zero-flicker docking**: owned by `Shell_TrayWnd` so clicking between apps and the taskbar never

@@ -25,7 +25,7 @@ pub struct MediaSnapshot {
     pub playing: bool,
     pub title: String,
     pub artist: String,
-    /// The source app's AppUserModelID (its icon comes from the shell, see `appicon`).
+    /// The source app's AppUserModelID (its icon comes from the shell, see `app`).
     pub aumid: String,
     pub can_seek: bool,
     pub start_100ns: i64,

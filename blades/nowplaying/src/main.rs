@@ -5,7 +5,7 @@
 
 extern crate alloc;
 
-mod appicon;
+mod app;
 mod audio;
 mod cli;
 mod fft;

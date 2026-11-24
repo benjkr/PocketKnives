@@ -17,11 +17,12 @@ What it does now. Keep it current in the same change, and lean.
 - **Cover**: `40 × 40` flush on the left (`CornerRadius = 4`, WIC Fant scaling at native DPI, 1 px
   subtle rim). Dominant saturated color is extracted from the cover (or, without one, the app
   icon) for the hover scrub accent.
-- **Row 1**: the playing app's own icon from the shell (`src/appicon.rs`: the session's
+- **Row 1**: the playing app's own icon from the shell (`src/app.rs`: the session's
   AppUserModelID in `shell:AppsFolder`, else the running process whose exe has that name, as for
   Spotify's `Spotify.exe`; a neutral play glyph when neither has one), `Title · Artist` with ellipsis trimming, **white M2 5-pill
   center-expanding frequency meter** (dark ink on Light taskbar, collapses to 5 soft dots when
-  paused), and `Prev / Play-Pause / Next` buttons with animated hover plates.
+  paused), and `Prev / Play-Pause / Next` buttons with animated hover plates. Hovering the icon or
+  the drawn text underlines the text like a link, and a click opens the playing app (see below).
 - **Row 2**: **P1 Spotify hover-reveal progress bar** — fixed `4 px` track centered in a `14 px`
   hit target (zero vertical jump), white fill at rest transitioning to album accent on hover/drag,
   cursor ghost seek fill, `10 px` smooth fade/scale knob, and tabular `cur / dur` with live hover
@@ -48,6 +49,18 @@ What it does now. Keep it current in the same change, and lean.
   it (such as after a fullscreen window or SnipSnap overlay closes).
 - `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` and `WM_MOUSEACTIVATE -> MA_NOACTIVATE` on left-clicks so
   clicking controls or scrubbing never steals focus.
+- **Open the app**: clicking the icon or title (press and release on it) brings the playing
+  app's window to the front, restoring it if minimized (`src/app.rs`). The app's exe is the
+  Apps-folder entry's link target (Chrome, Edge) or the running exe of that name (Spotify); its
+  window is the visible, unowned, titled top-level window of a process running that exe whose
+  title contains the track title (a browser window showing the playing tab), else the topmost
+  one. Cloaked windows count, so one on another virtual desktop is switched to. With no window
+  (closed to the tray, Store apps) it launches the Apps-folder entry or the exe, which a running
+  app answers by showing itself. A browser comes forward on its current tab, not the playing one
+  unless that tab is showing.
+- Right-click opens a context menu (play/pause, previous, next, frequency meter, exit). The strip
+  is made foreground while it's open so a click anywhere outside closes it, and focus goes back to
+  the previous window unless that click moved it.
 - Hidden when no media session is active, and behind visible, uncloaked fullscreen windows
   (ignoring desktop shell windows like `Progman` and `WorkerW`).
 
