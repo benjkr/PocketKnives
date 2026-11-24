@@ -4,11 +4,11 @@ use crate::fft::{BANDS, FFT_SIZE, SpectrumAnalyzer};
 use alloc::sync::Arc;
 use core::ptr::null_mut;
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use windows::Win32::Media::Audio::{
+use pk_windows::Win32::Media::Audio::{
     AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator,
     MMDeviceEnumerator, WAVEFORMATEXTENSIBLE, eConsole, eRender,
 };
-use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree};
+use pk_windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree};
 use windows_core::GUID;
 use windows_sys::Win32::System::Threading::Sleep;
 

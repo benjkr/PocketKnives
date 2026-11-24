@@ -25,17 +25,14 @@ New-Item -ItemType Directory $stage | Out-Null
 & cmd /c (Join-Path $root 'blades\snipsnap\build.bat') $stage
 if ($LASTEXITCODE -ne 0) { throw 'SnipSnap build failed' }
 
-# QuickTooth, the runner (pk.exe) and its Windows 11 settings app: Rust, built from the repo root
-# so cargo finds rust-toolchain.toml and .cargo/config.toml, into installer\obj. One package per
-# build, so each exe is exactly what its own `cargo build -p` makes.
+# QuickTooth, NowPlaying, the runner (pk.exe) and its Windows 11 settings app: Rust, built from
+# the repo root in one Cargo invocation so they share one dependency pass and compile in parallel.
 $cargoOut = Join-Path $PSScriptRoot 'obj\cargo'
 $release = Join-Path $cargoOut 'release'
 Push-Location $root
 try {
-    foreach ($package in 'quicktooth', 'nowplaying', 'pocketknives-runner', 'pocketknives-settings') {
-        cargo build --release -p $package --target-dir $cargoOut
-        if ($LASTEXITCODE -ne 0) { throw "$package build failed" }
-    }
+    cargo build --release -p quicktooth -p nowplaying -p pocketknives-runner -p pocketknives-settings --target-dir $cargoOut
+    if ($LASTEXITCODE -ne 0) { throw 'Rust workspace build failed' }
 } finally { Pop-Location }
 Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'NowPlaying.exe'), (Join-Path $release 'pk.exe') $stage
 

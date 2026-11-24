@@ -13,16 +13,16 @@ use pk::sync::Mutex;
 use pk::wide::to_wide;
 use quicktooth_core::Guid;
 use quicktooth_core::devices::{BtDevice, BtEndpoint, KS_NOT_ATTEMPTED, OneShot, OtherEndpoint, SendResult, Snapshot, device_state};
-use windows::Win32::Devices::FunctionDiscovery::{PKEY_Device_ContainerId, PKEY_Device_FriendlyName, PKEY_DeviceInterface_FriendlyName};
-use windows::Win32::Foundation::PROPERTYKEY;
-use windows::Win32::Media::Audio::{
+use pk_windows::Win32::Devices::FunctionDiscovery::{PKEY_Device_ContainerId, PKEY_Device_FriendlyName, PKEY_DeviceInterface_FriendlyName};
+use pk_windows::Win32::Foundation::PROPERTYKEY;
+use pk_windows::Win32::Media::Audio::{
     DEVICE_STATE, DEVICE_STATE_ACTIVE, DEVICE_STATEMASK_ALL, EDataFlow, ERole, IDeviceTopology, IMMDevice, IMMDeviceEnumerator,
     IMMNotificationClient, IMMNotificationClient_Impl, IPart, MMDeviceEnumerator, eRender,
 };
-use windows::Win32::Media::KernelStreaming::{IKsControl, KSIDENTIFIER, KSIDENTIFIER_0, KSIDENTIFIER_0_0};
-use windows::Win32::System::Com::StructuredStorage::{PROPVARIANT, PropVariantClear};
-use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoTaskMemFree, STGM_READ};
-use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
+use pk_windows::Win32::Media::KernelStreaming::{IKsControl, KSIDENTIFIER, KSIDENTIFIER_0, KSIDENTIFIER_0_0};
+use pk_windows::Win32::System::Com::StructuredStorage::{PROPVARIANT, PropVariantClear};
+use pk_windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoTaskMemFree, STGM_READ};
+use pk_windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 use windows_core::{GUID, Interface, PCWSTR, PWSTR, implement};
 
 /// KSPROPSETID_BtAudio (ksmedia.h) and its two one-shot properties.

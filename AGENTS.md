@@ -20,8 +20,9 @@ in a blade's docs are from that blade's folder.
 
 The blades and the runner are Rust, in one Cargo workspace (`Cargo.toml` at the root, toolchain
 pinned in `rust-toolchain.toml`), on `crates/pk`: what a `no_std` exe needs instead of Rust's std
-(entry point, heap, arguments, console, registry, single instance, threads), plus
-`crates/pk-build` for their build scripts. The runner's two settings windows share `runner/core`.
+(entry point, heap, arguments, console, registry, single instance, threads), `crates/pk-windows`
+for generated COM/WinRT bindings (`cargo run -p pk-windows-gen`), and `crates/pk-build` for their
+build scripts. The runner's two settings windows share `runner/core`.
 
 ## Rules every change follows
 

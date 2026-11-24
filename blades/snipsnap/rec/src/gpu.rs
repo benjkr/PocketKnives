@@ -1,20 +1,20 @@
 //! Background pre-warm and ownership of the D3D11 + WinRT Direct3D + Media Foundation DXGI
 //! device manager. Dropping `GpuContext` releases all GPU / Media Foundation handles immediately.
-use windows::Graphics::Capture::GraphicsCaptureItem;
-use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
-use windows::Win32::Foundation::HMODULE;
-use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1};
-use windows::Win32::Graphics::Direct3D11::{
+use pk_windows::Graphics::Capture::GraphicsCaptureItem;
+use pk_windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
+use pk_windows::Win32::Foundation::HMODULE;
+use pk_windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1};
+use pk_windows::Win32::Graphics::Direct3D11::{
     D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device,
     ID3D11DeviceContext, ID3D11Multithread, ID3D11VideoContext, ID3D11VideoDevice,
 };
-use windows::Win32::Graphics::Dxgi::IDXGIDevice;
-use windows::Win32::Media::MediaFoundation::{
+use pk_windows::Win32::Graphics::Dxgi::IDXGIDevice;
+use pk_windows::Win32::Media::MediaFoundation::{
     IMFDXGIDeviceManager, MF_VERSION, MFCreateDXGIDeviceManager, MFSTARTUP_LITE, MFShutdown, MFStartup,
 };
-use windows::Win32::System::WinRT::Direct3D11::CreateDirect3D11DeviceFromDXGIDevice;
-use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
-use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
+use pk_windows::Win32::System::WinRT::Direct3D11::CreateDirect3D11DeviceFromDXGIDevice;
+use pk_windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
+use pk_windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 use windows_core::Interface;
 
 /// Pre-warmed GPU & Media Foundation state shared across capture and encoding.

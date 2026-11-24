@@ -9,13 +9,13 @@ use core::ptr::null;
 use core::sync::atomic::{AtomicU32, Ordering};
 use pk::sync::Mutex;
 use quicktooth_core::battery::{BatteryReading, parse_apple_status};
-use windows::Devices::Bluetooth::Advertisement::{
+use pk_windows::Devices::Bluetooth::Advertisement::{
     BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementWatcher, BluetoothLEManufacturerData, BluetoothLEAdvertisementWatcherStoppedEventArgs,
     BluetoothLEScanningMode,
 };
-use windows::Devices::Bluetooth::BluetoothError;
-use windows::Foundation::TypedEventHandler;
-use windows::Storage::Streams::DataReader;
+use pk_windows::Devices::Bluetooth::BluetoothError;
+use pk_windows::Foundation::TypedEventHandler;
+use pk_windows::Storage::Streams::DataReader;
 use windows_sys::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 const STRONG_RSSI: i32 = -70;

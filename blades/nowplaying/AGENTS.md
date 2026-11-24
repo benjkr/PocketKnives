@@ -10,8 +10,8 @@ commands here and in this blade's `docs/` are from `blades/nowplaying/`.
 ## Rules for NowPlaying
 
 - **The exe**: `no_std` on `crates/pk`; WinRT SMTC, WASAPI loopback, Direct2D, DirectWrite and
-  WIC through the workspace's `windows` crate (no hand-written vtables), plain Win32 through
-  `windows-sys`. No new crates without the user's say.
+  WIC through the workspace's `crates/pk-windows` (generated `windows-bindgen` bindings, no
+  hand-written vtables), plain Win32 through `windows-sys`. No new crates without the user's say.
 - **Zero-flicker taskbar docking**: the layered window is owned by `Shell_TrayWnd`
   (`GWLP_HWNDPARENT`), uses `WS_EX_NOACTIVATE` + `MA_NOACTIVATE` on left-clicks, and sits flush to
   the taskbar's left/top/bottom edges for the hover area while the `344×40` strip content keeps

@@ -3,9 +3,9 @@
 //! apps (`…!App`). Desktop apps that report their exe name instead (Spotify: `Spotify.exe`) aren't
 //! in that folder, so their icon comes from the running process's exe.
 use pk::wide::{from_buf, to_wide};
-use windows::Win32::Foundation::SIZE;
-use windows::Win32::Graphics::Gdi::HBITMAP;
-use windows::Win32::UI::Shell::{
+use pk_windows::Win32::Foundation::SIZE;
+use pk_windows::Win32::Graphics::Gdi::HBITMAP;
+use pk_windows::Win32::UI::Shell::{
     FOLDERID_AppsFolder, IShellItemImageFactory, KF_FLAG_DEFAULT, SHCreateItemFromParsingName, SHCreateItemInKnownFolder,
     SIIGBF_ICONONLY, SIIGBF_RESIZETOFIT,
 };
