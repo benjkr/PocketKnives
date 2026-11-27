@@ -17,8 +17,13 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
   in the code. A new key goes in every theme file and in the spec's table.
 - **Nothing moves when values change**: every readout has fixed cells and every graph fixed
   columns. A change to a value's format keeps its width.
-- **The geometry is the approved mock's** (design "M2", one design pixel = one CSS pixel); show a
-  visible change with `--preview-render` before and after.
+- **The geometry is the approved mocks'** (the bar "M2", the process list "P4" with two presses
+  to kill; one design pixel = one CSS pixel); show a visible change with `--preview-render`
+  before and after.
+- **What can change is on glass, what is fixed is engraved**, and a key only travels when
+  pressed: it never changes colour or legend; states show on the glass.
+- **Ending programs is tested only on a throwaway process** you started (a renamed copy of a
+  system tool), never on the user's programs: one kill ends every process with that name.
 - **Budget**: one exe under 0.25 MB importing only Windows DLLs; a second's sample and redraw
   under 1% of one core.
 - **Live runs**: a running bar reserves the top of the screen and moves the user's windows. Don't
@@ -34,9 +39,10 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
 
 - `cargo build --release -p readout --target-dir <dir>` with zero warnings.
 - `--version`, `--help`, `--settings`, `--set` (with `POCKETKNIVES_SETTINGS_PREVIEW=1`),
-  `--status 3` and `--preview-render` for every theme exit cleanly with the expected output.
+  `--status 3`, `--top 2` and `--preview-render` for every theme exit cleanly with the expected
+  output.
 - On visual changes, look at `--preview-render` PNGs for every theme at `--scale 1` and `2`, with
-  a panel.
+  a panel (and the list's states: `--select`, `--deny`, `--press`).
 
 ## Specs
 

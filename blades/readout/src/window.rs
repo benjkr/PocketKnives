@@ -138,13 +138,12 @@ struct App {
     tracking: bool,
     fullscreen: bool,
     /// The process list: what it shows, the item it's for, whether the pointer is on the panel
-    /// (the rows hold still then), and when the selection, the refusal and the last press began.
+    /// (the rows hold still then), and when the selection and the refusal began.
     list: ListView,
     list_item: Option<Item>,
     on_panel: bool,
     sel_at: u64,
     denied_at: u64,
-    press_at: u64,
     reload_msg: u32,
     exit_msg: u32,
 }
@@ -200,7 +199,6 @@ pub fn run() -> u32 {
         on_panel: false,
         sel_at: 0,
         denied_at: 0,
-        press_at: 0,
         reload_msg: register_message(RELOAD_MSG),
         exit_msg: register_message(EXIT_MSG),
     });
@@ -487,19 +485,17 @@ impl App {
     }
 
     /// X on row `i`: the first press selects its program, a second press on the selected row
-    /// ends it. A second press as quick as a double-click is ignored, so a double-click only
-    /// selects.
+    /// ends it. A press within a double-click's time of the selection is ignored, so a
+    /// double-click only selects.
     fn press(&mut self, i: usize) {
         let t = ms();
-        let quick = t.saturating_sub(self.press_at) < unsafe { GetDoubleClickTime() } as u64;
-        self.press_at = t;
         self.list.denied = None;
         if self.list.sel != Some(i) {
             self.list.sel = Some(i);
             self.sel_at = t;
             return;
         }
-        if quick {
+        if t.saturating_sub(self.sel_at) < unsafe { GetDoubleClickTime() } as u64 {
             return;
         }
         self.list.sel = None;

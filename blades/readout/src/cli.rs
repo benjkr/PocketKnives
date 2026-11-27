@@ -22,9 +22,9 @@ const HELP: &str = "Readout \u{2014} a calculator-style system monitor bar along
   Readout.exe --settings               print settings for PocketKnives Settings\r\n\
   Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
   Readout.exe --set key=value ...      change settings\r\n\
-  Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n\
-                       [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]\r\n\
-                                       draw the bar with the design's sample values to a PNG\r\n\
+  Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n                         \
+[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]\r\n                                       \
+draw the bar with the design's sample values to a PNG\r\n\
   Readout.exe --version                print the version";
 
 pub fn run(args: &[String]) -> u32 {
