@@ -11,7 +11,7 @@
 - One click, Enter, or Space on the icon opens PocketKnives Settings or restores its existing
   window. Right-click, Shift+F10 or the menu key on the icon shows **Settings** (the default
   item) and **Exit**. Exit closes Settings, the icon and the running blades, each through its own
-  stop command (`snipsnap quit`, `QuickTooth.exe --exit`, `NowPlaying.exe --exit`). The installer's
+  stop command (`snipsnap quit`, `QuickTooth.exe --exit`, `NowPlaying.exe --exit`, `Readout.exe --exit`). The installer's
   `pk --exit` closes only Settings and the icon; Setup stops the blades itself. The Start menu
   shortcut runs `pk settings` and opens the same window, and starts the runner and enabled blades
   again after Exit; any blade can also be started on its own from its Start menu entry. Closing
@@ -22,11 +22,11 @@
   where Windows supports it. The runner opens the Windows 10 look if WinUI fails to start.
 - The left pane shows General and a Blades list with the name and icon of each blade. Each blade's
   check box or switch controls its existing sign-in entry. The window edits SnipSnap's Startup
-  shortcut and uses QuickTooth's and NowPlaying's `--autostart` commands for their Run entries. Windows launches
+  shortcut and uses QuickTooth's, NowPlaying's and Readout's `--autostart` commands for their Run entries. Windows launches
   enabled blades at the next sign-in.
 - Each blade's page shows that blade's own settings, read from the blade when Settings opens and
   changed through it ([blade settings](blade-settings.md)): SnipSnap's six hotkeys and the
-  flash, QuickTooth's headset, low-battery level and tray icon, NowPlaying's frequency meter. A hotkey is a hotkey box in XP and Windows
+  flash, QuickTooth's headset, low-battery level and tray icon, NowPlaying's frequency meter, Readout's theme and which readings it shows. A hotkey is a hotkey box in XP and Windows
   10 (Alt+key goes to the box, not to the window's access keys; the box can't take PrtSc or Win,
   and keeps a saved key it can't show). In Windows 11 the hotkey is a button: click it, press the
   keys, Esc cancels; Ctrl, Alt or Win is required. When a blade refuses a change (a hotkey taken

@@ -137,6 +137,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "readout"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "pk",
+ "pk-build",
+ "windows-sys",
+]
+
+[[package]]
 name = "runner-core"
 version = "0.1.0"
 dependencies = [
