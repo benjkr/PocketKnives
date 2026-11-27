@@ -12,7 +12,9 @@ What it does now. Keep it current in the same change, and lean.
   scaling and at least 1 (100% and 125%: 1; 150% to 225%: 2; 250%: 3), so the dot matrix and the
   engraving stay sharp.
 - **Once a second** it samples the system and redraws. Hovering a metric shows its panel under
-  it; leaving the bar hides it. Right-click: Theme (every theme, the current one checked) and Exit.
+  it; the panel stays while the pointer crosses to it and is on it, and goes when the pointer
+  leaves both. The panel never takes focus; its keys take clicks. Right-click the bar: Theme
+  (every theme, the current one checked) and Exit.
 
 ## Look
 
@@ -40,6 +42,23 @@ the mock):
   (and a dotted 70% line), and a footer: per-core bars and the effective clock speed (CPU);
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
   rates (disk); up and down rates (network).
+- **Top 10 processes** (design "P4"; CPU, memory, GPU and disk panels, not the network's):
+  under the screen, behind a parting line, the panel's body holds the list. What can change is
+  on glass, what is fixed is engraved in the plastic, and a key only travels when pressed.
+  - Engraved: the heading `TOP 10 PROCESSES` and what the value is (`OF ALL CORES`, `PRIVATE
+    MEMORY`, `OF GPU`, `I/O PER SEC`), the row numbers 1–10, a tick from each row to its key,
+    the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale, `BAR: OF TOTAL`) and
+    `X SELECTS` / `X AGAIN KILLS`.
+  - The list window: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in
+    the ghost colour), then a row per program: its name (11 characters, `~` for the rest), a bar
+    of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and its value.
+    A program over 70% of the whole is hot (not for I/O).
+  - A key per row: the first press selects the program (the row in inverse, `SEL` lit, the pips
+    count 5 s down); a second press on it ends every process with that name. A second press as
+    quick as a double-click is ignored. A program Readout can't end shows `ACCESS DENIED` and
+    lights `DENIED`.
+  - The rows hold still while the pointer is on the panel or a row is selected, held or refused;
+    a program that ends meanwhile leaves its row blank.
 
 ## Themes
 
@@ -65,7 +84,10 @@ the same name.
 | `hot`, `divider` | Hot pixels; the dotted dividers |
 | `iconGroove`, `iconHot` | An engraved icon, and the icon of a hot metric |
 | `iconLipAbove`, `iconLipBelow` | The lips one pixel above and below an engraving |
-| `panelShadow`, `panelRing`, `panelRingLip` | The panel's shadow, the ring round its screen, the highlight under that ring |
+| `panelShadow`, `panelRing`, `panelRingLip` | The panel's shadow, the ring round its screens, the highlight under that ring |
+| `keyTop`, `keyBottom` | A key cap's gradient |
+| `keySide`, `keyEdge`, `keyShadow` | A key's side wall under the cap, the lit top row of the cap, its shadow on the plate |
+| `keyLegend` | The legend on a key |
 
 ## Readings
 
@@ -73,6 +95,14 @@ the same name.
 speed; memory in use; GPU load (the busiest engine type, as Task Manager shows it) and dedicated
 video memory; disk active time and read and write rates; network bytes up and down on the
 connected physical adapters. No administrator rights; temperatures aren't shown.
+
+Per program (`src/procs.rs`), only while a panel with a list is open: one
+`NtQuerySystemInformation` snapshot a second gives each process's CPU time, private working set
+(Task Manager's memory column) and I/O bytes; GPU comes from the same GPU engine counter, per
+process, the busiest engine type. Processes with one image name are summed. Ending a program
+opens each of its processes for termination; one that can't be (elevated, protected, another
+user's, System, Readout itself) makes the result denied. Network traffic per process needs
+administrator rights, so the network panel has no list.
 
 ## Settings and command line
 
@@ -86,12 +116,14 @@ Readout.exe                          start the bar (single instance)
 Readout.exe --exit                   close the running bar
 Readout.exe --autostart on|off|status
 Readout.exe --status [seconds]       print live readings, one line a second (default 3)
+Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)
 Readout.exe --settings               print settings for PocketKnives Settings
 Readout.exe --set key=value ...      change settings
-Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS]
+Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]
 Readout.exe --version
 ```
 
 `--preview-render` draws the bar (and a panel, under its tile) to a PNG without opening a window:
-with the design mock's sample values and a fixed time, or with `--live`, that many seconds of this
-machine's readings and the time now.
+with the design mock's sample values and programs and a fixed time, or with `--live`, that many
+seconds of this machine's readings and the time now. `--select`, `--deny` and `--press` show a
+list row (1–10) selected, refused, or with its key held down.

@@ -10,6 +10,7 @@ mod cli;
 mod lcd;
 mod metrics;
 mod model;
+mod procs;
 mod raster;
 mod settings;
 mod status;

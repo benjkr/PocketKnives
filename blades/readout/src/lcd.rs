@@ -239,6 +239,8 @@ pub const HOT_PX: u8 = 2;
 pub const DIVIDER: u8 = 3;
 /// The body of a bar or filled area (its top row is [`LIT`]).
 pub const FILL: u8 = 4;
+/// An unlit annunciator or cursor: there, in the ghost colour, so nothing shifts when it lights.
+pub const GHOST: u8 = 5;
 
 pub struct Bitmap {
     pub w: usize,
@@ -284,12 +286,19 @@ fn glyph(c: u8) -> Option<&'static [u8; 5]> {
         b'Y' => b"55222", b'Z' => b"71247", b'0' => b"75557", b'1' => b"26227", b'2' => b"61247", b'3' => b"61216",
         b'4' => b"55711", b'5' => b"74616", b'6' => b"34757", b'7' => b"71222", b'8' => b"75757", b'9' => b"75716",
         b'.' => b"00002", b'/' => b"11244", b':' => b"02020", b'-' => b"00700", b'%' => b"51245", b'*' => b"25200",
+        // `~` stands for the rest of a name cut short.
+        b'~' => b"00005", b'_' => b"00007", b'?' => b"61202", b'(' => b"24442", b')' => b"42224",
         _ => return None,
     })
 }
 
 fn wide(c: u8) -> bool {
     matches!(c, b'M' | b'N' | b'W')
+}
+
+/// The width of `s` in the pixel font, without the gap after its last glyph.
+pub fn text_w(s: &str) -> usize {
+    s.bytes().map(|c| if wide(c) { 5 } else { 4 }).sum::<usize>().saturating_sub(1)
 }
 
 /// `s` in the pixel font; `fixed`, when not 0, is the bitmap's width (for text that changes).

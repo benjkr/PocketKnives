@@ -3,6 +3,7 @@
 //! the dot matrix and the engraving stay sharp.
 use crate::lcd::{self, Bitmap, LARGE, Readout, SMALL};
 use crate::model::{BURST_KBS, HOT, Model, Series};
+use crate::procs::Proc;
 use crate::raster::{self, Canvas, Mask, Paint, Path, Pt};
 use crate::theme::{Palette, Rgba};
 use alloc::format;
@@ -281,6 +282,7 @@ impl Pen<'_> {
                     lcd::HOT_PX => pal.hot,
                     lcd::DIVIDER => pal.divider,
                     lcd::FILL => pal.fill,
+                    lcd::GHOST => pal.ink_ghost,
                     _ => continue,
                 };
                 self.c.rect(ox + bx as i32 * s, oy + by as i32 * s, s, s, col);
@@ -296,6 +298,59 @@ impl Pen<'_> {
         self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
         self.fill(&g, if hot { pal.icon_hot } else { pal.icon_groove });
     }
+
+    /// Pixel text (or any bitmap's set pixels) engraved like the icons, its top left at (x, y).
+    fn engrave(&mut self, b: &Bitmap, x: f32, y: f32) {
+        let pal = *self.pal;
+        let g = pixels(b, x, y);
+        self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
+        self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
+        self.fill(&g, pal.icon_groove);
+    }
+
+    /// A key with `legend` centred on its cap, at (x, y), `w` x `h`: its shadow on the plate, its
+    /// side wall a pixel below the cap, the cap's gradient and its lit top row. Pressed, the cap
+    /// drops over its wall; its colours stay.
+    fn key(&mut self, x: f32, y: f32, w: f32, h: f32, legend: &Bitmap, down: bool) {
+        let pal = *self.pal;
+        let y = if down { y + 1.0 } else { y };
+        let mut cap = Path::new();
+        cap.poly(raster::round_rect(x, y, w, h, 2.0));
+        if down {
+            self.fill(&cap.offset(0.0, 1.0), pal.key_shadow);
+        } else {
+            self.fill(&cap.offset(0.0, 2.0), pal.key_shadow);
+            self.fill(&cap.offset(0.0, 1.0), pal.key_side);
+        }
+        self.fill_grad(&cap, &[(y, pal.key_top), (y + h, pal.key_bottom)]);
+        // inset 0 1px 0: the cap's top row lit, under the rest of the cap
+        self.fill(&cap, pal.key_edge);
+        let mut body = Path::new();
+        body.poly(raster::round_rect(x, y + 1.0, w, h - 1.0, 2.0));
+        self.fill_grad(&body, &[(y, pal.key_top), (y + h, pal.key_bottom)]);
+        let (lx, ly) = (x + libm::floorf((w - legend.w as f32) / 2.0), y + libm::floorf((h - legend.h as f32) / 2.0));
+        self.fill(&pixels(legend, lx, ly), pal.key_legend);
+    }
+}
+
+/// A bitmap's set pixels as one path of runs, one design pixel each, its top left at (x, y).
+fn pixels(b: &Bitmap, x: f32, y: f32) -> Path {
+    let mut p = Path::new();
+    for by in 0..b.h {
+        let mut bx = 0;
+        while bx < b.w {
+            if b.a[by * b.w + bx] == lcd::OFF {
+                bx += 1;
+                continue;
+            }
+            let start = bx;
+            while bx < b.w && b.a[by * b.w + bx] != lcd::OFF {
+                bx += 1;
+            }
+            p.poly(raster::rect_path(x + start as f32, y + by as f32, (bx - start) as f32, 1.0));
+        }
+    }
+    p
 }
 
 /// The engraved glyphs on a 12px grid with 1px strokes on pixel centres.
@@ -631,18 +686,38 @@ fn size_rate(kbs: f64) -> Readout {
     lcd::readout(&text, "88.8U", &SMALL, false, lcd::KMG[u])
 }
 
-/// The panel canvas's size in device pixels: the panel and the room for its shadow.
-pub fn panel_size(k: i32) -> (usize, usize) {
-    (((PANEL_W + 2 * PANEL_MARGIN) * k) as usize, ((PANEL_H + 2 * PANEL_MARGIN) * k) as usize)
+/// The panel's height in design pixels: the screen, and for a metric with a process list, the
+/// list's part of the body under it.
+pub fn panel_h(item: Item) -> i32 {
+    PANEL_H + if has_list(item) { LIST_H } else { 0 }
 }
 
-/// Draws `item`'s panel on `c` ([`panel_size`]); the panel's top left is at
-/// (`PANEL_MARGIN`, `PANEL_MARGIN`).
-pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item) {
+/// The panel canvas's size in device pixels: the panel and the room for its shadow.
+pub fn panel_size(k: i32, item: Item) -> (usize, usize) {
+    (((PANEL_W + 2 * PANEL_MARGIN) * k) as usize, ((panel_h(item) + 2 * PANEL_MARGIN) * k) as usize)
+}
+
+/// Draws `item`'s panel on `c` ([`panel_size`]), with its process list as `list` says; the
+/// panel's top left is at (`PANEL_MARGIN`, `PANEL_MARGIN`): [`panel_back`] then [`panel_front`].
+pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item, list: &ListView) {
+    panel_back(c, k, pal, item);
+    panel_front(c, k, pal, m, item, list);
+}
+
+/// The screen's glass and where its content goes: (x, y, width) of the content.
+fn screen_box() -> (f32, f32, f32, f32, f32, f32, f32) {
+    let (px, py) = (PANEL_MARGIN as f32, PANEL_MARGIN as f32);
+    let (gx, gy, gw, gh) = (px + 5.0, py + 5.0, PANEL_W as f32 - 10.0, PANEL_H as f32 - 10.0);
+    (gx, gy, gw, gh, gx + 4.0, gy + 4.0, gw - 8.0)
+}
+
+/// What of `item`'s panel never changes, drawn over the whole of `c`: its shadow, the plastic and
+/// what's engraved in it, the windows' rings and glass, the graph's grid and axis labels.
+pub fn panel_back(c: &mut Canvas, k: i32, pal: &Palette, item: Item) {
     c.clear();
     let mut pen = Pen { c, k: k as f32, pal };
     let (px, py) = (PANEL_MARGIN as f32, PANEL_MARGIN as f32);
-    let (pw, ph) = (PANEL_W as f32, PANEL_H as f32);
+    let (pw, ph) = (PANEL_W as f32, panel_h(item) as f32);
 
     // 0 6px 18px shadow
     let mut sh = Path::new();
@@ -661,8 +736,12 @@ pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item) {
     body.poly(raster::round_rect(px, py, pw, ph, 5.0));
     pen.plate(&body, py, py + ph);
 
+    if has_list(item) {
+        list_back(&mut pen, px, py, item);
+    }
+
     // the screen, in its ring
-    let (gx, gy, gw, gh) = (px + 5.0, py + 5.0, pw - 10.0, ph - 10.0);
+    let (gx, gy, gw, gh, cx, cy, cw) = screen_box();
     let rr = |x: f32, y: f32, w: f32, h: f32, r: f32| {
         let mut p = Path::new();
         p.poly(raster::round_rect(x, y, w, h, r));
@@ -673,8 +752,24 @@ pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item) {
     let gls = rr(gx, gy, gw, gh, 2.0);
     pen.fill_grad(&gls, &[(gy, pal.glass_top), (gy + gh, pal.glass_bottom)]);
     pen.glass_detail(&gls);
+    let net = item == Item::Net;
+    pen.grid(cx, cy + 17.0, 66, 20, 2);
 
-    let (cx, cy, cw) = (gx + 4.0, gy + 4.0, gw - 8.0);
+    // the axis labels
+    let (a0, a1, a2) = (lcd::text("60S", false, 0), lcd::text(if net { "1M/S" } else { "70%" }, false, 0), lcd::text("NOW", false, 0));
+    let free = cw - (a0.w + a1.w + a2.w) as f32;
+    let ay = cy + 59.0;
+    pen.bitmap(&a0, cx, ay, 1);
+    pen.bitmap(&a1, cx + a0.w as f32 + libm::floorf(free / 2.0), ay, 1);
+    pen.bitmap(&a2, cx + cw - a2.w as f32, ay, 1);
+}
+
+/// What of `item`'s panel changes, over its [`panel_back`]: the headline, the graph, the footer,
+/// the process list and its keys.
+pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item, list: &ListView) {
+    let mut pen = Pen { c, k: k as f32, pal };
+    let (px, py) = (PANEL_MARGIN as f32, PANEL_MARGIN as f32);
+    let (_, _, _, _, cx, cy, cw) = screen_box();
     let net = item == Item::Net;
     let val = value(m, item);
     // headline: the name, scaled 2x, and the value
@@ -709,16 +804,7 @@ pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item) {
             }
         }
     }
-    pen.grid(cx, cy + 17.0, b.w, b.h, 2);
     pen.bitmap(&b, cx, cy + 17.0, 2);
-
-    // the axis labels
-    let (a0, a1, a2) = (lcd::text("60S", false, 0), lcd::text(if net { "1M/S" } else { "70%" }, false, 0), lcd::text("NOW", false, 0));
-    let free = cw - (a0.w + a1.w + a2.w) as f32;
-    let ay = cy + 59.0;
-    pen.bitmap(&a0, cx, ay, 1);
-    pen.bitmap(&a1, cx + a0.w as f32 + libm::floorf(free / 2.0), ay, 1);
-    pen.bitmap(&a2, cx + cw - a2.w as f32, ay, 1);
 
     // the footer
     let s = &m.last;
@@ -776,5 +862,305 @@ pub fn panel(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item) {
             _ => {}
         }
         x += if matches!(f, Foot::Spacer) { sp } else { f.w() } + 2.0;
+    }
+    if has_list(item) {
+        list_front(&mut pen, px, py, m, item, list);
+    }
+}
+
+// ---- the panel's process list ----
+// What can change is on glass; what is fixed (the heading, the row numbers, the scale, the
+// footer) is engraved in the plastic; a key only travels when pressed. Design "P4", X twice.
+
+/// The rows in a process list.
+pub const LIST_ROWS: usize = 10;
+/// The list's part of the body under the screen: the parting line, the heading, the list window,
+/// its scale and the footer.
+const LIST_H: i32 = 147;
+/// The list window's glass (from the panel's top left) and its bitmap's width.
+const LW_X: f32 = 15.0;
+const LW_Y: f32 = 114.0;
+const LW_W: f32 = 113.0;
+const LW_H: f32 = 100.0;
+const LB_W: usize = 109;
+/// The first row's text on the bitmap, and the row pitch.
+const ROW_Y: i32 = 12;
+const ROW_PITCH: i32 = 9;
+/// The keys: left edge, first key's top, size.
+const KEY_X: f32 = 134.0;
+const KEY_Y: f32 = 125.0;
+const KEY_W: f32 = 11.0;
+const KEY_H: f32 = 7.0;
+/// Characters of a name; the bar's left and width; the value's right edge (bitmap columns).
+const NAME_CHARS: usize = 11;
+const BAR_X: i32 = 50;
+const BAR_W: i32 = 35;
+const VAL_R: i32 = 108;
+/// Pips counting down a selection's seconds.
+pub const SEL_PIPS: u8 = 5;
+
+/// Whether `item`'s panel lists processes (the network's can't: Windows doesn't count traffic
+/// per process without administrator rights).
+pub fn has_list(item: Item) -> bool {
+    matches!(item, Item::Cpu | Item::Mem | Item::Gpu | Item::Dsk)
+}
+
+/// What the list shows besides the readings.
+#[derive(Clone, Default)]
+pub struct ListView {
+    /// The programs on the rows, top first; a program that has ended leaves its row blank.
+    pub rows: Vec<String>,
+    /// The selected row, and its seconds left (pips lit).
+    pub sel: Option<usize>,
+    pub left: u8,
+    /// A row whose program couldn't be ended.
+    pub denied: Option<usize>,
+    /// The key held down.
+    pub down: Option<usize>,
+}
+
+/// The key at a point in the panel (design pixels from the panel's top left): the row's whole
+/// height across the key and the tick before it.
+pub fn key_at(item: Item, x: f32, y: f32) -> Option<usize> {
+    if !has_list(item) || !(KEY_X - 4.0..KEY_X + KEY_W + 1.0).contains(&x) {
+        return None;
+    }
+    let r = libm::floorf((y - KEY_Y + 1.0) / ROW_PITCH as f32);
+    (r >= 0.0 && (r as usize) < LIST_ROWS).then_some(r as usize)
+}
+
+/// The list's rows as the readings stand: the top [`LIST_ROWS`] programs by `item`.
+pub fn ranking(m: &Model, item: Item) -> Vec<String> {
+    let mut v: Vec<(f64, &str)> = m.last.procs.iter().map(|p| (proc_value(p, item), p.name.as_str())).collect();
+    v.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal).then(a.1.cmp(b.1)));
+    v.into_iter().take(LIST_ROWS).map(|(_, n)| String::from(n)).collect()
+}
+
+fn proc_value(p: &Proc, item: Item) -> f64 {
+    match item {
+        Item::Cpu => p.cpu as f64,
+        Item::Mem => p.mem as f64,
+        Item::Gpu => p.gpu as f64,
+        _ => p.io,
+    }
+}
+
+/// What a full bar is: the whole machine's CPU or GPU, all the memory, all programs' I/O.
+fn whole(m: &Model, item: Item) -> f64 {
+    match item {
+        Item::Mem => m.last.mem_total as f64,
+        Item::Dsk => m.last.procs.iter().map(|p| p.io).sum(),
+        _ => 100.0,
+    }
+}
+
+fn list_label(item: Item) -> &'static str {
+    match item {
+        Item::Cpu => "OF ALL CORES",
+        Item::Mem => "PRIVATE MEMORY",
+        Item::Gpu => "OF GPU",
+        _ => "I/O PER SEC",
+    }
+}
+
+/// A value as at most three digits and a point, and its unit.
+fn proc_text(v: f64, item: Item) -> (String, &'static str) {
+    match item {
+        Item::Mem => {
+            let (t, u) = lcd::fmt3((v / (1024.0 * 1024.0)) as f32);
+            (t, ["M", "G", "T"][u])
+        }
+        Item::Dsk => {
+            let (t, u) = lcd::fmt3((v / 1024.0) as f32);
+            (t, ["K", "M", "G"][u])
+        }
+        _ => (if v < 99.95 { lcd::fixed1(v as f32) } else { String::from("100") }, "%"),
+    }
+}
+
+/// A name in capitals cut to `n` characters (a `~` for the rest), and to the field's width.
+fn fit_name(name: &str, n: usize) -> String {
+    let up: String = name.chars().map(|c| if c.is_ascii() { c.to_ascii_uppercase() } else { '?' }).collect();
+    let mut s = if up.len() > n {
+        let mut t = String::from(&up[..n - 1]);
+        t.push('~');
+        t
+    } else {
+        up
+    };
+    while lcd::text_w(&s) > n * 4 + 2 && s.len() > 2 {
+        s.truncate(s.len() - 2);
+        s.push('~');
+    }
+    s
+}
+
+fn text_at(b: &mut Bitmap, s: &str, x: i32, y: i32, v: u8) {
+    let t = lcd::text(s, false, 0);
+    for ty in 0..t.h {
+        for tx in 0..t.w {
+            if t.a[ty * t.w + tx] != lcd::OFF {
+                b.ps(x + tx as i32, y + ty as i32, v);
+            }
+        }
+    }
+}
+
+fn text_right(b: &mut Bitmap, s: &str, xr: i32, y: i32, v: u8) {
+    text_at(b, s, xr - lcd::text_w(s) as i32, y, v);
+}
+
+/// Turns columns `x0..x1` of rows `y0..=y1` over: set pixels off, the rest lit.
+fn invert(b: &mut Bitmap, x0: i32, x1: i32, y0: i32, y1: i32) {
+    for y in y0.max(0)..=y1.min(b.h as i32 - 1) {
+        for x in x0.max(0)..x1.min(b.w as i32) {
+            let i = y as usize * b.w + x as usize;
+            b.a[i] = if b.a[i] == lcd::OFF { lcd::LIT } else { lcd::OFF };
+        }
+    }
+}
+
+/// An annunciator: a word at a fixed place on the glass, a ghost when off, in inverse when on.
+/// Returns the next one's x.
+fn annunciator(b: &mut Bitmap, x: i32, y: i32, s: &str, on: bool) -> i32 {
+    let w = lcd::text_w(s) as i32 + 4;
+    text_at(b, s, x + 2, y, if on { lcd::LIT } else { lcd::GHOST });
+    if on {
+        invert(b, x, x + w, y - 1, y + 5);
+    }
+    x + w + 3
+}
+
+/// The list window's bitmap: the annunciators over a dotted rule, then a row per program.
+fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
+    let mut b = Bitmap::new(LB_W, LW_H as usize);
+    let mut x = annunciator(&mut b, 1, 2, "SEL", v.sel.is_some());
+    for i in 0..SEL_PIPS {
+        let on = v.sel.is_some() && i < v.left;
+        for y in 2..7 {
+            for dx in 0..2 {
+                b.ps(x + i as i32 * 4 + dx, y, if on { lcd::LIT } else { lcd::GHOST });
+            }
+        }
+    }
+    x += SEL_PIPS as i32 * 4 + 1;
+    annunciator(&mut b, x, 2, "DENIED", v.denied.is_some());
+    for x in (0..LB_W as i32).step_by(2) {
+        b.ps(x, 8, lcd::DIVIDER);
+    }
+    let whole = whole(m, item);
+    for (i, name) in v.rows.iter().enumerate().take(LIST_ROWS) {
+        let y = ROW_Y + i as i32 * ROW_PITCH;
+        let Some(p) = m.last.procs.iter().find(|p| p.name == *name) else { continue };
+        let val = proc_value(p, item);
+        let share = if whole > 0.0 { (val / whole).clamp(0.0, 1.0) } else { 0.0 };
+        // all programs' I/O has no capacity to run hot against
+        let hot = item != Item::Dsk && share * 100.0 > HOT as f64;
+        text_at(&mut b, &fit_name(name, NAME_CHARS), 1, y, if hot { lcd::HOT_PX } else { lcd::LIT });
+        if v.denied == Some(i) {
+            text_right(&mut b, "ACCESS DENIED", VAL_R, y, lcd::LIT);
+        } else {
+            // three rows of bar over a dotted track, its length the share on a square-root scale
+            for x in (0..BAR_W).step_by(2) {
+                b.ps(BAR_X + x, y + 4, lcd::DIVIDER);
+            }
+            let len = (libm::round(libm::sqrt(share) * BAR_W as f64) as i32).clamp(1, BAR_W);
+            for x in BAR_X..BAR_X + len {
+                for r in 1..=3 {
+                    b.ps(x, y + r, if hot { lcd::HOT_PX } else if r == 1 { lcd::LIT } else { lcd::FILL });
+                }
+            }
+            let (num, unit) = proc_text(val, item);
+            text_at(&mut b, unit, VAL_R - 4, y, lcd::LIT);
+            text_right(&mut b, &num, VAL_R - 5, y, lcd::LIT);
+        }
+        if v.sel == Some(i) {
+            invert(&mut b, 0, VAL_R + 1, y - 1, y + 5);
+        }
+    }
+    b
+}
+
+/// The scale under the bars, engraved: ticks at 0, 1, 5, 10, 25, 50 and 100% on the bars'
+/// square-root scale, three of them labelled.
+fn scale_bitmap() -> Bitmap {
+    let mut b = Bitmap::new(BAR_W as usize + 16, 9);
+    for (t, label) in [(0.0, "0"), (0.01, ""), (0.05, ""), (0.1, "10"), (0.25, ""), (0.5, ""), (1.0, "100%")] {
+        let x = (libm::round(libm::sqrt(t) * BAR_W as f64) as i32).min(BAR_W - 1);
+        b.ps(x, 0, lcd::LIT);
+        if !label.is_empty() {
+            b.ps(x, 1, lcd::LIT);
+            let lx = if t == 0.0 {
+                0
+            } else if t == 1.0 {
+                x - 5
+            } else {
+                x - lcd::text_w(label) as i32 / 2
+            };
+            text_at(&mut b, label, lx, 3, lcd::LIT);
+        }
+    }
+    b
+}
+
+/// The list's part of the body that never changes: a parting line under the screen, the
+/// engraved heading and row numbers, the list window's ring and glass, the engraved tick before
+/// each key, the engraved scale and footer. (px, py) is the panel's top left.
+fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
+    let pal = *pen.pal;
+    let line = |y: f32| {
+        let mut p = Path::new();
+        p.poly(raster::rect_path(px + 2.0, py + y, PANEL_W as f32 - 4.0, 1.0));
+        p
+    };
+    pen.fill(&line(96.0), pal.plate_edge_bottom);
+    pen.fill(&line(97.0), pal.plate_edge_top);
+    let right = |s: &str| px + PANEL_W as f32 - 5.0 - lcd::text_w(s) as f32;
+    pen.engrave(&lcd::text("TOP 10 PROCESSES", false, 0), px + 5.0, py + 103.0);
+    let label = list_label(item);
+    pen.engrave(&lcd::text(label, false, 0), right(label), py + 103.0);
+    for i in 0..LIST_ROWS {
+        let n = format!("{}", i + 1);
+        pen.engrave(&lcd::text(&n, false, 0), px + 13.0 - lcd::text_w(&n) as f32, py + 126.0 + (i as i32 * ROW_PITCH) as f32);
+    }
+
+    // the window: the highlight under its ring, the ring, the glass
+    let (wx, wy) = (px + LW_X, py + LW_Y);
+    let rr = |x: f32, y: f32, w: f32, h: f32, r: f32| {
+        let mut p = Path::new();
+        p.poly(raster::round_rect(x, y, w, h, r));
+        p
+    };
+    pen.fill(&rr(wx, wy + 1.5, LW_W, LW_H, 1.5), pal.panel_ring_lip);
+    pen.fill(&rr(wx - 1.0, wy - 1.0, LW_W + 2.0, LW_H + 2.0, 2.5), pal.panel_ring);
+    let gls = rr(wx, wy, LW_W, LW_H, 1.5);
+    pen.fill_grad(&gls, &[(wy, pal.glass_top), (wy + LW_H, pal.glass_bottom)]);
+    pen.glass_detail(&gls);
+
+    // the ticks tying each key to its row
+    let mut tick = Bitmap::new(3, 1);
+    (0..3).for_each(|x| tick.ps(x, 0, lcd::LIT));
+    for i in 0..LIST_ROWS {
+        pen.engrave(&tick, px + 130.0, py + KEY_Y + (i as i32 * ROW_PITCH) as f32 + 3.0);
+    }
+
+    // the scale under the bars, and the footer
+    pen.engrave(&scale_bitmap(), px + LW_X + 2.0 + BAR_X as f32, py + 218.0);
+    pen.engrave(&lcd::text("BAR: OF TOTAL", false, 0), px + 5.0, py + 221.0);
+    pen.engrave(&lcd::text("X SELECTS", false, 0), px + 5.0, py + 231.0);
+    pen.engrave(&lcd::text("X AGAIN KILLS", false, 0), right("X AGAIN KILLS"), py + 231.0);
+}
+
+/// The list's moving parts: the list window's content and the keys (one may be held down).
+fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListView) {
+    pen.bitmap(&list_bitmap(m, item, v), px + LW_X + 2.0, py + LW_Y, 1);
+    let mut x_glyph = Bitmap::new(5, 5);
+    for i in 0..5 {
+        x_glyph.ps(i, i, lcd::LIT);
+        x_glyph.ps(4 - i, i, lcd::LIT);
+    }
+    for i in 0..LIST_ROWS {
+        let y = py + KEY_Y + (i as i32 * ROW_PITCH) as f32;
+        pen.key(px + KEY_X, y, KEY_W, KEY_H, &x_glyph, v.down == Some(i));
     }
 }

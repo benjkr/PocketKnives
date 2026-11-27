@@ -1,8 +1,10 @@
 //! The bar's window: an app bar along the top of the main screen (Windows moves other windows out
-//! of its way, like the taskbar), redrawn every second, with a panel under the tile the pointer is on.
-use crate::bar::{self, BAR_H, Item, Layout, PANEL_GAP, PANEL_MARGIN, Time};
+//! of its way, like the taskbar), redrawn every second, with a panel under the tile the pointer is
+//! on. The panel stays while the pointer is on it, and its keys end programs.
+use crate::bar::{self, BAR_H, Item, Layout, ListView, PANEL_GAP, PANEL_MARGIN, PANEL_W, Time};
 use crate::metrics::Collector;
 use crate::model::Model;
+use crate::procs::{self, Kill};
 use crate::raster::Canvas;
 use crate::settings::Settings;
 use crate::theme::{self, Palette};
@@ -18,23 +20,25 @@ use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetMonitorInfoW,
     HBITMAP, HDC, HGDIOBJ, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, SelectObject,
 };
+use windows_sys::Win32::Graphics::Gdi::{AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::SystemInformation::GetLocalTime;
+use windows_sys::Win32::System::SystemInformation::{GetLocalTime, GetTickCount64};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    GetDoubleClickTime, ReleaseCapture, SetCapture, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+};
 use windows_sys::Win32::UI::Shell::{
     ABE_TOP, ABM_NEW, ABM_QUERYPOS, ABM_REMOVE, ABM_SETPOS, ABN_FULLSCREENAPP, ABN_POSCHANGED, APPBARDATA, SHAppBarMessage,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA,
-    GetCursorPos, GetMessageW, GetWindowLongPtrW, HWND_BOTTOM, HWND_TOPMOST, IDC_ARROW, LoadCursorW, MA_NOACTIVATE, MF_CHECKED,
-    MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    GetCursorPos, GetMessageW, GetWindowLongPtrW, HWND_BOTTOM, HWND_TOPMOST, IDC_ARROW, KillTimer, LoadCursorW, MA_NOACTIVATE,
+    MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_HIDE,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
+    ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP,
+    WM_CAPTURECHANGED, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
+    WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
-use windows_sys::Win32::Graphics::Gdi::{AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION};
 use windows_sys::core::PCWSTR;
 
 const MUTEX_NAME: PCWSTR = w!("Local\\PocketKnives.Readout.v1");
@@ -45,6 +49,13 @@ const EXIT_MSG: PCWSTR = w!("PocketKnives.Readout.Exit.v1");
 const WM_APPBAR: u32 = WM_APP + 1;
 const WM_MOUSELEAVE: u32 = 0x02A3;
 const TIMER_TICK: usize = 1;
+/// While a tile is hovered: where the pointer is (it may cross the gap to the panel, where
+/// neither window hears it leave), and the list's countdowns.
+const TIMER_POINTER: usize = 2;
+const POINTER_MS: u32 = 100;
+/// A selection lasts this long; a refusal shows this long.
+const SEL_MS: u64 = 5000;
+const DENIED_MS: u64 = 2500;
 const MENU_EXIT: usize = 1;
 const MENU_THEME: usize = 100;
 
@@ -119,10 +130,21 @@ struct App {
     back_hover: Option<Option<usize>>,
     surface: Surface,
     panel_canvas: Canvas,
+    /// The panel's part that never changes, for `panel_item` (`None` when it must be drawn again).
+    panel_back: Canvas,
     panel_surface: Surface,
+    panel_item: Option<Item>,
     hover: Option<usize>,
     tracking: bool,
     fullscreen: bool,
+    /// The process list: what it shows, the item it's for, whether the pointer is on the panel
+    /// (the rows hold still then), and when the selection, the refusal and the last press began.
+    list: ListView,
+    list_item: Option<Item>,
+    on_panel: bool,
+    sel_at: u64,
+    denied_at: u64,
+    press_at: u64,
     reload_msg: u32,
     exit_msg: u32,
 }
@@ -131,7 +153,8 @@ pub fn run() -> u32 {
     let Some(guard) = NamedMutex::first(MUTEX_NAME) else { return 0 };
     guard.keep();
     let hinst = unsafe { GetModuleHandleW(null()) };
-    for (class, proc_) in [(BAR_CLASS, bar_proc as unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT), (PANEL_CLASS, DefWindowProcW)] {
+    type Proc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
+    for (class, proc_) in [(BAR_CLASS, bar_proc as Proc), (PANEL_CLASS, panel_proc as Proc)] {
         let wc = WNDCLASSEXW {
             cbSize: core::mem::size_of::<WNDCLASSEXW>() as u32,
             lpfnWndProc: Some(proc_),
@@ -146,7 +169,7 @@ pub fn run() -> u32 {
     }
     let ex = WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
     let hwnd = unsafe { CreateWindowExW(ex, BAR_CLASS, w!("Readout"), WS_POPUP, 0, 0, 1, 1, null_mut(), null_mut(), hinst, null()) };
-    let panel_hwnd = unsafe { CreateWindowExW(ex | WS_EX_TRANSPARENT, PANEL_CLASS, w!("Readout panel"), WS_POPUP, 0, 0, 1, 1, hwnd, null_mut(), hinst, null()) };
+    let panel_hwnd = unsafe { CreateWindowExW(ex, PANEL_CLASS, w!("Readout panel"), WS_POPUP, 0, 0, 1, 1, hwnd, null_mut(), hinst, null()) };
     if hwnd.is_null() || panel_hwnd.is_null() {
         return 1;
     }
@@ -166,10 +189,18 @@ pub fn run() -> u32 {
         back_hover: None,
         surface: Surface::new(1, 1),
         panel_canvas: Canvas::new(1, 1),
+        panel_back: Canvas::new(1, 1),
         panel_surface: Surface::new(1, 1),
+        panel_item: None,
         hover: None,
         tracking: false,
         fullscreen: false,
+        list: ListView::default(),
+        list_item: None,
+        on_panel: false,
+        sel_at: 0,
+        denied_at: 0,
+        press_at: 0,
         reload_msg: register_message(RELOAD_MSG),
         exit_msg: register_message(EXIT_MSG),
     });
@@ -178,8 +209,10 @@ pub fn run() -> u32 {
     unsafe { SHAppBarMessage(ABM_NEW, &mut abd) };
     app.sample();
     app.place();
+    let ptr = Box::into_raw(app) as isize;
     unsafe {
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(app) as isize);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr);
+        SetWindowLongPtrW(panel_hwnd, GWLP_USERDATA, ptr);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         SetTimer(hwnd, TIMER_TICK, 1000, None);
     }
@@ -229,6 +262,15 @@ pub fn now() -> Time {
     Time { hour: st.wHour, minute: st.wMinute, weekday: st.wDayOfWeek, day: st.wDay, month: st.wMonth }
 }
 
+fn ms() -> u64 {
+    unsafe { GetTickCount64() }
+}
+
+/// A point in a window's client area from a mouse message's `lp`, in device pixels.
+fn point(lp: LPARAM) -> (i32, i32) {
+    ((lp & 0xFFFF) as i16 as i32, ((lp >> 16) & 0xFFFF) as i16 as i32)
+}
+
 impl App {
     fn sample(&mut self) {
         let s = self.collector.sample();
@@ -260,12 +302,8 @@ impl App {
             self.surface = Surface::new(w, h);
         }
         self.back_hover = None;
-        let (pw, ph) = bar::panel_size(k);
-        if self.panel_canvas.w != pw || self.panel_canvas.h != ph {
-            self.panel_canvas = Canvas::new(pw, ph);
-            self.panel_surface = Surface::new(pw, ph);
-        }
-        self.hover = None;
+        self.panel_item = None;
+        self.set_hover(None);
         self.draw();
     }
 
@@ -280,25 +318,137 @@ impl App {
         self.draw_panel();
     }
 
+    /// The hovered tile's item, when it has a panel.
+    fn panel_item(&self) -> Option<Item> {
+        self.hover.map(|i| self.layout.tiles[i].item).filter(|&t| t != Item::Clock)
+    }
+
+    /// The panel's body on the screen, in device pixels: left, top, right, bottom.
+    fn panel_rect(&self, item: Item) -> (i32, i32, i32, i32) {
+        let k = self.layout.k;
+        let left = self.origin.0 + (self.layout.panel_x(self.hover.unwrap_or(0)) * k as f32) as i32;
+        let top = self.origin.1 + (BAR_H + PANEL_GAP) * k;
+        (left, top, left + PANEL_W * k, top + bar::panel_h(item) * k)
+    }
+
     fn draw_panel(&mut self) {
-        let item = self.hover.map(|i| self.layout.tiles[i]).filter(|t| t.item != Item::Clock);
-        let Some(tile) = item else {
+        let Some(item) = self.panel_item() else {
             unsafe { ShowWindow(self.panel_hwnd, SW_HIDE) };
             return;
         };
-        let i = self.hover.unwrap_or(0);
         let k = self.layout.k;
-        bar::panel(&mut self.panel_canvas, k, &self.pal, &self.model, tile.item);
-        let x = self.origin.0 + ((self.layout.panel_x(i) - PANEL_MARGIN as f32) * k as f32) as i32;
-        let y = self.origin.1 + (BAR_H + PANEL_GAP - PANEL_MARGIN) * k;
-        self.panel_surface.show(self.panel_hwnd, &self.panel_canvas, x, y);
+        if self.panel_item != Some(item) {
+            let (pw, ph) = bar::panel_size(k, item);
+            if self.panel_canvas.w != pw || self.panel_canvas.h != ph {
+                self.panel_canvas = Canvas::new(pw, ph);
+                self.panel_back = Canvas::new(pw, ph);
+                self.panel_surface = Surface::new(pw, ph);
+            }
+            bar::panel_back(&mut self.panel_back, k, &self.pal, item);
+            self.panel_item = Some(item);
+        }
+        self.update_list(item);
+        self.panel_canvas.px.copy_from_slice(&self.panel_back.px);
+        bar::panel_front(&mut self.panel_canvas, k, &self.pal, &self.model, item, &self.list);
+        let (left, top, _, _) = self.panel_rect(item);
+        self.panel_surface.show(self.panel_hwnd, &self.panel_canvas, left - PANEL_MARGIN * k, top - PANEL_MARGIN * k);
         unsafe { ShowWindow(self.panel_hwnd, SW_SHOWNOACTIVATE) };
     }
 
-    fn reload(&mut self) {
-        self.settings = Settings::load();
-        self.pal = load_theme(&self.settings.theme);
-        self.place();
+    /// The list's rows and states for `item` now. The rows hold still while the pointer is on
+    /// the panel or anything is selected, held or refused, so a key never moves under it; then
+    /// a program that ends leaves its row blank.
+    fn update_list(&mut self, item: Item) {
+        if self.list_item != Some(item) {
+            self.list = ListView::default();
+            self.list_item = Some(item);
+        }
+        let t = ms();
+        if self.list.sel.is_some() && t.saturating_sub(self.sel_at) >= SEL_MS {
+            self.list.sel = None;
+        }
+        if self.list.denied.is_some() && t.saturating_sub(self.denied_at) >= DENIED_MS {
+            self.list.denied = None;
+        }
+        let still = self.on_panel || self.list.sel.is_some() || self.list.down.is_some() || self.list.denied.is_some();
+        if !still || self.list.rows.is_empty() {
+            self.list.rows = bar::ranking(&self.model, item);
+        }
+        if let Some(i) = self.list.sel
+            && !self.running(i)
+        {
+            self.list.sel = None;
+        }
+        self.list.left = bar::SEL_PIPS.saturating_sub((t.saturating_sub(self.sel_at) / 1000) as u8);
+    }
+
+    /// Whether row `i`'s program is running (in the latest sample).
+    fn running(&self, i: usize) -> bool {
+        self.list.rows.get(i).is_some_and(|n| self.model.last.procs.iter().any(|p| p.name == *n))
+    }
+
+    /// Hovers tile `hover` (or none): per-program sampling and the pointer timer run only while a
+    /// panel can be open.
+    fn set_hover(&mut self, hover: Option<usize>) {
+        if hover == self.hover && hover.is_some() {
+            return;
+        }
+        self.hover = hover;
+        self.on_panel = false;
+        let item = self.panel_item();
+        self.collector.set_procs(item.is_some_and(bar::has_list));
+        unsafe {
+            if hover.is_some() {
+                SetTimer(self.hwnd, TIMER_POINTER, POINTER_MS, None);
+            } else {
+                KillTimer(self.hwnd, TIMER_POINTER);
+            }
+        }
+    }
+
+    /// Follows the pointer (screen device pixels): the tile under it on the bar; or, on the way
+    /// to the open panel or on it, the same tile; or nothing.
+    fn follow(&mut self, x: i32, y: i32) {
+        let k = self.layout.k;
+        let (bx, by) = (x - self.origin.0, y - self.origin.1);
+        let mut hover = if by >= 0 && by < BAR_H * k { self.layout.hit(bx as f32 / k as f32, by as f32 / k as f32) } else { None };
+        let mut on_panel = false;
+        if let Some(item) = self.panel_item() {
+            let (l, t, r, b) = self.panel_rect(item);
+            if x >= l && x < r && y >= self.origin.1 && y < b && (hover.is_none() || hover == self.hover) {
+                hover = self.hover;
+                on_panel = y >= t;
+            }
+        }
+        let was_on_panel = self.on_panel;
+        if hover != self.hover {
+            self.set_hover(hover);
+            self.on_panel = on_panel;
+            self.draw();
+        } else if on_panel != was_on_panel {
+            self.on_panel = on_panel;
+            self.draw_panel();
+        }
+    }
+
+    fn follow_cursor(&mut self) {
+        let mut pt = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut pt) };
+        self.follow(pt.x, pt.y);
+    }
+
+    /// The pointer timer: where the pointer went, and the list's countdowns.
+    fn pointer_tick(&mut self) {
+        if self.list.down.is_none() {
+            self.follow_cursor();
+        }
+        let (sel, left, denied) = (self.list.sel, self.list.left, self.list.denied);
+        if let Some(item) = self.panel_item() {
+            self.update_list(item);
+            if (self.list.sel, self.list.left, self.list.denied) != (sel, left, denied) {
+                self.draw_panel();
+            }
+        }
     }
 
     fn mouse(&mut self, lp: LPARAM) {
@@ -307,13 +457,62 @@ impl App {
             unsafe { TrackMouseEvent(&mut tme) };
             self.tracking = true;
         }
+        let (x, y) = point(lp);
+        self.follow(self.origin.0 + x, self.origin.1 + y);
+    }
+
+    /// The key under a point in the panel window (device pixels).
+    fn key_at(&self, lp: LPARAM) -> Option<usize> {
+        let item = self.panel_item()?;
         let k = self.layout.k as f32;
-        let (x, y) = ((lp & 0xFFFF) as i16 as f32 / k, ((lp >> 16) & 0xFFFF) as i16 as f32 / k);
-        let hit = self.layout.hit(x, y);
-        if hit != self.hover {
-            self.hover = hit;
-            self.draw();
+        let (x, y) = point(lp);
+        bar::key_at(item, x as f32 / k - PANEL_MARGIN as f32, y as f32 / k - PANEL_MARGIN as f32)
+    }
+
+    fn key_down(&mut self, lp: LPARAM) {
+        if let Some(i) = self.key_at(lp).filter(|&i| self.running(i)) {
+            self.list.down = Some(i);
+            unsafe { SetCapture(self.panel_hwnd) };
+            self.draw_panel();
         }
+    }
+
+    fn key_up(&mut self, lp: LPARAM) {
+        let Some(i) = self.list.down.take() else { return };
+        unsafe { ReleaseCapture() };
+        if self.key_at(lp) == Some(i) {
+            self.press(i);
+        }
+        self.draw_panel();
+    }
+
+    /// X on row `i`: the first press selects its program, a second press on the selected row
+    /// ends it. A second press as quick as a double-click is ignored, so a double-click only
+    /// selects.
+    fn press(&mut self, i: usize) {
+        let t = ms();
+        let quick = t.saturating_sub(self.press_at) < unsafe { GetDoubleClickTime() } as u64;
+        self.press_at = t;
+        self.list.denied = None;
+        if self.list.sel != Some(i) {
+            self.list.sel = Some(i);
+            self.sel_at = t;
+            return;
+        }
+        if quick {
+            return;
+        }
+        self.list.sel = None;
+        if procs::kill(&self.list.rows[i]) == Kill::Denied {
+            self.list.denied = Some(i);
+            self.denied_at = t;
+        }
+    }
+
+    fn reload(&mut self) {
+        self.settings = Settings::load();
+        self.pal = load_theme(&self.settings.theme);
+        self.place();
     }
 
     fn menu(&mut self) {
@@ -349,12 +548,14 @@ impl App {
     }
 }
 
-unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+/// The App both windows share, or `None` before it's set and after the bar is gone.
+fn app_of(hwnd: HWND) -> Option<&'static mut App> {
     let ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut App;
-    if ptr.is_null() {
-        return unsafe { DefWindowProcW(hwnd, msg, wp, lp) };
-    }
-    let app = unsafe { &mut *ptr };
+    if ptr.is_null() { None } else { Some(unsafe { &mut *ptr }) }
+}
+
+unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    let Some(app) = app_of(hwnd) else { return unsafe { DefWindowProcW(hwnd, msg, wp, lp) } };
     match msg {
         WM_TIMER if wp == TIMER_TICK => {
             app.sample();
@@ -363,15 +564,17 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             }
             0
         }
+        WM_TIMER if wp == TIMER_POINTER => {
+            app.pointer_tick();
+            0
+        }
         WM_MOUSEMOVE => {
             app.mouse(lp);
             0
         }
         WM_MOUSELEAVE => {
             app.tracking = false;
-            if app.hover.take().is_some() {
-                app.draw();
-            }
+            app.follow_cursor();
             0
         }
         WM_MOUSEACTIVATE => MA_NOACTIVATE as LRESULT,
@@ -400,6 +603,8 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             let mut abd = appbar(hwnd);
             unsafe {
                 SHAppBarMessage(ABM_REMOVE, &mut abd);
+                let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
+                SetWindowLongPtrW(app.panel_hwnd, GWLP_USERDATA, 0);
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 drop(Box::from_raw(ptr));
                 PostQuitMessage(0);
@@ -412,6 +617,29 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         m if m == app.exit_msg => {
             unsafe { DestroyWindow(hwnd) };
+            0
+        }
+        _ => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },
+    }
+}
+
+/// The panel: it never takes focus; a press on a key holds it down until the button comes up.
+unsafe extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    let Some(app) = app_of(hwnd) else { return unsafe { DefWindowProcW(hwnd, msg, wp, lp) } };
+    match msg {
+        WM_MOUSEACTIVATE => MA_NOACTIVATE as LRESULT,
+        WM_LBUTTONDOWN => {
+            app.key_down(lp);
+            0
+        }
+        WM_LBUTTONUP => {
+            app.key_up(lp);
+            0
+        }
+        WM_CAPTURECHANGED => {
+            if app.list.down.take().is_some() {
+                app.draw_panel();
+            }
             0
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },

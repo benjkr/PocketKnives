@@ -100,6 +100,13 @@ palette! {
     panel_shadow = "panelShadow",
     panel_ring = "panelRing",
     panel_ring_lip = "panelRingLip",
+    /// The keys: the cap's gradient, its side wall, the lit top row of the cap, the shadow it casts on the plate, its legend.
+    key_top = "keyTop",
+    key_bottom = "keyBottom",
+    key_side = "keySide",
+    key_edge = "keyEdge",
+    key_shadow = "keyShadow",
+    key_legend = "keyLegend",
 }
 
 /// Parses a theme file: one flat JSON object whose values are all colour strings, with every key

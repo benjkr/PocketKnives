@@ -20,8 +20,10 @@ const HELP: &str = "Readout \u{2014} a calculator-style system monitor bar along
   Readout.exe --autostart on|off|status\r\n\
   Readout.exe --status [seconds]       print live readings, one line a second (default 3)\r\n\
   Readout.exe --settings               print settings for PocketKnives Settings\r\n\
+  Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
   Readout.exe --set key=value ...      change settings\r\n\
   Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n\
+                       [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]\r\n\
                                        draw the bar with the design's sample values to a PNG\r\n\
   Readout.exe --version                print the version";
 
@@ -51,6 +53,7 @@ pub fn run(args: &[String]) -> u32 {
             }
         },
         "--status" => crate::status::run(&mut out, args.get(1).and_then(|s| s.parse().ok()).unwrap_or(3)),
+        "--top" => crate::status::top(&mut out, args.get(1).and_then(|s| s.parse().ok()).unwrap_or(2)),
         "--exit" => {
             crate::window::request_exit();
             0
@@ -101,6 +104,8 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         return 2;
     };
     let (mut theme_arg, mut k, mut width, mut panel, mut live) = (String::from("ivory"), 1i32, 728.0f32, None, 0u32);
+    // The list's states, by row from 1: selected, refused, a key held down.
+    let (mut select, mut deny, mut press) = (0usize, 0usize, 0usize);
     let mut i = 1;
     while i < args.len() {
         let v = args.get(i + 1).map(String::as_str).unwrap_or("");
@@ -109,6 +114,9 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
             "--scale" => k = v.parse().unwrap_or(0),
             "--width" => width = v.parse().unwrap_or(0.0),
             "--live" => live = v.parse().unwrap_or(0).min(64),
+            "--select" => select = v.parse().unwrap_or(0),
+            "--deny" => deny = v.parse().unwrap_or(0),
+            "--press" => press = v.parse().unwrap_or(0),
             "--panel" => {
                 panel = match v {
                     "cpu" => Some(Item::Cpu),
@@ -129,8 +137,8 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         }
         i += 2;
     }
-    if !(1..=4).contains(&k) || width < 200.0 {
-        wl!(out, "--scale is 1 to 4 and --width at least 200");
+    if !(1..=4).contains(&k) || width < 200.0 || [select, deny, press].iter().any(|&r| r > bar::LIST_ROWS) {
+        wl!(out, "--scale is 1 to 4, --width at least 200, and --select, --deny and --press a row from 1 to {}", bar::LIST_ROWS);
         return 2;
     }
     let pal = if theme_arg.ends_with(".json") {
@@ -152,6 +160,7 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         // this machine's readings, a second apart, and the time now
         let mut m = Model::new();
         let mut c = crate::metrics::Collector::new();
+        c.set_procs(true);
         for _ in 0..live {
             unsafe { windows_sys::Win32::System::Threading::Sleep(1000) };
             m.push(c.sample());
@@ -168,9 +177,11 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
     bar::bar(&mut c, &l, &pal, &m, t, hover);
     // A panel is drawn under the bar where the window would put it.
     let img = if let (Some(item), Some(i)) = (panel, hover) {
-        let (pw, ph) = bar::panel_size(k);
+        let (pw, ph) = bar::panel_size(k, item);
         let mut pc = Canvas::new(pw, ph);
-        bar::panel(&mut pc, k, &pal, &m, item);
+        let row = |r: usize| r.checked_sub(1);
+        let view = bar::ListView { rows: bar::ranking(&m, item), sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press) };
+        bar::panel(&mut pc, k, &pal, &m, item, &view);
         let px = ((l.panel_x(i) - bar::PANEL_MARGIN as f32) * k as f32) as i32;
         let py = (bar::BAR_H + bar::PANEL_GAP - bar::PANEL_MARGIN) * k;
         let h = (py as usize + ph).max(bh);

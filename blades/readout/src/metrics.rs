@@ -11,9 +11,13 @@
 //!   most; total: the largest `HardwareInformation.qwMemorySize` of the display adapters.
 //! - Disk: PDH `\PhysicalDisk(_Total)`. Network: octet deltas (`GetIfEntry2`) of the connected
 //!   hardware interfaces, listed every few seconds (`GetIfTable2Ex` without statistics).
+//! - Programs, only while asked for (`set_procs`): CPU, private working set and I/O from one
+//!   `NtQuerySystemInformation` snapshot (`procs::Sampler`); GPU from the same GPU Engine
+//!   instances, which are per process (`pid_1234_…`).
 //!
 //! Every source is optional: one that fails reads as 0 and the others carry on. Nothing here
 //! prints. Buffers are kept between calls and only grow to the largest size seen.
+use crate::procs::{Proc, Sampler};
 use alloc::vec::Vec;
 use core::mem::{size_of, zeroed};
 use core::ptr::{null, null_mut};
@@ -54,6 +58,8 @@ pub struct Sample {
     pub disk_write: f64,
     pub net_up: f64,
     pub net_down: f64,
+    /// Every program, while the collector is asked for them (`set_procs`); empty otherwise.
+    pub procs: Vec<Proc>,
 }
 
 /// `PDH_FMT_NOCAP100` (pdh.h), not in windows-sys: percentages above 100 (Processor Utility
@@ -97,6 +103,8 @@ pub struct Collector {
     net_cur: Vec<(u64, u64, u64)>,
     net_time: i64,
     qpc_freq: i64,
+    /// Every program's load, while `set_procs` has it on.
+    procs: Option<Sampler>,
 }
 
 impl Collector {
@@ -129,6 +137,7 @@ impl Collector {
             net_cur: Vec::new(),
             net_time: 0,
             qpc_freq: 0,
+            procs: None,
         };
         unsafe { QueryPerformanceFrequency(&mut c.qpc_freq) };
         // Rates need two readings: take the first now, so the first `sample` already has them.
@@ -151,7 +160,18 @@ impl Collector {
         s.disk_write = value(self.disk_write).unwrap_or(0.0).max(0.0);
         memory(&mut s);
         self.net(&mut s);
+        if let Some(p) = &mut self.procs {
+            s.procs = p.sample();
+        }
         s
+    }
+
+    /// Whether `sample` fills `Sample::procs`. Off, nothing per process is read or kept; on,
+    /// a first snapshot is taken at once, so the next sample already has CPU and I/O rates.
+    pub fn set_procs(&mut self, on: bool) {
+        if on != self.procs.is_some() {
+            self.procs = if on { Some(Sampler::new()) } else { None };
+        }
     }
 
     fn collect(&mut self) {
@@ -197,7 +217,14 @@ impl Collector {
                 continue;
             }
             // Adapter: "luid_…_phys_0"; type: what follows "engtype_".
-            let key = (hash(&name[luid..eng]), hash(&name[ty + b"engtype_".len()..]));
+            let key = (hash(name[luid..eng].iter().copied()), hash(name[ty + b"engtype_".len()..].iter().copied()));
+            if let Some(p) = &mut self.procs
+                && let Some(pid) = name.strip_prefix(&[b'p' as u16, b'i' as u16, b'd' as u16, b'_' as u16])
+                && let Some(end) = pid.iter().position(|&c| c == b'_' as u16)
+                && let Some(pid) = number(&pid[..end])
+            {
+                p.engines.push((pid, key.1, v));
+            }
             match self.engines.iter_mut().find(|e| (e.0, e.1) == key) {
                 Some(e) => e.2 += v,
                 None => self.engines.push((key.0, key.1, v)),
@@ -383,8 +410,9 @@ fn processor_key(name: &[u16]) -> Option<u32> {
     Some(group << 16 | number)
 }
 
+/// A decimal number of up to nine digits (processor numbers, pids).
 fn number(s: &[u16]) -> Option<u32> {
-    if s.is_empty() || s.len() > 5 {
+    if s.is_empty() || s.len() > 9 {
         return None;
     }
     s.iter().try_fold(0u32, |n, &c| if (b'0' as u16..=b'9' as u16).contains(&c) { Some(n * 10 + (c - b'0' as u16) as u32) } else { None })
@@ -399,9 +427,10 @@ fn eq_ascii(s: &[u16], ascii: &[u8]) -> bool {
     s.len() == ascii.len() && s.iter().zip(ascii).all(|(&a, &b)| a == b as u16)
 }
 
-/// FNV-1a: groups GPU engines by adapter and type without keeping their names.
-fn hash(s: &[u16]) -> u64 {
-    s.iter().fold(0xcbf29ce484222325u64, |h, &c| (h ^ c as u64).wrapping_mul(0x100000001b3))
+/// FNV-1a: groups GPU engines by adapter and type, and programs by name, without keeping
+/// their names.
+pub fn hash(s: impl IntoIterator<Item = u16>) -> u64 {
+    s.into_iter().fold(0xcbf29ce484222325u64, |h, c| (h ^ c as u64).wrapping_mul(0x100000001b3))
 }
 
 fn clamp_pct(v: f32) -> f32 {

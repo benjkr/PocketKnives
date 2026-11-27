@@ -32,5 +32,11 @@
   "iconLipBelow": "#00000000",
   "panelShadow": "#04061899",
   "panelRing": "#0b0e20",
-  "panelRingLip": "#ffffff59"
+  "panelRingLip": "#ffffff59",
+  "keyTop": "#e6e9f1",
+  "keyBottom": "#bdc3d5",
+  "keySide": "#6a7190",
+  "keyEdge": "#ffffffcc",
+  "keyShadow": "#04061899",
+  "keyLegend": "#1a1f3a"
 }

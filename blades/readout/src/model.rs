@@ -1,6 +1,7 @@
 //! What the bar shows: the latest values and a short history of each, filled from live samples
 //! or from the deterministic mock the previews use.
 use crate::metrics::Sample;
+use crate::procs::Proc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -86,9 +87,38 @@ impl Model {
         for _ in 0..174 {
             m.push(g.tick());
         }
+        let cpu = m.cpu.now();
+        m.last.procs = MOCK_PROCS
+            .iter()
+            .map(|&(name, mb, share, gpu, kbs)| Proc {
+                name: name.into(),
+                cpu: share * cpu,
+                mem: (mb as f64 * 1024.0 * 1024.0) as u64,
+                gpu,
+                io: kbs as f64 * 1024.0,
+            })
+            .collect();
         m
     }
 }
+
+/// The design mock's sample programs: name, private MB, share of the CPU in use, GPU %, I/O KB/s.
+const MOCK_PROCS: [(&str, f32, f32, f32, f32); 14] = [
+    ("chrome", 3420.0, 0.26, 14.0, 820.0),
+    ("Code", 2180.0, 0.15, 1.2, 140.0),
+    ("steamwebhelper", 1640.0, 0.17, 3.1, 64.0),
+    ("Discord", 1260.0, 0.06, 2.4, 35.0),
+    ("MsMpEng", 842.0, 0.12, 0.0, 2600.0),
+    ("ms-teams", 815.0, 0.01, 1.8, 22.0),
+    ("explorer", 412.0, 0.03, 0.6, 12.0),
+    ("Spotify", 384.0, 0.02, 0.9, 180.0),
+    ("dwm", 296.0, 0.07, 9.5, 0.0),
+    ("SearchIndexer", 188.0, 0.012, 0.0, 960.0),
+    ("OneDrive", 164.0, 0.01, 0.0, 310.0),
+    ("svchost", 142.0, 0.015, 0.2, 75.0),
+    ("System", 0.2, 0.04, 0.0, 1400.0),
+    ("RuntimeBroker", 96.0, 0.006, 0.0, 3.0),
+];
 
 /// The design mock's random walk (`tick()` in bar-mocks-16.html), 8 cores.
 struct Mock {
@@ -162,6 +192,7 @@ impl Mock {
             net_up: up as f64 * 1024.0,
             net_down: dn as f64 * 1024.0,
             cores,
+            procs: Vec::new(),
         }
     }
 }
