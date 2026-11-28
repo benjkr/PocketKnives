@@ -233,6 +233,8 @@ pub fn run() -> u32 {
     let mut abd = appbar(hwnd);
     abd.uCallbackMessage = WM_APPBAR;
     unsafe { SHAppBarMessage(ABM_NEW, &mut abd) };
+    // every program sampled each second, so a list has its rows the moment it opens
+    app.collector.set_procs(true);
     app.sample();
     app.place();
     let ptr = Box::into_raw(app) as isize;
@@ -542,16 +544,13 @@ impl App {
         bar::row_proc(&self.model, &self.list.rows, i).is_some()
     }
 
-    /// Hovers tile `hover` (or none): per-program sampling and the pointer timer run only while a
-    /// panel can be open.
+    /// Hovers tile `hover` (or none): the pointer timer runs only while a panel can be open.
     fn set_hover(&mut self, hover: Option<usize>) {
         if hover == self.hover && hover.is_some() {
             return;
         }
         self.hover = hover;
         self.on_panel = false;
-        let item = self.panel_item();
-        self.collector.set_procs(item.is_some_and(bar::has_list));
         unsafe {
             if hover.is_some() {
                 SetTimer(self.hwnd, TIMER_POINTER, POINTER_MS, None);
