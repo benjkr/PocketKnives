@@ -48,7 +48,10 @@ the mock):
   - Engraved: the heading `TOP 10 PROCESSES` and what the value is (`OF ALL CORES`, `PRIVATE
     MEMORY`, `OF GPU`, `I/O PER SEC`), the row numbers 1–10, a tick from each row to its key,
     the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale, `BAR: OF TOTAL`) and
-    `X SELECTS` / `X AGAIN KILLS`.
+    `X SELECTS` / `X AGAIN KILLS`. Lettering on the plastic is in capitals like a calculator's
+    printed labels: Arial Bold (every Windows has it), 5 design pixels to the capitals' top,
+    unhinted so the letters space evenly. Text on glass stays in the pixel font.
+  - The keys' legend is a multiplication sign `×`.
   - The list window: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in
     the ghost colour), then a row per program: its name (11 characters, `~` for the rest), a bar
     of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and its value.

@@ -20,6 +20,8 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
 - **The geometry is the approved mocks'** (the bar "M2", the process list "P4" with two presses
   to kill; one design pixel = one CSS pixel); show a visible change with `--preview-render`
   before and after.
+- **Lettering on the plastic is Arial Bold** (`src/letters.rs`), like a calculator's printed
+  labels; text on glass is the LCD's pixel font or seven segments.
 - **What can change is on glass, what is fixed is engraved**, and a key only travels when
   pressed: it never changes colour or legend; states show on the glass.
 - **Ending programs is tested only on a throwaway process** you started (a renamed copy of a

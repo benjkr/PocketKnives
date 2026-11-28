@@ -8,6 +8,7 @@ extern crate alloc;
 mod bar;
 mod cli;
 mod lcd;
+mod letters;
 mod metrics;
 mod model;
 mod procs;

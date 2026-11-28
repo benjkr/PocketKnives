@@ -2,6 +2,7 @@
 //! design pixels (the approved mock's CSS pixels); `k` device pixels make one, a whole number, so
 //! the dot matrix and the engraving stay sharp.
 use crate::lcd::{self, Bitmap, LARGE, Readout, SMALL};
+use crate::letters::Face;
 use crate::model::{BURST_KBS, HOT, Model, Series};
 use crate::procs::Proc;
 use crate::raster::{self, Canvas, Mask, Paint, Path, Pt};
@@ -299,19 +300,24 @@ impl Pen<'_> {
         self.fill(&g, if hot { pal.icon_hot } else { pal.icon_groove });
     }
 
-    /// Pixel text (or any bitmap's set pixels) engraved like the icons, its top left at (x, y).
-    fn engrave(&mut self, b: &Bitmap, x: f32, y: f32) {
+    /// A shape engraved like the icons: the lips one pixel above and below, then the groove.
+    fn engrave(&mut self, g: &Path) {
         let pal = *self.pal;
-        let g = pixels(b, x, y);
         self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
         self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
-        self.fill(&g, pal.icon_groove);
+        self.fill(g, pal.icon_groove);
+    }
+
+    /// Lettering engraved with its capitals' top left at (x, y), x on a whole device pixel.
+    fn letter(&mut self, f: &Face, s: &str, x: f32, y: f32) {
+        let x = libm::floorf(x * self.k + 0.5) / self.k;
+        self.engrave(&f.text(s).0.offset(x, y));
     }
 
     /// A key with `legend` centred on its cap, at (x, y), `w` x `h`: its shadow on the plate, its
     /// side wall a pixel below the cap, the cap's gradient and its lit top row. Pressed, the cap
     /// drops over its wall; its colours stay.
-    fn key(&mut self, x: f32, y: f32, w: f32, h: f32, legend: &Bitmap, down: bool) {
+    fn key(&mut self, x: f32, y: f32, w: f32, h: f32, legend: &Path, down: bool) {
         let pal = *self.pal;
         let y = if down { y + 1.0 } else { y };
         let mut cap = Path::new();
@@ -328,29 +334,10 @@ impl Pen<'_> {
         let mut body = Path::new();
         body.poly(raster::round_rect(x, y + 1.0, w, h - 1.0, 2.0));
         self.fill_grad(&body, &[(y, pal.key_top), (y + h, pal.key_bottom)]);
-        let (lx, ly) = (x + libm::floorf((w - legend.w as f32) / 2.0), y + libm::floorf((h - legend.h as f32) / 2.0));
-        self.fill(&pixels(legend, lx, ly), pal.key_legend);
+        let (x0, y0, x1, y1) = path_bounds(legend);
+        let (lx, ly) = (x + libm::floorf((w - (x1 - x0)) / 2.0) - x0, y + libm::floorf((h - (y1 - y0)) / 2.0) - y0);
+        self.fill(&legend.offset(lx, ly), pal.key_legend);
     }
-}
-
-/// A bitmap's set pixels as one path of runs, one design pixel each, its top left at (x, y).
-fn pixels(b: &Bitmap, x: f32, y: f32) -> Path {
-    let mut p = Path::new();
-    for by in 0..b.h {
-        let mut bx = 0;
-        while bx < b.w {
-            if b.a[by * b.w + bx] == lcd::OFF {
-                bx += 1;
-                continue;
-            }
-            let start = bx;
-            while bx < b.w && b.a[by * b.w + bx] != lcd::OFF {
-                bx += 1;
-            }
-            p.poly(raster::rect_path(x + start as f32, y + by as f32, (bx - start) as f32, 1.0));
-        }
-    }
-    p
 }
 
 /// The engraved glyphs on a 12px grid with 1px strokes on pixel centres.
@@ -1081,26 +1068,19 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
     b
 }
 
-/// The scale under the bars, engraved: ticks at 0, 1, 5, 10, 25, 50 and 100% on the bars'
-/// square-root scale, three of them labelled.
-fn scale_bitmap() -> Bitmap {
-    let mut b = Bitmap::new(BAR_W as usize + 16, 9);
+/// The scale under the bars, engraved at (x, y): ticks at 0, 1, 5, 10, 25, 50 and 100% on the
+/// bars' square-root scale, three of them longer and labelled, each number centred on its tick.
+fn scale(pen: &mut Pen, f: &Face, x: f32, y: f32) {
+    let mut ticks = Path::new();
     for (t, label) in [(0.0, "0"), (0.01, ""), (0.05, ""), (0.1, "10"), (0.25, ""), (0.5, ""), (1.0, "100%")] {
-        let x = (libm::round(libm::sqrt(t) * BAR_W as f64) as i32).min(BAR_W - 1);
-        b.ps(x, 0, lcd::LIT);
+        let tx = x + (libm::round(libm::sqrt(t) * BAR_W as f64) as i32).min(BAR_W - 1) as f32;
+        ticks.poly(raster::rect_path(tx, y, 1.0, if label.is_empty() { 1.0 } else { 2.0 }));
         if !label.is_empty() {
-            b.ps(x, 1, lcd::LIT);
-            let lx = if t == 0.0 {
-                0
-            } else if t == 1.0 {
-                x - 5
-            } else {
-                x - lcd::text_w(label) as i32 / 2
-            };
-            text_at(&mut b, label, lx, 3, lcd::LIT);
+            let num = label.trim_end_matches('%');
+            pen.letter(f, label, tx + 0.5 - f.width(num) / 2.0, y + 3.0);
         }
     }
-    b
+    pen.engrave(&ticks);
 }
 
 /// The list's part of the body that never changes: a parting line under the screen, the
@@ -1115,13 +1095,14 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     };
     pen.fill(&line(96.0), pal.plate_edge_bottom);
     pen.fill(&line(97.0), pal.plate_edge_top);
-    let right = |s: &str| px + PANEL_W as f32 - 5.0 - lcd::text_w(s) as f32;
-    pen.engrave(&lcd::text("TOP 10 PROCESSES", false, 0), px + 5.0, py + 103.0);
+    let f = Face::new();
+    let right = |s: &str| px + PANEL_W as f32 - 5.0 - f.width(s);
+    pen.letter(&f, "TOP 10 PROCESSES", px + 5.0, py + 103.0);
     let label = list_label(item);
-    pen.engrave(&lcd::text(label, false, 0), right(label), py + 103.0);
+    pen.letter(&f, label, right(label), py + 103.0);
     for i in 0..LIST_ROWS {
         let n = format!("{}", i + 1);
-        pen.engrave(&lcd::text(&n, false, 0), px + 13.0 - lcd::text_w(&n) as f32, py + 126.0 + (i as i32 * ROW_PITCH) as f32);
+        pen.letter(&f, &n, px + 13.0 - f.width(&n), py + 126.0 + (i as i32 * ROW_PITCH) as f32);
     }
 
     // the window: the highlight under its ring, the ring, the glass
@@ -1138,29 +1119,28 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     pen.glass_detail(&gls);
 
     // the ticks tying each key to its row
-    let mut tick = Bitmap::new(3, 1);
-    (0..3).for_each(|x| tick.ps(x, 0, lcd::LIT));
+    let mut ticks = Path::new();
     for i in 0..LIST_ROWS {
-        pen.engrave(&tick, px + 130.0, py + KEY_Y + (i as i32 * ROW_PITCH) as f32 + 3.0);
+        ticks.poly(raster::rect_path(px + 130.0, py + KEY_Y + (i as i32 * ROW_PITCH) as f32 + 3.0, 3.0, 1.0));
     }
+    pen.engrave(&ticks);
 
     // the scale under the bars, and the footer
-    pen.engrave(&scale_bitmap(), px + LW_X + 2.0 + BAR_X as f32, py + 218.0);
-    pen.engrave(&lcd::text("BAR: OF TOTAL", false, 0), px + 5.0, py + 221.0);
-    pen.engrave(&lcd::text("X SELECTS", false, 0), px + 5.0, py + 231.0);
-    pen.engrave(&lcd::text("X AGAIN KILLS", false, 0), right("X AGAIN KILLS"), py + 231.0);
+    scale(pen, &f, px + LW_X + 2.0 + BAR_X as f32, py + 218.0);
+    pen.letter(&f, "BAR: OF TOTAL", px + 5.0, py + 221.0);
+    pen.letter(&f, "X SELECTS", px + 5.0, py + 231.0);
+    pen.letter(&f, "X AGAIN KILLS", right("X AGAIN KILLS"), py + 231.0);
 }
 
 /// The list's moving parts: the list window's content and the keys (one may be held down).
 fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListView) {
     pen.bitmap(&list_bitmap(m, item, v), px + LW_X + 2.0, py + LW_Y, 1);
-    let mut x_glyph = Bitmap::new(5, 5);
-    for i in 0..5 {
-        x_glyph.ps(i, i, lcd::LIT);
-        x_glyph.ps(4 - i, i, lcd::LIT);
-    }
+    // the keys' legend, a multiplication sign like a calculator's
+    let mut x = Path::new();
+    raster::stroke_polyline(&mut x, &[(0.5, 0.5), (4.5, 4.5)], 1.0);
+    raster::stroke_polyline(&mut x, &[(4.5, 0.5), (0.5, 4.5)], 1.0);
     for i in 0..LIST_ROWS {
         let y = py + KEY_Y + (i as i32 * ROW_PITCH) as f32;
-        pen.key(px + KEY_X, y, KEY_W, KEY_H, &x_glyph, v.down == Some(i));
+        pen.key(px + KEY_X, y, KEY_W, KEY_H, &x, v.down == Some(i));
     }
 }
