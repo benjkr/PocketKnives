@@ -1,5 +1,5 @@
-//! Settings (`%APPDATA%\Readout\settings.ini`, or next to the exe in preview mode) and the user's
-//! themes folder (`%APPDATA%\Readout\themes`).
+//! Settings (`%APPDATA%\Pulse\settings.ini`, or next to the exe in preview mode) and the user's
+//! themes folder (`%APPDATA%\Pulse\themes`).
 use crate::bar::Item;
 use alloc::format;
 use alloc::string::String;
@@ -16,7 +16,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::UI::Shell::FOLDERID_RoamingAppData;
 
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const RUN_VALUE: &str = "Readout";
+const RUN_VALUE: &str = "Pulse";
 
 /// The theme a new install starts with.
 const DEFAULT_THEME: &str = "ivory";
@@ -137,17 +137,17 @@ fn settings_dir() -> String {
         return pk::env::exe_dir();
     }
     let appdata = pk::env::known_folder(&FOLDERID_RoamingAppData).unwrap_or_else(pk::env::exe_dir);
-    format!("{appdata}\\Readout")
+    format!("{appdata}\\Pulse")
 }
 
 fn settings_path() -> String {
     if pk::env::settings_preview() {
-        return format!("{}\\readout-preview.ini", pk::env::exe_dir());
+        return format!("{}\\pulse-preview.ini", pk::env::exe_dir());
     }
     format!("{}\\settings.ini", settings_dir())
 }
 
-/// Whether the bar starts when the user signs in (`HKCU\...\Run\Readout`).
+/// Whether the bar starts when the user signs in (`HKCU\...\Run\Pulse`).
 pub fn autostart_enabled() -> bool {
     pk::reg::string(HKEY_CURRENT_USER, Some(RUN_KEY), RUN_VALUE).is_some_and(|v| !v.trim().is_empty())
 }

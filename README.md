@@ -31,11 +31,11 @@ of about 16 seconds through Quick Settings. [Read more](blades/quicktooth/README
 Shows the current media's album cover, source app icon, seekable timeline and live 5-band audio
 frequency meter docked cleanly in the Windows 11 taskbar. [Read more](blades/nowplaying/README.md)
 
-### <img src="blades/readout/assets/icon.svg" width="32" height="32" alt=""> Readout
+### <img src="blades/pulse/assets/icon.svg" width="32" height="32" alt=""> Pulse
 
 Shows CPU, memory, GPU, disk, network and the time as seven-segment readouts and dot-matrix graphs
 in a calculator-style bar along the top of the screen; hover a reading for its last minute.
-[Read more](blades/readout/README.md)
+[Read more](blades/pulse/README.md)
 
 ## Install
 

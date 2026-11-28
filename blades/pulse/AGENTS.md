@@ -1,13 +1,13 @@
-# AGENTS.md: Readout
+# AGENTS.md: Pulse
 
-Readout: a calculator-style system monitor bar along the top of the main screen. CPU, memory,
+Pulse: a calculator-style system monitor bar along the top of the main screen. CPU, memory,
 GPU, disk and network as seven-segment readouts over dot-matrix graphs on one LCD glass, and the
 time; hovering a metric shows its last minute. Rust, `no_std` on `pk`, one small exe.
 
 **The suite's [`AGENTS.md`](../../AGENTS.md) comes first**: its rules hold here too. Paths and
-commands here and in this blade's `docs/` are from `blades/readout/`.
+commands here and in this blade's `docs/` are from `blades/pulse/`.
 
-## Rules for Readout
+## Rules for Pulse
 
 - **The exe**: `no_std` on `crates/pk`, plain Win32 through `windows-sys`. It draws with its own
   rasterizer (`src/raster.rs`) into the layered window's pixels: no Direct2D, no COM. No new crates
@@ -33,13 +33,13 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
 
 ## Running things
 
-- Build in scratch: `cargo build --release -p readout --target-dir <dir>`
-- Visual check, nothing live: `<dir>\release\Readout.exe --preview-render <out.png> --theme navy --scale 2 [--panel cpu]`
-- Live readings, read-only: `<dir>\release\Readout.exe --status 5`
+- Build in scratch: `cargo build --release -p pulse --target-dir <dir>`
+- Visual check, nothing live: `<dir>\release\Pulse.exe --preview-render <out.png> --theme navy --scale 2 [--panel cpu]`
+- Live readings, read-only: `<dir>\release\Pulse.exe --status 5`
 
 ## Verification
 
-- `cargo build --release -p readout --target-dir <dir>` with zero warnings.
+- `cargo build --release -p pulse --target-dir <dir>` with zero warnings.
 - `--version`, `--help`, `--settings`, `--set` (with `POCKETKNIVES_SETTINGS_PREVIEW=1`),
   `--status 3`, `--top 2` and `--preview-render` for every theme exit cleanly with the expected
   output.
@@ -50,4 +50,4 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
 
 | Area | Spec |
 |---|---|
-| Window, look, themes, readings, settings and CLI | [readout](docs/specs/readout.md) |
+| Window, look, themes, readings, settings and CLI | [pulse](docs/specs/pulse.md) |

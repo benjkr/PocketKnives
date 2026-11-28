@@ -52,14 +52,14 @@ LZMAUseSeparateProcess=yes
 Name: snipsnap; Description: "SnipSnap"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('snipsnap.exe')
 Name: quicktooth; Description: "QuickTooth"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('QuickTooth.exe')
 Name: nowplaying; Description: "NowPlaying"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('NowPlaying.exe')
-Name: readout; Description: "Readout"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('Readout.exe')
+Name: pulse; Description: "Pulse"; GroupDescription: "Start when I sign in to Windows:"; Check: IsFresh('Pulse.exe')
 
 [Files]
 Source: "{#AppSource}\snipsnap.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\snipsnap-rec.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\QuickTooth.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\NowPlaying.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AppSource}\Readout.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#AppSource}\Pulse.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\pk.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AppSource}\icons\*.ico"; DestDir: "{app}\icons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#AppSource}\winui\*"; DestDir: "{app}\winui"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -69,22 +69,22 @@ Name: "{autoprograms}\{#AppName}\PocketKnives Settings"; Filename: "{app}\pk.exe
 Name: "{autoprograms}\{#AppName}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Comment: "Copy a rectangle, a window or the screen to the clipboard"
 Name: "{autoprograms}\{#AppName}\QuickTooth"; Filename: "{app}\QuickTooth.exe"; Comment: "Connect or disconnect your AirPods with one click"
 Name: "{autoprograms}\{#AppName}\NowPlaying"; Filename: "{app}\NowPlaying.exe"; Comment: "Live media cover, seekable timeline and frequency meter in the taskbar"
-Name: "{autoprograms}\{#AppName}\Readout"; Filename: "{app}\Readout.exe"; Comment: "CPU, memory, GPU, disk, network and the time in a bar along the top of the screen"
+Name: "{autoprograms}\{#AppName}\Pulse"; Filename: "{app}\Pulse.exe"; Comment: "CPU, memory, GPU, disk, network and the time in a bar along the top of the screen"
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\pk.exe"
 ; SnipSnap starts at sign-in through a Startup shortcut, as it always has.
 Name: "{userstartup}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Tasks: snipsnap
 
 [Run]
-; QuickTooth, NowPlaying and Readout write their own Run values before pk.exe checks which blades are enabled.
+; QuickTooth, NowPlaying and Pulse write their own Run values before pk.exe checks which blades are enabled.
 Filename: "{app}\QuickTooth.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: quicktooth
 Filename: "{app}\NowPlaying.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: nowplaying
-Filename: "{app}\Readout.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: readout
+Filename: "{app}\Pulse.exe"; Parameters: "--autostart on"; Flags: runhidden waituntilterminated; Tasks: pulse
 Filename: "{app}\pk.exe"; Flags: nowait
 ; No skipifsilent: a silent update should leave the blades running, as they were before.
 Filename: "{app}\snipsnap.exe"; Description: "Start SnipSnap now"; Flags: nowait postinstall
 Filename: "{app}\QuickTooth.exe"; Description: "Start QuickTooth now"; Flags: nowait postinstall
 Filename: "{app}\NowPlaying.exe"; Description: "Start NowPlaying now"; Flags: nowait postinstall
-Filename: "{app}\Readout.exe"; Description: "Start Readout now"; Flags: nowait postinstall
+Filename: "{app}\Pulse.exe"; Description: "Start Pulse now"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; Settings can create SnipSnap's Startup shortcut after Setup, so Setup never recorded it.
@@ -199,9 +199,9 @@ begin
   Result := CloseBlade('NowPlaying.exe', '--exit', 'Local\PocketKnives.NowPlaying.v1');
 end;
 
-function CloseReadout: Boolean;
+function ClosePulse: Boolean;
 begin
-  Result := CloseBlade('Readout.exe', '--exit', 'Local\PocketKnives.Readout.v1');
+  Result := CloseBlade('Pulse.exe', '--exit', 'Local\PocketKnives.Pulse.v1');
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -215,8 +215,8 @@ begin
     Result := 'QuickTooth is still running and could not be closed. Choose Exit in its tray menu, then run Setup again.'
   else if not CloseNowPlaying then
     Result := 'NowPlaying is still running and could not be closed. Right-click it and choose Exit NowPlaying, then run Setup again.'
-  else if not CloseReadout then
-    Result := 'Readout is still running and could not be closed. Right-click its bar and choose Exit, then run Setup again.';
+  else if not ClosePulse then
+    Result := 'Pulse is still running and could not be closed. Right-click its bar and choose Exit, then run Setup again.';
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -229,16 +229,16 @@ begin
     CloseSnipSnap;
     CloseQuickTooth;
     CloseNowPlaying;
-    CloseReadout;
-    { Remove QuickTooth, NowPlaying and Readout "start when I sign in" entries, only if they point at this install. }
+    ClosePulse;
+    { Remove QuickTooth, NowPlaying and Pulse "start when I sign in" entries, only if they point at this install. }
     if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth', Value) and
        (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
       RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'QuickTooth');
     if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'NowPlaying', Value) and
        (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
       RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'NowPlaying');
-    if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'Readout', Value) and
+    if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'Pulse', Value) and
        (Pos(Lowercase(ExpandConstant('{app}')), Lowercase(Value)) > 0) then
-      RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'Readout');
+      RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'Pulse');
   end;
 end;

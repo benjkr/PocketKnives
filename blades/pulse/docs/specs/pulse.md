@@ -1,4 +1,4 @@
-# Readout
+# Pulse
 
 What it does now. Keep it current in the same change, and lean.
 
@@ -82,7 +82,7 @@ the mock):
     the program that couldn't be ended shows a padlock; the selected row's cell lights.
   - A key per row: the first press selects the program (its row in inverse, its icon's cell lit,
     for 5 s); a second press on it ends every process with that name. A second press as quick as
-    a double-click is ignored. A program Readout can't end shows `ACCESS DENIED` and a padlock.
+    a double-click is ignored. A program Pulse can't end shows `ACCESS DENIED` and a padlock.
   - The rows hold still while the pointer is on the panel or a row is selected, held or refused;
     a program that ends meanwhile leaves its row blank.
 
@@ -91,7 +91,7 @@ the mock):
 A theme is one flat JSON object of colours (`"#rrggbb"` or `"#rrggbbaa"`), nothing else, with
 every key below and no others; a broken theme file is refused with the reason. The drawing code
 never names a theme. The built-in themes are `themes/*.json`, embedded at build time (adding a
-file adds a theme); a file in `%APPDATA%\Readout\themes` adds a theme or replaces a built-in of
+file adds a theme); a file in `%APPDATA%\Pulse\themes` adds a theme or replaces a built-in of
 the same name.
 
 | Key | Role |
@@ -131,26 +131,26 @@ them reads them at once, and again 0.3 seconds after the reading began when that
 (Task Manager's memory column) and I/O bytes; GPU comes from the same GPU engine counter, per
 process, the busiest engine type. Processes with one image name are summed. Ending a program
 opens each of its processes for termination; one that can't be (elevated, protected, another
-user's, System, Readout itself) makes the result denied. Network traffic per process needs
+user's, System, Pulse itself) makes the result denied. Network traffic per process needs
 administrator rights, so the network panel has no list.
 
 ## Settings and command line
 
-Settings (`%APPDATA%\Readout\settings.ini`; next to the exe in preview mode):
+Settings (`%APPDATA%\Pulse\settings.ini`; next to the exe in preview mode):
 `theme` (a choice of every theme), `cpu`, `memory`, `gpu`, `disk`, `network` and `clock`
 (toggles, all on), and `taskbar` (a toggle, off). Printed and changed through the [blade settings](../../../../docs/specs/blade-settings.md)
 contract; a running bar applies a change at once.
 
 ```text
-Readout.exe                          start the bar (single instance)
-Readout.exe --exit                   close the running bar
-Readout.exe --autostart on|off|status
-Readout.exe --status [seconds]       print live readings, one line a second (default 3)
-Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)
-Readout.exe --settings               print settings for PocketKnives Settings
-Readout.exe --set key=value ...      change settings
-Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]
-Readout.exe --version
+Pulse.exe                          start the bar (single instance)
+Pulse.exe --exit                   close the running bar
+Pulse.exe --autostart on|off|status
+Pulse.exe --status [seconds]       print live readings, one line a second (default 3)
+Pulse.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)
+Pulse.exe --settings               print settings for PocketKnives Settings
+Pulse.exe --set key=value ...      change settings
+Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]
+Pulse.exe --version
 ```
 
 `--preview-render` draws the bar (and a panel, under its tile) to a PNG without opening a window:

@@ -38,14 +38,14 @@ pub struct Proc {
 pub enum Kill {
     /// Every process with the name ended.
     Ended,
-    /// At least one couldn't be ended (protected, another user's, elevated, or Readout itself).
+    /// At least one couldn't be ended (protected, another user's, elevated, or Pulse itself).
     Denied,
     /// None was running any more.
     Gone,
 }
 
 /// Ends every process with this image name (without ".exe", case-insensitive): never the
-/// idle process, System (pid 4) or Readout itself, which count as denied.
+/// idle process, System (pid 4) or Pulse itself, which count as denied.
 pub fn kill(name: &str) -> Kill {
     let want: Vec<u16> = name.encode_utf16().collect();
     if want.is_empty() {

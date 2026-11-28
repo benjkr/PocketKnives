@@ -1,4 +1,4 @@
-//! Readout.exe: a calculator-style system monitor bar along the top of the screen.
+//! Pulse.exe: a calculator-style system monitor bar along the top of the screen.
 //! Rust, `no_std` on `pk`.
 #![no_std]
 #![no_main]

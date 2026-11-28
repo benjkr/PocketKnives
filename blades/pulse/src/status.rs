@@ -1,5 +1,5 @@
-//! `Readout.exe --status [seconds]`: prints one line of live readings a second.
-//! `Readout.exe --top [seconds]`: the programs using most CPU, memory, GPU and I/O.
+//! `Pulse.exe --status [seconds]`: prints one line of live readings a second.
+//! `Pulse.exe --top [seconds]`: the programs using most CPU, memory, GPU and I/O.
 use crate::metrics::{Collector, Sample};
 use crate::procs::Proc;
 use core::fmt::Write;

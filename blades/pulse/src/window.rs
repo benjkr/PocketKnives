@@ -42,11 +42,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 use windows_sys::core::PCWSTR;
 
-const MUTEX_NAME: PCWSTR = w!("Local\\PocketKnives.Readout.v1");
-const BAR_CLASS: PCWSTR = w!("PocketKnives.Readout.Bar");
-const PANEL_CLASS: PCWSTR = w!("PocketKnives.Readout.Panel");
-const RELOAD_MSG: PCWSTR = w!("PocketKnives.Readout.Reload.v1");
-const EXIT_MSG: PCWSTR = w!("PocketKnives.Readout.Exit.v1");
+const MUTEX_NAME: PCWSTR = w!("Local\\PocketKnives.Pulse.v1");
+const BAR_CLASS: PCWSTR = w!("PocketKnives.Pulse.Bar");
+const PANEL_CLASS: PCWSTR = w!("PocketKnives.Pulse.Panel");
+const RELOAD_MSG: PCWSTR = w!("PocketKnives.Pulse.Reload.v1");
+const EXIT_MSG: PCWSTR = w!("PocketKnives.Pulse.Exit.v1");
 /// In the taskbar, the bar goes after NowPlaying's strip (`blades/nowplaying/src/ipc.rs`).
 const NOWPLAYING_CLASS: PCWSTR = w!("PocketKnives.NowPlaying.Strip");
 const WM_APPBAR: u32 = WM_APP + 1;
@@ -195,8 +195,8 @@ pub fn run() -> u32 {
         }
     }
     let ex = WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
-    let hwnd = unsafe { CreateWindowExW(ex, BAR_CLASS, w!("Readout"), WS_POPUP, 0, 0, 1, 1, null_mut(), null_mut(), hinst, null()) };
-    let panel_hwnd = unsafe { CreateWindowExW(ex, PANEL_CLASS, w!("Readout panel"), WS_POPUP, 0, 0, 1, 1, hwnd, null_mut(), hinst, null()) };
+    let hwnd = unsafe { CreateWindowExW(ex, BAR_CLASS, w!("Pulse"), WS_POPUP, 0, 0, 1, 1, null_mut(), null_mut(), hinst, null()) };
+    let panel_hwnd = unsafe { CreateWindowExW(ex, PANEL_CLASS, w!("Pulse panel"), WS_POPUP, 0, 0, 1, 1, hwnd, null_mut(), hinst, null()) };
     if hwnd.is_null() || panel_hwnd.is_null() {
         return 1;
     }

@@ -10,7 +10,7 @@ the user's screen. Each blade's `docs/working/live-testing.md` adds what's speci
 | SnipSnap | `%LOCALAPPDATA%\Programs\PocketKnives\snipsnap.exe` | a shortcut in `shell:startup` |
 | QuickTooth | `%LOCALAPPDATA%\Programs\PocketKnives\QuickTooth.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\QuickTooth` |
 | NowPlaying | `%LOCALAPPDATA%\Programs\PocketKnives\NowPlaying.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NowPlaying` |
-| Readout | `%LOCALAPPDATA%\Programs\PocketKnives\Readout.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Readout` |
+| Pulse | `%LOCALAPPDATA%\Programs\PocketKnives\Pulse.exe` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Pulse` |
 | [Runner](../specs/runner.md) | `%LOCALAPPDATA%\Programs\PocketKnives\pk.exe` | a `PocketKnives` shortcut in `shell:startup` |
 
 - All of them come from the PocketKnives installer ([installer](../specs/installer.md)), and only

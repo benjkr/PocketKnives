@@ -1,4 +1,4 @@
-//! Command-line options for `Readout.exe`.
+//! Command-line options for `Pulse.exe`.
 use crate::bar::{self, Item, Layout, Time};
 use crate::model::Model;
 use crate::raster::{self, Canvas};
@@ -13,25 +13,25 @@ macro_rules! wl {
     ($out:expr, $($t:tt)*) => {{ let _ = write!($out, $($t)*); $out.write_bytes(b"\r\n"); }};
 }
 
-const HELP: &str = "Readout \u{2014} a calculator-style system monitor bar along the top of the screen.\r\n\
+const HELP: &str = "Pulse \u{2014} a calculator-style system monitor bar along the top of the screen.\r\n\
 \r\n\
-  Readout.exe                          start the bar (single instance)\r\n\
-  Readout.exe --exit                   close the running bar\r\n\
-  Readout.exe --autostart on|off|status\r\n\
-  Readout.exe --status [seconds]       print live readings, one line a second (default 3)\r\n\
-  Readout.exe --settings               print settings for PocketKnives Settings\r\n\
-  Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
-  Readout.exe --set key=value ...      change settings\r\n\
-  Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n                         \
-[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]\r\n                                       \
+  Pulse.exe                          start the bar (single instance)\r\n\
+  Pulse.exe --exit                   close the running bar\r\n\
+  Pulse.exe --autostart on|off|status\r\n\
+  Pulse.exe --status [seconds]       print live readings, one line a second (default 3)\r\n\
+  Pulse.exe --settings               print settings for PocketKnives Settings\r\n\
+  Pulse.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
+  Pulse.exe --set key=value ...      change settings\r\n\
+  Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n                       \
+[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]\r\n                                     \
 draw the bar with the design's sample values to a PNG\r\n\
-  Readout.exe --version                print the version";
+  Pulse.exe --version                print the version";
 
 pub fn run(args: &[String]) -> u32 {
     let mut out = open_console();
     match args[0].to_ascii_lowercase().as_str() {
         "--version" => {
-            wl!(out, "Readout {}", env!("CARGO_PKG_VERSION"));
+            wl!(out, "Pulse {}", env!("CARGO_PKG_VERSION"));
             0
         }
         "--help" | "-h" | "/?" => {
@@ -74,7 +74,7 @@ pub fn run(args: &[String]) -> u32 {
                 }
             },
             _ => {
-                wl!(out, "Usage: Readout.exe --autostart on|off|status");
+                wl!(out, "Usage: Pulse.exe --autostart on|off|status");
                 2
             }
         },
@@ -100,7 +100,7 @@ fn open_console() -> Writer {
 
 fn preview(out: &mut Writer, args: &[String]) -> u32 {
     let Some(path) = args.first() else {
-        wl!(out, "Usage: Readout.exe --preview-render <path.png> [options]");
+        wl!(out, "Usage: Pulse.exe --preview-render <path.png> [options]");
         return 2;
     };
     let (mut theme_arg, mut k, mut width, mut panel, mut live) = (String::from("ivory"), 1i32, 728.0f32, None, 0u32);

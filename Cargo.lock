@@ -102,6 +102,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulse"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "pk",
+ "pk-build",
+ "windows-sys",
+]
+
+[[package]]
 name = "quicktooth"
 version = "1.1.0"
 dependencies = [
@@ -134,16 +144,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "readout"
-version = "0.1.0"
-dependencies = [
- "libm",
- "pk",
- "pk-build",
- "windows-sys",
 ]
 
 [[package]]

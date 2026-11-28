@@ -1,13 +1,13 @@
 [package]
-name = "readout"
+name = "pulse"
 version = "0.1.0"
-description = "Readout: a calculator-style system monitor bar along the top of the screen."
+description = "Pulse: a calculator-style system monitor bar along the top of the screen."
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "Readout"
+name = "Pulse"
 path = "src/main.rs"
 # A no_std exe: its own panic handler and entry point can't link with the test harness.
 test = false

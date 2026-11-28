@@ -98,11 +98,11 @@ pub const BLADES: [Blade; 4] = [
         set_command: "--set",
     },
     Blade {
-        name: "Readout",
+        name: "Pulse",
         description: "Shows CPU, memory, GPU, disk, network and the time in a bar along the top of the screen.",
-        icon: "readout.ico",
-        exe: "Readout.exe",
-        mutex: "Local\\PocketKnives.Readout.v1",
+        icon: "pulse.ico",
+        exe: "Pulse.exe",
+        mutex: "Local\\PocketKnives.Pulse.v1",
         stop_command: "--exit",
         settings_command: "--settings",
         set_command: "--set",
@@ -341,7 +341,7 @@ mod tests {
         std::fs::write(dir.join("snipsnap.exe"), b"not a program").unwrap();
         std::fs::write(dir.join("QuickTooth.exe"), b"not a program").unwrap();
         std::fs::write(dir.join("NowPlaying.exe"), b"not a program").unwrap();
-        std::fs::write(dir.join("Readout.exe"), b"not a program").unwrap();
+        std::fs::write(dir.join("Pulse.exe"), b"not a program").unwrap();
         suite.start_enabled_blades();
         suite.stop_blades();
 
