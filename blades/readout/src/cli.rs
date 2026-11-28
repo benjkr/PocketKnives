@@ -177,17 +177,18 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
     bar::bar(&mut c, &l, &pal, &m, t, hover);
     // A panel is drawn under the bar where the window would put it.
     let img = if let (Some(item), Some(i)) = (panel, hover) {
-        let (pw, ph) = bar::panel_size(k, item);
+        let pk = l.panel_k;
+        let (pw, ph) = bar::panel_size(pk, item);
         let mut pc = Canvas::new(pw, ph);
         let row = |r: usize| r.checked_sub(1);
         let rows = bar::ranking(&m, item);
         // the icons of this machine's programs with those names (the sample's have no processes)
         let icons = if live > 0 { crate::icons::for_rows(&rows, &m.last.procs) } else { crate::icons::for_rows(&rows, &crate::procs::Sampler::new().sample()) };
         let view = bar::ListView { rows, sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press), icons };
-        bar::panel(&mut pc, k, &pal, &m, item, &view);
-        let px = ((l.panel_x(i) - bar::PANEL_MARGIN as f32) * k as f32) as i32;
-        let py = (bar::BAR_H + bar::PANEL_GAP - bar::PANEL_MARGIN) * k;
-        let h = (py as usize + ph).max(bh);
+        bar::panel(&mut pc, pk, &pal, &m, item, &view);
+        let px = (l.panel_x(i) * k as f32) as i32 - bar::PANEL_MARGIN * pk;
+        let py = (bar::BAR_H + bar::PANEL_GAP) * k - bar::PANEL_MARGIN * pk;
+        let h = (py + ph as i32).max(bh as i32) as usize;
         let mut all = Canvas::new(bw, h);
         compose(&mut all, &c, 0, 0);
         compose(&mut all, &pc, px, py);

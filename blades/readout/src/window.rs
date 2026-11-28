@@ -296,6 +296,11 @@ impl App {
         unsafe { SHAppBarMessage(ABM_SETPOS, &mut abd) };
         let width = (abd.rc.right - abd.rc.left) as f32 / k as f32;
         self.layout = Layout::new(width, k, &self.settings.items(), self.settings.clock);
+        // the panels a step smaller where the tallest wouldn't fit under the bar
+        let room = r.bottom - abd.rc.bottom - PANEL_GAP * k;
+        while self.layout.panel_k > k && bar::panel_h(Item::Cpu) * self.layout.panel_k > room {
+            self.layout.panel_k -= 1;
+        }
         self.origin = (abd.rc.left, abd.rc.top);
         let (w, h) = self.layout.size();
         if self.canvas.w != w || self.canvas.h != h {
@@ -327,10 +332,10 @@ impl App {
 
     /// The panel's body on the screen, in device pixels: left, top, right, bottom.
     fn panel_rect(&self, item: Item) -> (i32, i32, i32, i32) {
-        let k = self.layout.k;
+        let (k, pk) = (self.layout.k, self.layout.panel_k);
         let left = self.origin.0 + (self.layout.panel_x(self.hover.unwrap_or(0)) * k as f32) as i32;
         let top = self.origin.1 + (BAR_H + PANEL_GAP) * k;
-        (left, top, left + PANEL_W * k, top + bar::panel_h(item) * k)
+        (left, top, left + PANEL_W * pk, top + bar::panel_h(item) * pk)
     }
 
     fn draw_panel(&mut self) {
@@ -338,7 +343,7 @@ impl App {
             unsafe { ShowWindow(self.panel_hwnd, SW_HIDE) };
             return;
         };
-        let k = self.layout.k;
+        let k = self.layout.panel_k;
         if self.panel_item != Some(item) {
             let (pw, ph) = bar::panel_size(k, item);
             if self.panel_canvas.w != pw || self.panel_canvas.h != ph {
@@ -481,7 +486,7 @@ impl App {
     /// The key under a point in the panel window (device pixels).
     fn key_at(&self, lp: LPARAM) -> Option<usize> {
         let item = self.panel_item()?;
-        let k = self.layout.k as f32;
+        let k = self.layout.panel_k as f32;
         let (x, y) = point(lp);
         bar::key_at(item, x as f32 / k - PANEL_MARGIN as f32, y as f32 / k - PANEL_MARGIN as f32)
     }

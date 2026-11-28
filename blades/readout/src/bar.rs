@@ -84,6 +84,8 @@ pub struct Tile {
 pub struct Layout {
     /// Device pixels per design pixel.
     pub k: i32,
+    /// The same for the panels: a step larger than the bar, so they read at a glance.
+    pub panel_k: i32,
     /// The bar's width in design pixels.
     pub width: f32,
     pub tiles: Vec<Tile>,
@@ -104,7 +106,7 @@ impl Layout {
             let w = Item::Clock.digits_w() + 22.0;
             tiles.push(Tile { item: Item::Clock, x: width - PAD - w, w });
         }
-        Layout { k, width, tiles }
+        Layout { k, panel_k: k + 1, width, tiles }
     }
 
     /// The tile under a point (design pixels from the bar's top left).
@@ -122,7 +124,8 @@ impl Layout {
 
     /// Where tile `i`'s panel goes, its left edge in design pixels from the bar's left.
     pub fn panel_x(&self, i: usize) -> f32 {
-        (self.tiles[i].x - 1.0).clamp(4.0, (self.width - PANEL_W as f32 - 4.0).max(4.0))
+        let w = (PANEL_W * self.panel_k) as f32 / self.k as f32;
+        (self.tiles[i].x - 1.0).clamp(4.0, (self.width - w - 4.0).max(4.0))
     }
 
     fn metrics(&self) -> Vec<Tile> {

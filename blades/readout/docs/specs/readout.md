@@ -10,7 +10,8 @@ What it does now. Keep it current in the same change, and lean.
   under the reserved strip. It steps behind full-screen apps and comes back after them.
 - **Scaling**: every design pixel is a whole number of device pixels, the nearest to the screen's
   scaling and at least 1 (100% and 125%: 1; 150% to 225%: 2; 250%: 3), so the dot matrix and the
-  engraving stay sharp.
+  engraving stay sharp. The panels are drawn one whole step larger than the bar (at 100%, 2
+  device pixels a design pixel), and a step less where the tallest wouldn't fit under the bar.
 - **Once a second** it samples the system and redraws. Hovering a metric shows its panel under
   it; the panel stays while the pointer crosses to it and is on it, and goes when the pointer
   leaves both. The panel never takes focus; its keys take clicks. Right-click the bar: Theme
