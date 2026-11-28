@@ -104,8 +104,8 @@ the same name.
 | `fill` | The body of a bar or filled area under its lit top row |
 | `hot`, `divider` | Hot pixels; the dotted dividers |
 | `netDown`, `netDownFill` | The network graph's download: its outer row, the area between that and the axis |
-| `iconGroove`, `iconHot` | An engraved icon, and the icon of a hot metric |
-| `iconLipAbove`, `iconLipBelow` | The lips one pixel above and below an engraving |
+| `icon`, `iconHot`, `iconShadow` | A metric's icon on the bar, its colour when hot, and its shadow one pixel above |
+| `engrave`, `engraveLipAbove`, `engraveLipBelow` | Engraved labels and ticks on the panel's faceplate, and the lips one pixel above and below |
 | `panelShadow`, `panelRing`, `panelRingLip` | The panel's shadow, the ring round its screens, the highlight under that ring |
 | `keyTop`, `keyBottom` | A key cap's gradient |
 | `keySide`, `keyEdge`, `keyShadow` | A key's side wall under the cap, the lit top row of the cap, its shadow on the plate |

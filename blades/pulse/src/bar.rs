@@ -315,21 +315,20 @@ impl Pen<'_> {
         }
     }
 
-    /// An engraved icon in its 12x12 box at (x, y): the lips one pixel above and below, then the groove.
+    /// A metric icon in its 12x12 box at (x, y): its shadow one pixel above, then the icon.
     fn icon(&mut self, item: Item, x: f32, y: f32, hot: bool) {
         let pal = *self.pal;
         let g = icon_path(item).offset(x, y);
-        self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
-        self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
-        self.fill(&g, if hot { pal.icon_hot } else { pal.icon_groove });
+        self.fill(&g.offset(0.0, -1.0), pal.icon_shadow);
+        self.fill(&g, if hot { pal.icon_hot } else { pal.icon });
     }
 
-    /// A shape engraved like the icons: the lips one pixel above and below, then the groove.
+    /// A shape engraved in the panel's faceplate: the lips one pixel above and below, then the groove.
     fn engrave(&mut self, g: &Path) {
         let pal = *self.pal;
-        self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
-        self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
-        self.fill(g, pal.icon_groove);
+        self.fill(&g.offset(0.0, -1.0), pal.engrave_lip_above);
+        self.fill(&g.offset(0.0, 1.0), pal.engrave_lip_below);
+        self.fill(g, pal.engrave);
     }
 
     /// Lettering engraved with its capitals' top left at (x, y), x on a whole device pixel.

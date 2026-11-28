@@ -94,11 +94,14 @@ palette! {
     /// and the area between that and the axis.
     net_down = "netDown",
     net_down_fill = "netDownFill",
-    /// The engraved icons: the groove, the groove when the metric is hot, and the lips one pixel above and below.
-    icon_groove = "iconGroove",
+    /// The metric icons on the bar: the icon, when hot, and its shadow one pixel above.
+    icon = "icon",
     icon_hot = "iconHot",
-    icon_lip_above = "iconLipAbove",
-    icon_lip_below = "iconLipBelow",
+    icon_shadow = "iconShadow",
+    /// Engraved labels and ticks on the panel's faceplate: the groove, and the lips one pixel above and below.
+    engrave = "engrave",
+    engrave_lip_above = "engraveLipAbove",
+    engrave_lip_below = "engraveLipBelow",
     /// The hover panel's shadow, the ring round its screen, and the highlight under that ring.
     panel_shadow = "panelShadow",
     panel_ring = "panelRing",
