@@ -99,7 +99,7 @@ pub const BLADES: [Blade; 4] = [
     },
     Blade {
         name: "Pulse",
-        description: "Shows CPU, memory, GPU, disk, network and the time in a bar along the top of the screen.",
+        description: "Shows CPU, memory, GPU, disk and network in a calculator-style strip in the taskbar.",
         icon: "pulse.ico",
         exe: "Pulse.exe",
         mutex: "Local\\PocketKnives.Pulse.v1",

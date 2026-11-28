@@ -69,7 +69,7 @@ Name: "{autoprograms}\{#AppName}\PocketKnives Settings"; Filename: "{app}\pk.exe
 Name: "{autoprograms}\{#AppName}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Comment: "Copy a rectangle, a window or the screen to the clipboard"
 Name: "{autoprograms}\{#AppName}\QuickTooth"; Filename: "{app}\QuickTooth.exe"; Comment: "Connect or disconnect your AirPods with one click"
 Name: "{autoprograms}\{#AppName}\NowPlaying"; Filename: "{app}\NowPlaying.exe"; Comment: "Live media cover, seekable timeline and frequency meter in the taskbar"
-Name: "{autoprograms}\{#AppName}\Pulse"; Filename: "{app}\Pulse.exe"; Comment: "CPU, memory, GPU, disk, network and the time in a bar along the top of the screen"
+Name: "{autoprograms}\{#AppName}\Pulse"; Filename: "{app}\Pulse.exe"; Comment: "CPU, memory, GPU, disk and network in the taskbar"
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\pk.exe"
 ; SnipSnap starts at sign-in through a Startup shortcut, as it always has.
 Name: "{userstartup}\SnipSnap"; Filename: "{app}\snipsnap.exe"; Tasks: snipsnap

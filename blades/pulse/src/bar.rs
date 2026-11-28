@@ -13,20 +13,17 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-/// The bar's height, and the shadow drawn under it (outside the reserved space).
-pub const BAR_H: i32 = 37;
-pub const SHADOW_H: i32 = 4;
+/// The bar's height in design pixels.
+pub const BAR_H: i32 = 43;
 /// Space at the bar's left and right ends.
 const PAD: f32 = 3.0;
-/// Each tile's box: from row 2, 33 rows tall.
+/// Each tile's box: from row 2, 39 rows tall.
 const TILE_Y: f32 = 2.0;
-const TILE_H: f32 = 33.0;
-/// The graph row: 13 pixels tall, 2 rows under the digit windows.
-const GRAPH_H: usize = 13;
-/// In the taskbar, the graph row is this many rows taller, so the bar fills more of it.
-const TASKBAR_GRAPH: usize = 6;
+const TILE_H: f32 = 39.0;
+/// The graph row: 19 pixels tall, 2 rows under the digit windows.
+const GRAPH_H: usize = 19;
 
-/// The hover panel: its size, the gap above it, and the room round it for its shadow.
+/// The hover panel: its size, the gap beside it, and the room round it for its shadow.
 pub const PANEL_W: i32 = 150;
 pub const PANEL_H: i32 = 95;
 pub const PANEL_GAP: i32 = 4;
@@ -39,7 +36,6 @@ pub enum Item {
     Gpu,
     Dsk,
     Net,
-    Clock,
 }
 
 impl Item {
@@ -47,7 +43,6 @@ impl Item {
     fn digits_w(self) -> f32 {
         match self {
             Item::Net => 68.0,
-            Item::Clock => 44.0,
             _ => 28.0,
         }
     }
@@ -58,21 +53,8 @@ impl Item {
             Item::Gpu => "GPU",
             Item::Dsk => "DSK",
             Item::Net => "NET",
-            Item::Clock => "",
         }
     }
-}
-
-/// The local time the clock shows.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Time {
-    pub hour: u16,
-    pub minute: u16,
-    /// 0 = Sunday.
-    pub weekday: u16,
-    pub day: u16,
-    /// 1 = January.
-    pub month: u16,
 }
 
 /// A tile: what it shows and its box along the bar.
@@ -92,17 +74,17 @@ pub struct Layout {
     /// The bar's width in design pixels.
     pub width: f32,
     pub tiles: Vec<Tile>,
-    /// Whether the faceplate and its shadow are drawn: in the taskbar there's none, the glass
-    /// and its surround sit in the taskbar itself.
-    pub plate: bool,
-    /// The graph row's height.
-    pub graph_h: usize,
+}
+
+/// The rows anything is drawn on, from the icons' top lip to the surround's bottom lip: the first
+/// and how many.
+pub const fn ink_rows() -> (i32, i32) {
+    (TILE_Y as i32 - 1, BAR_H - 3)
 }
 
 impl Layout {
-    /// The metrics in `metrics` side by side from the left on one glass, the clock (when `clock`)
-    /// at the right end.
-    pub fn new(width: f32, k: i32, metrics: &[Item], clock: bool) -> Layout {
+    /// The metrics in `metrics` side by side on one glass.
+    pub fn new(k: i32, metrics: &[Item]) -> Layout {
         let mut tiles = Vec::new();
         let mut x = PAD;
         for &item in metrics {
@@ -110,46 +92,21 @@ impl Layout {
             tiles.push(Tile { item, x, w });
             x += w;
         }
-        if clock {
-            let w = Item::Clock.digits_w() + 22.0;
-            tiles.push(Tile { item: Item::Clock, x: width - PAD - w, w });
-        }
-        Layout { k, panel_halves: 3 * k, width, tiles, plate: true, graph_h: GRAPH_H }
-    }
-
-    /// In the taskbar: just the metrics' tiles, no clock and no faceplate, and a taller graph row.
-    pub fn taskbar(k: i32, metrics: &[Item]) -> Layout {
-        let width = metrics.iter().map(|i| i.digits_w() + 22.0).sum::<f32>() + 2.0 * PAD;
-        Layout { plate: false, graph_h: GRAPH_H + TASKBAR_GRAPH, ..Layout::new(width, k, metrics, false) }
-    }
-
-    /// How much taller than the design's the graph row is.
-    fn taller(&self) -> f32 {
-        (self.graph_h - GRAPH_H) as f32
-    }
-
-    /// The bar's height in design pixels.
-    pub fn bar_h(&self) -> i32 {
-        BAR_H + self.taller() as i32
-    }
-
-    /// The rows anything is drawn on without the faceplate, from the icons' top lip to the
-    /// surround's bottom lip: the first and how many.
-    pub fn ink_rows(&self) -> (i32, i32) {
-        (TILE_Y as i32 - 1, self.bar_h() - 3)
+        let width = x + PAD;
+        Layout { k, panel_halves: 3 * k, width, tiles }
     }
 
     /// The tile under a point (design pixels from the bar's top left).
     pub fn hit(&self, x: f32, y: f32) -> Option<usize> {
-        if !(TILE_Y..TILE_Y + TILE_H + self.taller()).contains(&y) {
+        if !(TILE_Y..TILE_Y + TILE_H).contains(&y) {
             return None;
         }
         self.tiles.iter().position(|t| x >= t.x && x < t.x + t.w)
     }
 
-    /// The device size of the bar's window: the bar and its shadow.
+    /// The device size of the bar's window.
     pub fn size(&self) -> (usize, usize) {
-        ((self.width * self.k as f32) as usize, ((self.bar_h() + SHADOW_H) * self.k) as usize)
+        ((self.width * self.k as f32) as usize, (BAR_H * self.k) as usize)
     }
 
     /// Device pixels per design pixel on the panels.
@@ -167,10 +124,6 @@ impl Layout {
     pub fn panel_x(&self, i: usize) -> f32 {
         let w = PANEL_W as f32 * self.panel_scale() / self.k as f32;
         (self.tiles[i].x - 1.0).clamp(4.0, (self.width - w - 4.0).max(4.0))
-    }
-
-    fn metrics(&self) -> Vec<Tile> {
-        self.tiles.iter().copied().filter(|t| t.item != Item::Clock).collect()
     }
 }
 
@@ -362,21 +315,20 @@ impl Pen<'_> {
         }
     }
 
-    /// An engraved icon in its 12x12 box at (x, y): the lips one pixel above and below, then the groove.
+    /// A metric icon in its 12x12 box at (x, y): its shadow one pixel above, then the icon.
     fn icon(&mut self, item: Item, x: f32, y: f32, hot: bool) {
         let pal = *self.pal;
         let g = icon_path(item).offset(x, y);
-        self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
-        self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
-        self.fill(&g, if hot { pal.icon_hot } else { pal.icon_groove });
+        self.fill(&g.offset(0.0, -1.0), pal.icon_shadow);
+        self.fill(&g, if hot { pal.icon_hot } else { pal.icon });
     }
 
-    /// A shape engraved like the icons: the lips one pixel above and below, then the groove.
+    /// A shape engraved in the panel's faceplate: the lips one pixel above and below, then the groove.
     fn engrave(&mut self, g: &Path) {
         let pal = *self.pal;
-        self.fill(&g.offset(0.0, -1.0), pal.icon_lip_above);
-        self.fill(&g.offset(0.0, 1.0), pal.icon_lip_below);
-        self.fill(g, pal.icon_groove);
+        self.fill(&g.offset(0.0, -1.0), pal.engrave_lip_above);
+        self.fill(&g.offset(0.0, 1.0), pal.engrave_lip_below);
+        self.fill(g, pal.engrave);
     }
 
     /// Lettering engraved with its capitals' top left at (x, y), x on a whole device pixel.
@@ -445,10 +397,6 @@ fn icon_path(item: Item) -> Path {
             line(&mut p, &[(2.5, 8.0), (2.5, 6.5), (8.5, 6.5), (8.5, 8.0)]);
             raster::stroke_round_rect(&mut p, 0.5, 8.5, 4.0, 2.0, 0.0, 1.0);
             raster::stroke_round_rect(&mut p, 6.5, 8.5, 4.0, 2.0, 0.0, 1.0);
-        }
-        Item::Clock => {
-            raster::stroke_circle(&mut p, 5.5, 5.5, 5.0, 1.0);
-            line(&mut p, &[(5.5, 2.5), (5.5, 5.5), (8.0, 5.5)]);
         }
     }
     p
@@ -525,7 +473,6 @@ fn value(m: &Model, item: Item) -> f32 {
 fn hot(m: &Model, item: Item) -> bool {
     match item {
         Item::Net => m.up.now() >= BURST_KBS || m.dn.now() >= BURST_KBS,
-        Item::Clock => false,
         _ => value(m, item) > HOT,
     }
 }
@@ -534,7 +481,7 @@ fn pct_text(v: f32) -> String {
     format!("{}", libm::floorf(v.clamp(0.0, 100.0) + 0.5) as u32)
 }
 
-/// A tile's graph in the shared graph row: 11 rows of data, the axis, a row of ticks.
+/// A tile's graph in the shared graph row: data rows, the axis, a row of ticks.
 fn tile_graph(m: &Model, item: Item, gw: usize, gh: usize) -> Bitmap {
     let mut b = Bitmap::new(gw, gh);
     let dh = gh as i32 - 2;
@@ -564,66 +511,38 @@ fn tile_graph(m: &Model, item: Item, gw: usize, gh: usize) -> Bitmap {
     b
 }
 
-const MONTHS: [&str; 12] = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const DAYS: [&str; 7] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-
-/// Draws the bar (and the shadow under it) on `c`, which is [`Layout::size`]: [`background`]
-/// then [`foreground`].
-pub fn bar(c: &mut Canvas, l: &Layout, pal: &Palette, m: &Model, t: Time, hover: Option<usize>) {
+/// Draws the bar on `c`, which is [`Layout::size`]: [`background`] then [`foreground`].
+pub fn bar(c: &mut Canvas, l: &Layout, pal: &Palette, m: &Model, hover: Option<usize>) {
     background(c, l, pal, hover);
-    foreground(c, l, pal, m, t);
+    foreground(c, l, pal, m);
 }
 
-/// What doesn't change from second to second: the faceplate and its shadow, the hover tint, the
-/// surrounds, the glass and the dot matrix's unlit pixels.
+/// What doesn't change from second to second: the hover tint, the surround, the glass and the dot
+/// matrix's unlit pixels.
 pub fn background(c: &mut Canvas, l: &Layout, pal: &Palette, hover: Option<usize>) {
     c.clear();
     let mut pen = Pen { c, k: l.k as f32, pal };
-    let bh = BAR_H as f32;
-    if l.plate {
-        // the shadow under the bar: 0 1px 3px
-        for (i, a) in [0.7f32, 0.42, 0.18, 0.05].iter().enumerate() {
-            let mut row = Path::new();
-            row.poly(raster::rect_path(0.0, bh + i as f32, l.width, 1.0));
-            pen.fill(&row, pal.plate_shadow.with_alpha(*a));
-        }
-        let mut body = Path::new();
-        body.poly(raster::rect_path(0.0, 0.0, l.width, bh));
-        pen.plate(&body, 0.0, bh);
-    }
 
     if let Some(i) = hover {
         let t = l.tiles[i];
         let mut p = Path::new();
-        p.poly(raster::round_rect(t.x, TILE_Y, t.w, TILE_H + l.taller(), 4.0));
+        p.poly(raster::round_rect(t.x, TILE_Y, t.w, TILE_H, 4.0));
         pen.fill(&p, pal.hover);
     }
 
-    let metrics = l.metrics();
-    if !metrics.is_empty() {
-        let g = Strip::new(&metrics, l.taller());
+    if !l.tiles.is_empty() {
+        let g = Strip::new(&l.tiles);
         let (ox, oy) = (g.x0 + 1.0, TILE_Y + 1.0);
         pen.surround(&poly(&g.sur, ox, oy), &poly(&g.gls, ox, oy));
-        pen.grid(g.x0 + 4.0, GRAPH_Y, g.graph_w, l.graph_h, 1);
-    }
-    if let Some(ct) = l.tiles.iter().find(|t| t.item == Item::Clock) {
-        let w = Item::Clock.digits_w() + 20.0;
-        let (ox, oy) = (ct.x + 1.0, TILE_Y + 1.0);
-        let sur = poly(&[(14.0, 0.0, 2.0), (w, 0.0, 3.5), (w, 31.0, 3.5), (0.0, 31.0, 3.5), (0.0, 11.0, 3.5), (14.0, 11.0, 1.5)], ox, oy);
-        let gls = poly(&[(16.0, 2.0, 1.5), (w - 2.0, 2.0, 1.5), (w - 2.0, 29.0, 1.5), (2.0, 29.0, 1.5), (2.0, 13.0, 1.5), (16.0, 13.0, 1.5)], ox, oy);
-        pen.surround(&sur, &gls);
+        pen.grid(g.x0 + 4.0, GRAPH_Y, g.graph_w, GRAPH_H, 1);
     }
 }
 
-/// What the readings change, over a [`background`]: the graphs, the readouts, the icons, the clock.
-pub fn foreground(c: &mut Canvas, l: &Layout, pal: &Palette, m: &Model, t: Time) {
+/// What the readings change, over a [`background`]: the graphs, the readouts and the icons.
+pub fn foreground(c: &mut Canvas, l: &Layout, pal: &Palette, m: &Model) {
     let mut pen = Pen { c, k: l.k as f32, pal };
-    let metrics = l.metrics();
-    if !metrics.is_empty() {
-        strip(&mut pen, &metrics, m, l.graph_h);
-    }
-    if let Some(ct) = l.tiles.iter().find(|t| t.item == Item::Clock) {
-        clock(&mut pen, ct.x, t);
+    if !l.tiles.is_empty() {
+        strip(&mut pen, &l.tiles, m);
     }
 }
 
@@ -641,8 +560,7 @@ struct Strip {
 }
 
 impl Strip {
-    /// `taller`: how much taller than the design's the graph row is.
-    fn new(tiles: &[Tile], taller: f32) -> Strip {
+    fn new(tiles: &[Tile]) -> Strip {
         let x0 = tiles[0].x;
         let xs: Vec<f32> = tiles.iter().map(|t| t.x - x0).collect();
         let n = tiles.len();
@@ -661,7 +579,7 @@ impl Strip {
                 gls.push((xs[i + 1] + 16.0, 13.0, 1.5));
             }
         }
-        let (sb, gb) = (31.0 + taller, 29.0 + taller);
+        let (sb, gb) = (37.0, 35.0);
         sur.extend([(t_end, sb, 3.5), (0.0, sb, 3.5), (0.0, 11.0, 3.5), (14.0, 11.0, 1.5)]);
         gls.extend([(t_end - 2.0, gb, 1.5), (2.0, gb, 1.5), (2.0, 13.0, 1.5), (16.0, 13.0, 1.5)]);
         Strip { x0, xs, sur, gls, graph_w: (t_end - 6.0) as usize }
@@ -669,20 +587,20 @@ impl Strip {
 }
 
 /// The metric tiles' readings: the graph row, the icons and the readouts.
-fn strip(pen: &mut Pen, tiles: &[Tile], m: &Model, gh: usize) {
-    let g = Strip::new(tiles, (gh - GRAPH_H) as f32);
+fn strip(pen: &mut Pen, tiles: &[Tile], m: &Model) {
+    let g = Strip::new(tiles);
     let (xs, n) = (&g.xs, tiles.len());
     // each tile's graph in its own columns, a dotted divider between them
-    let mut row = Bitmap::new(g.graph_w, gh);
+    let mut row = Bitmap::new(g.graph_w, GRAPH_H);
     for i in 0..n {
         let mut c0 = if i > 0 { xs[i] as usize - 2 } else { 0 };
         let c1 = if i + 1 < n { xs[i + 1] as usize - 5 } else { g.graph_w };
         if tiles[i].item == Item::Net {
             c0 += (c1 - c0) & 1; // two columns a sample
         }
-        row.blit(&tile_graph(m, tiles[i].item, c1 - c0, gh), c0);
+        row.blit(&tile_graph(m, tiles[i].item, c1 - c0, GRAPH_H), c0);
         if i > 0 {
-            for y in (0..gh as i32).step_by(2) {
+            for y in (0..GRAPH_H as i32).step_by(2) {
                 row.ps(xs[i] as i32 - 4, y, lcd::DIVIDER);
             }
         }
@@ -702,15 +620,6 @@ fn strip(pen: &mut Pen, tiles: &[Tile], m: &Model, gh: usize) {
             pen.readout(&lcd::readout(&pct_text(value(m, t.item)), "888%", &SMALL, false, 0), dx, dy);
         }
     }
-}
-
-/// The clock's readings: the date in the pixel font over the time.
-fn clock(pen: &mut Pen, x: f32, t: Time) {
-    pen.icon(Item::Clock, x + 2.0, TILE_Y, false);
-    let date = format!("{} {}{} {}", DAYS[t.weekday as usize % 7], if t.day < 10 { " " } else { "" }, t.day, MONTHS[(t.month as usize + 11) % 12]);
-    pen.bitmap(&lcd::text(&date, false, 44), x + 18.0, TILE_Y + 7.0, 1);
-    let time = format!("{:02}{:02}", t.hour, t.minute);
-    pen.readout(&lcd::readout(&time, "88:88", &LARGE, false, 0), x + 11.0, TILE_Y + 15.0);
 }
 
 // ---- the hover panel ----
