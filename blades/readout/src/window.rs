@@ -330,8 +330,8 @@ impl App {
             let r = mi.rcMonitor;
             self.origin = origin;
             self.up = origin.1 > (r.top + r.bottom) / 2;
-            room = if self.up { origin.1 - r.top } else { r.bottom - origin.1 - BAR_H * k } - PANEL_GAP * k;
             self.layout = Layout::taskbar(k, &items);
+            room = if self.up { origin.1 - r.top } else { r.bottom - origin.1 - self.layout.bar_h() * k } - PANEL_GAP * k;
         } else {
             let mon = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
             unsafe { GetMonitorInfoW(mon, &mut mi) };
@@ -377,6 +377,7 @@ impl App {
             return None;
         }
         let k = scale(unsafe { GetDpiForWindow(self.tray) });
+        let (ink, rows) = Layout::taskbar(k, &[]).ink_rows();
         let mut left = tb.left;
         let np = find_window(NOWPLAYING_CLASS);
         let mut r: RECT = unsafe { core::mem::zeroed() };
@@ -388,7 +389,8 @@ impl App {
         {
             left = r.right;
         }
-        Some((k, (left, tb.top + (tb.bottom - tb.top - BAR_H * k).max(0) / 2)))
+        // what's drawn centred top to bottom
+        Some((k, (left, tb.top + (tb.bottom - tb.top - rows * k).max(0) / 2 - ink * k)))
     }
 
     /// The second's tick: in the taskbar, follows it and NowPlaying, and comes back above the
@@ -431,7 +433,7 @@ impl App {
         let (k, s) = (self.layout.k, self.layout.panel_scale());
         let left = self.origin.0 + (self.layout.panel_x(self.hover.unwrap_or(0)) * k as f32) as i32;
         let h = (bar::panel_h(item) as f32 * s) as i32;
-        let top = if self.up { self.origin.1 - PANEL_GAP * k - h } else { self.origin.1 + (BAR_H + PANEL_GAP) * k };
+        let top = if self.up { self.origin.1 - PANEL_GAP * k - h } else { self.origin.1 + (self.layout.bar_h() + PANEL_GAP) * k };
         (left, top, left + (PANEL_W as f32 * s) as i32, top + h)
     }
 
@@ -564,12 +566,12 @@ impl App {
     fn follow(&mut self, x: i32, y: i32) {
         let k = self.layout.k;
         let (bx, by) = (x - self.origin.0, y - self.origin.1);
-        let mut hover = if by >= 0 && by < BAR_H * k { self.layout.hit(bx as f32 / k as f32, by as f32 / k as f32) } else { None };
+        let mut hover = if by >= 0 && by < self.layout.bar_h() * k { self.layout.hit(bx as f32 / k as f32, by as f32 / k as f32) } else { None };
         let mut on_panel = false;
         if let Some(item) = self.panel_item() {
             let (l, t, r, b) = self.panel_rect(item);
             // the panel, the bar and the gap between them
-            let (top, bottom) = (t.min(self.origin.1), b.max(self.origin.1 + BAR_H * k));
+            let (top, bottom) = (t.min(self.origin.1), b.max(self.origin.1 + self.layout.bar_h() * k));
             if x >= l && x < r && y >= top && y < bottom && (hover.is_none() || hover == self.hover) {
                 hover = self.hover;
                 on_panel = y >= t && y < b;

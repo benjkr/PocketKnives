@@ -23,6 +23,8 @@ const TILE_Y: f32 = 2.0;
 const TILE_H: f32 = 33.0;
 /// The graph row: 13 pixels tall, 2 rows under the digit windows.
 const GRAPH_H: usize = 13;
+/// In the taskbar, the graph row is this many rows taller, so the bar fills more of it.
+const TASKBAR_GRAPH: usize = 6;
 
 /// The hover panel: its size, the gap above it, and the room round it for its shadow.
 pub const PANEL_W: i32 = 150;
@@ -93,6 +95,8 @@ pub struct Layout {
     /// Whether the faceplate and its shadow are drawn: in the taskbar there's none, the glass
     /// and its surround sit in the taskbar itself.
     pub plate: bool,
+    /// The graph row's height.
+    pub graph_h: usize,
 }
 
 impl Layout {
@@ -110,18 +114,34 @@ impl Layout {
             let w = Item::Clock.digits_w() + 22.0;
             tiles.push(Tile { item: Item::Clock, x: width - PAD - w, w });
         }
-        Layout { k, panel_halves: 3 * k, width, tiles, plate: true }
+        Layout { k, panel_halves: 3 * k, width, tiles, plate: true, graph_h: GRAPH_H }
     }
 
-    /// In the taskbar: just the metrics' tiles, no clock and no faceplate.
+    /// In the taskbar: just the metrics' tiles, no clock and no faceplate, and a taller graph row.
     pub fn taskbar(k: i32, metrics: &[Item]) -> Layout {
         let width = metrics.iter().map(|i| i.digits_w() + 22.0).sum::<f32>() + 2.0 * PAD;
-        Layout { plate: false, ..Layout::new(width, k, metrics, false) }
+        Layout { plate: false, graph_h: GRAPH_H + TASKBAR_GRAPH, ..Layout::new(width, k, metrics, false) }
+    }
+
+    /// How much taller than the design's the graph row is.
+    fn taller(&self) -> f32 {
+        (self.graph_h - GRAPH_H) as f32
+    }
+
+    /// The bar's height in design pixels.
+    pub fn bar_h(&self) -> i32 {
+        BAR_H + self.taller() as i32
+    }
+
+    /// The rows anything is drawn on without the faceplate, from the icons' top lip to the
+    /// surround's bottom lip: the first and how many.
+    pub fn ink_rows(&self) -> (i32, i32) {
+        (TILE_Y as i32 - 1, self.bar_h() - 3)
     }
 
     /// The tile under a point (design pixels from the bar's top left).
     pub fn hit(&self, x: f32, y: f32) -> Option<usize> {
-        if !(TILE_Y..TILE_Y + TILE_H).contains(&y) {
+        if !(TILE_Y..TILE_Y + TILE_H + self.taller()).contains(&y) {
             return None;
         }
         self.tiles.iter().position(|t| x >= t.x && x < t.x + t.w)
@@ -129,7 +149,7 @@ impl Layout {
 
     /// The device size of the bar's window: the bar and its shadow.
     pub fn size(&self) -> (usize, usize) {
-        ((self.width * self.k as f32) as usize, ((BAR_H + SHADOW_H) * self.k) as usize)
+        ((self.width * self.k as f32) as usize, ((self.bar_h() + SHADOW_H) * self.k) as usize)
     }
 
     /// Device pixels per design pixel on the panels.
@@ -513,12 +533,12 @@ fn pct_text(v: f32) -> String {
 }
 
 /// A tile's graph in the shared graph row: 11 rows of data, the axis, a row of ticks.
-fn tile_graph(m: &Model, item: Item, gw: usize) -> Bitmap {
-    let mut b = Bitmap::new(gw, GRAPH_H);
-    let dh = GRAPH_H as i32 - 2;
+fn tile_graph(m: &Model, item: Item, gw: usize, gh: usize) -> Bitmap {
+    let mut b = Bitmap::new(gw, gh);
+    let dh = gh as i32 - 2;
     match item {
         Item::Net => {
-            lcd::net(&mut b, &m.up, &m.dn, gw / 2, 2, 0, GRAPH_H as i32 / 2, GRAPH_H as i32 / 2);
+            lcd::net(&mut b, &m.up, &m.dn, gw / 2, 2, 0, gh as i32 / 2, gh as i32 / 2);
             return b;
         }
         Item::Cpu => {
@@ -573,16 +593,16 @@ pub fn background(c: &mut Canvas, l: &Layout, pal: &Palette, hover: Option<usize
     if let Some(i) = hover {
         let t = l.tiles[i];
         let mut p = Path::new();
-        p.poly(raster::round_rect(t.x, TILE_Y, t.w, TILE_H, 4.0));
+        p.poly(raster::round_rect(t.x, TILE_Y, t.w, TILE_H + l.taller(), 4.0));
         pen.fill(&p, pal.hover);
     }
 
     let metrics = l.metrics();
     if !metrics.is_empty() {
-        let g = Strip::new(&metrics);
+        let g = Strip::new(&metrics, l.taller());
         let (ox, oy) = (g.x0 + 1.0, TILE_Y + 1.0);
         pen.surround(&poly(&g.sur, ox, oy), &poly(&g.gls, ox, oy));
-        pen.grid(g.x0 + 4.0, GRAPH_Y, g.graph_w, GRAPH_H, 1);
+        pen.grid(g.x0 + 4.0, GRAPH_Y, g.graph_w, l.graph_h, 1);
     }
     if let Some(ct) = l.tiles.iter().find(|t| t.item == Item::Clock) {
         let w = Item::Clock.digits_w() + 20.0;
@@ -598,7 +618,7 @@ pub fn foreground(c: &mut Canvas, l: &Layout, pal: &Palette, m: &Model, t: Time)
     let mut pen = Pen { c, k: l.k as f32, pal };
     let metrics = l.metrics();
     if !metrics.is_empty() {
-        strip(&mut pen, &metrics, m);
+        strip(&mut pen, &metrics, m, l.graph_h);
     }
     if let Some(ct) = l.tiles.iter().find(|t| t.item == Item::Clock) {
         clock(&mut pen, ct.x, t);
@@ -619,7 +639,8 @@ struct Strip {
 }
 
 impl Strip {
-    fn new(tiles: &[Tile]) -> Strip {
+    /// `taller`: how much taller than the design's the graph row is.
+    fn new(tiles: &[Tile], taller: f32) -> Strip {
         let x0 = tiles[0].x;
         let xs: Vec<f32> = tiles.iter().map(|t| t.x - x0).collect();
         let n = tiles.len();
@@ -638,27 +659,28 @@ impl Strip {
                 gls.push((xs[i + 1] + 16.0, 13.0, 1.5));
             }
         }
-        sur.extend([(t_end, 31.0, 3.5), (0.0, 31.0, 3.5), (0.0, 11.0, 3.5), (14.0, 11.0, 1.5)]);
-        gls.extend([(t_end - 2.0, 29.0, 1.5), (2.0, 29.0, 1.5), (2.0, 13.0, 1.5), (16.0, 13.0, 1.5)]);
+        let (sb, gb) = (31.0 + taller, 29.0 + taller);
+        sur.extend([(t_end, sb, 3.5), (0.0, sb, 3.5), (0.0, 11.0, 3.5), (14.0, 11.0, 1.5)]);
+        gls.extend([(t_end - 2.0, gb, 1.5), (2.0, gb, 1.5), (2.0, 13.0, 1.5), (16.0, 13.0, 1.5)]);
         Strip { x0, xs, sur, gls, graph_w: (t_end - 6.0) as usize }
     }
 }
 
 /// The metric tiles' readings: the graph row, the icons and the readouts.
-fn strip(pen: &mut Pen, tiles: &[Tile], m: &Model) {
-    let g = Strip::new(tiles);
+fn strip(pen: &mut Pen, tiles: &[Tile], m: &Model, gh: usize) {
+    let g = Strip::new(tiles, (gh - GRAPH_H) as f32);
     let (xs, n) = (&g.xs, tiles.len());
     // each tile's graph in its own columns, a dotted divider between them
-    let mut row = Bitmap::new(g.graph_w, GRAPH_H);
+    let mut row = Bitmap::new(g.graph_w, gh);
     for i in 0..n {
         let mut c0 = if i > 0 { xs[i] as usize - 2 } else { 0 };
         let c1 = if i + 1 < n { xs[i + 1] as usize - 5 } else { g.graph_w };
         if tiles[i].item == Item::Net {
             c0 += (c1 - c0) & 1; // two columns a sample
         }
-        row.blit(&tile_graph(m, tiles[i].item, c1 - c0), c0);
+        row.blit(&tile_graph(m, tiles[i].item, c1 - c0, gh), c0);
         if i > 0 {
-            for y in (0..GRAPH_H as i32).step_by(2) {
+            for y in (0..gh as i32).step_by(2) {
                 row.ps(xs[i] as i32 - 4, y, lcd::DIVIDER);
             }
         }

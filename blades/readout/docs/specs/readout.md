@@ -9,7 +9,9 @@ What it does now. Keep it current in the same change, and lean.
   A layered window (`UpdateLayeredWindow`) that never takes focus, with a 4-pixel shadow drawn
   under the reserved strip. It steps behind full-screen apps and comes back after them.
 - **Or in the taskbar** (setting `taskbar`): just the metric tiles, no clock (the taskbar has
-  one) and no faceplate or shadow, so the glass and its surround sit in the taskbar itself, in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
+  one) and no faceplate or shadow, so the glass and its surround sit in the taskbar itself, and
+  a graph row 6 dot rows taller (19), so the bar fills more of the taskbar (4 pixels above and
+  below on a 48-pixel taskbar). It goes in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
   centred top to bottom, reserving nothing. Owned by `Shell_TrayWnd` so it stays above the
   taskbar, raised again when the taskbar rises over it, and it follows the taskbar and
   NowPlaying each second and a restarted Explorer. Its panels open above it (below it in a

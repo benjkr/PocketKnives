@@ -202,7 +202,7 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         let px = (l.panel_x(i) * k as f32) as i32 - margin;
         // in the taskbar, above the bar
         let body = (bar::panel_h(item) as f32 * l.panel_scale()) as i32;
-        let py = if taskbar { -bar::PANEL_GAP * k - body } else { (bar::BAR_H + bar::PANEL_GAP) * k } - margin;
+        let py = if taskbar { -bar::PANEL_GAP * k - body } else { (l.bar_h() + bar::PANEL_GAP) * k } - margin;
         // in the taskbar, all of the panel; along the top, cut at the screen's edges like the window
         let (ox, oy) = if taskbar { ((-px).max(0), -py) } else { (0, 0) };
         let w = if taskbar { (px + ox + pc.w as i32).max(bw as i32 + ox) as usize } else { bw };
