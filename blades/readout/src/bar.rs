@@ -110,6 +110,11 @@ impl Layout {
         Layout { k, panel_halves: 3 * k, width, tiles }
     }
 
+    /// The width that just holds `metrics`' tiles.
+    pub fn fit(metrics: &[Item]) -> f32 {
+        metrics.iter().map(|i| i.digits_w() + 22.0).sum::<f32>() + 2.0 * PAD
+    }
+
     /// The tile under a point (design pixels from the bar's top left).
     pub fn hit(&self, x: f32, y: f32) -> Option<usize> {
         if !(TILE_Y..TILE_Y + TILE_H).contains(&y) {

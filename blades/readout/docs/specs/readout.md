@@ -8,6 +8,12 @@ What it does now. Keep it current in the same change, and lean.
   other windows out from under it, like the taskbar. Full screen width, 37 design pixels tall.
   A layered window (`UpdateLayeredWindow`) that never takes focus, with a 4-pixel shadow drawn
   under the reserved strip. It steps behind full-screen apps and comes back after them.
+- **Or in the taskbar** (setting `taskbar`): just the metric tiles, no clock (the taskbar has
+  one), in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
+  centred top to bottom, reserving nothing. Owned by `Shell_TrayWnd` so it stays above the
+  taskbar, raised again when the taskbar rises over it, and it follows the taskbar and
+  NowPlaying each second and a restarted Explorer. Its panels open above it (below it in a
+  taskbar along the top). It hides while an app is full screen.
 - **Scaling**: every design pixel is a whole number of device pixels, the nearest to the screen's
   scaling and at least 1 (100% and 125%: 1; 150% to 225%: 2; 250%: 3), so the dot matrix and the
   engraving stay sharp. The panels are half again the bar's size (at 100%, 1.5 device pixels a
@@ -128,7 +134,7 @@ administrator rights, so the network panel has no list.
 
 Settings (`%APPDATA%\Readout\settings.ini`; next to the exe in preview mode):
 `theme` (a choice of every theme), `cpu`, `memory`, `gpu`, `disk`, `network` and `clock`
-(toggles, all on). Printed and changed through the [blade settings](../../../../docs/specs/blade-settings.md)
+(toggles, all on), and `taskbar` (a toggle, off). Printed and changed through the [blade settings](../../../../docs/specs/blade-settings.md)
 contract; a running bar applies a change at once.
 
 ```text

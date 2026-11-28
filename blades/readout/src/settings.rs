@@ -36,11 +36,13 @@ pub struct Settings {
     /// Per entry of [`METRICS`].
     pub show: [bool; 5],
     pub clock: bool,
+    /// In the main taskbar beside NowPlaying, without the clock, instead of along the top.
+    pub taskbar: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { theme: String::from(DEFAULT_THEME), show: [true; 5], clock: true }
+        Settings { theme: String::from(DEFAULT_THEME), show: [true; 5], clock: true, taskbar: false }
     }
 }
 
@@ -66,6 +68,7 @@ impl Settings {
             text.push_str(&format!("{}={}\r\n", m.1, u8::from(self.show[i])));
         }
         text.push_str(&format!("clock={}\r\n", u8::from(self.clock)));
+        text.push_str(&format!("taskbar={}\r\n", u8::from(self.taskbar)));
         write_file(&settings_path(), text.as_bytes())
     }
 
@@ -85,6 +88,7 @@ impl Settings {
             out.push_str(&format!("{}\ttoggle\t{}\t{}\r\n", m.1, u8::from(self.show[i]), m.2));
         }
         out.push_str(&format!("clock\ttoggle\t{}\tShow the date and time\r\n", u8::from(self.clock)));
+        out.push_str(&format!("taskbar\ttoggle\t{}\tSit in the taskbar, beside NowPlaying\r\n", u8::from(self.taskbar)));
         out
     }
 
@@ -111,6 +115,8 @@ impl Settings {
         };
         if k == "clock" {
             self.clock = on;
+        } else if k == "taskbar" {
+            self.taskbar = on;
         } else if let Some(i) = METRICS.iter().position(|m| m.1 == k) {
             self.show[i] = on;
         } else {
