@@ -23,7 +23,7 @@ const HELP: &str = "Readout \u{2014} a calculator-style system monitor bar along
   Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
   Readout.exe --set key=value ...      change settings\r\n\
   Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n                         \
-[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]\r\n                                       \
+[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]\r\n                                       \
 draw the bar with the design's sample values to a PNG\r\n\
   Readout.exe --version                print the version";
 
@@ -106,8 +106,14 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
     let (mut theme_arg, mut k, mut width, mut panel, mut live) = (String::from("ivory"), 1i32, 728.0f32, None, 0u32);
     // The list's states, by row from 1: selected, refused, a key held down.
     let (mut select, mut deny, mut press) = (0usize, 0usize, 0usize);
+    let mut taskbar = false;
     let mut i = 1;
     while i < args.len() {
+        if args[i] == "--taskbar" {
+            taskbar = true;
+            i += 1;
+            continue;
+        }
         let v = args.get(i + 1).map(String::as_str).unwrap_or("");
         match args[i].as_str() {
             "--theme" => theme_arg = String::from(v),
@@ -170,7 +176,7 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         (Model::mock(), Time { hour: 10, minute: 18, weekday: 5, day: 27, month: 11 })
     };
     let items = Settings::default().items();
-    let l = Layout::new(width, k, &items, true);
+    let l = if taskbar { Layout::taskbar(k, &items) } else { Layout::new(width, k, &items, true) };
     let (bw, bh) = l.size();
     let mut c = Canvas::new(bw, bh);
     let hover = panel.and_then(|p| l.tiles.iter().position(|t| t.item == p));
@@ -194,11 +200,16 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         }
         let margin = (bar::PANEL_MARGIN as f32 * l.panel_scale()) as i32;
         let px = (l.panel_x(i) * k as f32) as i32 - margin;
-        let py = (bar::BAR_H + bar::PANEL_GAP) * k - margin;
-        let h = (py + pc.h as i32).max(bh as i32) as usize;
-        let mut all = Canvas::new(bw, h);
-        compose(&mut all, &c, 0, 0);
-        compose(&mut all, &pc, px, py);
+        // in the taskbar, above the bar
+        let body = (bar::panel_h(item) as f32 * l.panel_scale()) as i32;
+        let py = if taskbar { -bar::PANEL_GAP * k - body } else { (bar::BAR_H + bar::PANEL_GAP) * k } - margin;
+        // in the taskbar, all of the panel; along the top, cut at the screen's edges like the window
+        let (ox, oy) = if taskbar { ((-px).max(0), -py) } else { (0, 0) };
+        let w = if taskbar { (px + ox + pc.w as i32).max(bw as i32 + ox) as usize } else { bw };
+        let h = (py + oy + pc.h as i32).max(bh as i32 + oy) as usize;
+        let mut all = Canvas::new(w, h);
+        compose(&mut all, &c, ox, oy);
+        compose(&mut all, &pc, px + ox, py + oy);
         all
     } else {
         c

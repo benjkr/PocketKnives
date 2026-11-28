@@ -90,6 +90,9 @@ pub struct Layout {
     /// The bar's width in design pixels.
     pub width: f32,
     pub tiles: Vec<Tile>,
+    /// Whether the faceplate and its shadow are drawn: in the taskbar there's none, the glass
+    /// and its surround sit in the taskbar itself.
+    pub plate: bool,
 }
 
 impl Layout {
@@ -107,12 +110,13 @@ impl Layout {
             let w = Item::Clock.digits_w() + 22.0;
             tiles.push(Tile { item: Item::Clock, x: width - PAD - w, w });
         }
-        Layout { k, panel_halves: 3 * k, width, tiles }
+        Layout { k, panel_halves: 3 * k, width, tiles, plate: true }
     }
 
-    /// The width that just holds `metrics`' tiles.
-    pub fn fit(metrics: &[Item]) -> f32 {
-        metrics.iter().map(|i| i.digits_w() + 22.0).sum::<f32>() + 2.0 * PAD
+    /// In the taskbar: just the metrics' tiles, no clock and no faceplate.
+    pub fn taskbar(k: i32, metrics: &[Item]) -> Layout {
+        let width = metrics.iter().map(|i| i.digits_w() + 22.0).sum::<f32>() + 2.0 * PAD;
+        Layout { plate: false, ..Layout::new(width, k, metrics, false) }
     }
 
     /// The tile under a point (design pixels from the bar's top left).
@@ -554,15 +558,17 @@ pub fn background(c: &mut Canvas, l: &Layout, pal: &Palette, hover: Option<usize
     c.clear();
     let mut pen = Pen { c, k: l.k as f32, pal };
     let bh = BAR_H as f32;
-    // the shadow under the bar: 0 1px 3px
-    for (i, a) in [0.7f32, 0.42, 0.18, 0.05].iter().enumerate() {
-        let mut row = Path::new();
-        row.poly(raster::rect_path(0.0, bh + i as f32, l.width, 1.0));
-        pen.fill(&row, pal.plate_shadow.with_alpha(*a));
+    if l.plate {
+        // the shadow under the bar: 0 1px 3px
+        for (i, a) in [0.7f32, 0.42, 0.18, 0.05].iter().enumerate() {
+            let mut row = Path::new();
+            row.poly(raster::rect_path(0.0, bh + i as f32, l.width, 1.0));
+            pen.fill(&row, pal.plate_shadow.with_alpha(*a));
+        }
+        let mut body = Path::new();
+        body.poly(raster::rect_path(0.0, 0.0, l.width, bh));
+        pen.plate(&body, 0.0, bh);
     }
-    let mut body = Path::new();
-    body.poly(raster::rect_path(0.0, 0.0, l.width, bh));
-    pen.plate(&body, 0.0, bh);
 
     if let Some(i) = hover {
         let t = l.tiles[i];

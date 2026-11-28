@@ -331,7 +331,7 @@ impl App {
             self.origin = origin;
             self.up = origin.1 > (r.top + r.bottom) / 2;
             room = if self.up { origin.1 - r.top } else { r.bottom - origin.1 - BAR_H * k } - PANEL_GAP * k;
-            self.layout = Layout::new(Layout::fit(&items), k, &items, false);
+            self.layout = Layout::taskbar(k, &items);
         } else {
             let mon = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
             unsafe { GetMonitorInfoW(mon, &mut mi) };

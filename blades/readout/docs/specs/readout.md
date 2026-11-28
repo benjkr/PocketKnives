@@ -9,7 +9,7 @@ What it does now. Keep it current in the same change, and lean.
   A layered window (`UpdateLayeredWindow`) that never takes focus, with a 4-pixel shadow drawn
   under the reserved strip. It steps behind full-screen apps and comes back after them.
 - **Or in the taskbar** (setting `taskbar`): just the metric tiles, no clock (the taskbar has
-  one), in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
+  one) and no faceplate or shadow, so the glass and its surround sit in the taskbar itself, in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
   centred top to bottom, reserving nothing. Owned by `Shell_TrayWnd` so it stays above the
   taskbar, raised again when the taskbar rises over it, and it follows the taskbar and
   NowPlaying each second and a restarted Explorer. Its panels open above it (below it in a
@@ -145,7 +145,7 @@ Readout.exe --status [seconds]       print live readings, one line a second (def
 Readout.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)
 Readout.exe --settings               print settings for PocketKnives Settings
 Readout.exe --set key=value ...      change settings
-Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]
+Readout.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]
 Readout.exe --version
 ```
 
@@ -153,4 +153,5 @@ Readout.exe --version
 with the design mock's sample values and programs and a fixed time, or with `--live`, that many
 seconds of this machine's readings and the time now. The list's icons are those of this
 machine's running programs with the rows' names. `--select`, `--deny` and `--press` show a
-list row (1–10) selected, refused, or with its key held down.
+list row (1–10) selected, refused, or with its key held down. `--taskbar` draws the bar as it is
+in the taskbar, with its panel above it.
