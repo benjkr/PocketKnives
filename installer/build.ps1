@@ -25,21 +25,21 @@ New-Item -ItemType Directory $stage | Out-Null
 & cmd /c (Join-Path $root 'blades\snipsnap\build.bat') $stage
 if ($LASTEXITCODE -ne 0) { throw 'SnipSnap build failed' }
 
-# QuickTooth, NowPlaying, the runner (pk.exe) and its Windows 11 settings app: Rust, built from
+# QuickTooth, NowPlaying, Pulse, the runner (pk.exe) and its Windows 11 settings app: Rust, built from
 # the repo root in one Cargo invocation so they share one dependency pass and compile in parallel.
 $cargoOut = Join-Path $PSScriptRoot 'obj\cargo'
 $release = Join-Path $cargoOut 'release'
 Push-Location $root
 try {
-    cargo build --release -p quicktooth -p nowplaying -p pocketknives-runner -p pocketknives-settings --target-dir $cargoOut
+    cargo build --release -p quicktooth -p nowplaying -p pulse -p pocketknives-runner -p pocketknives-settings --target-dir $cargoOut
     if ($LASTEXITCODE -ne 0) { throw 'Rust workspace build failed' }
 } finally { Pop-Location }
-Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'NowPlaying.exe'), (Join-Path $release 'pk.exe') $stage
+Copy-Item (Join-Path $release 'QuickTooth.exe'), (Join-Path $release 'NowPlaying.exe'), (Join-Path $release 'Pulse.exe'), (Join-Path $release 'pk.exe') $stage
 
 # The blade icons the settings windows show, and the pictures of the blades' picture settings
 # (icons\<blade>\<key>.<value>.ico), drawn by the blade itself.
 $icons = New-Item -ItemType Directory (Join-Path $stage 'icons')
-Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico'), (Join-Path $root 'blades\nowplaying\assets\nowplaying.ico') $icons
+Copy-Item (Join-Path $root 'blades\snipsnap\assets\snipsnap.ico'), (Join-Path $root 'blades\quicktooth\assets\quicktooth.ico'), (Join-Path $root 'blades\nowplaying\assets\nowplaying.ico'), (Join-Path $root 'blades\pulse\assets\pulse.ico') $icons
 & (Join-Path $stage 'QuickTooth.exe') --write-setting-pictures (Join-Path $icons 'QuickTooth') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'QuickTooth could not write its setting pictures' }
 

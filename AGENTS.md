@@ -17,6 +17,7 @@ in a blade's docs are from that blade's folder.
 | SnipSnap | Copies a rectangle, a window or the screen to the clipboard from a hotkey | Rust, `no_std` on `pk`, four system DLLs | [`blades/snipsnap/AGENTS.md`](blades/snipsnap/AGENTS.md) |
 | QuickTooth | Connects or disconnects AirPods with one click on a tray icon | Rust, `no_std` on `pk`; browser simulator (WebAssembly) | [`blades/quicktooth/AGENTS.md`](blades/quicktooth/AGENTS.md) |
 | NowPlaying | Shows live media cover, seekable timeline and 5-band frequency meter in the taskbar | Rust, `no_std` on `pk`, Direct2D/SMTC/WASAPI | [`blades/nowplaying/AGENTS.md`](blades/nowplaying/AGENTS.md) |
+| Pulse | Shows CPU, memory, GPU, disk, network and the time in a calculator-style bar along the top of the screen | Rust, `no_std` on `pk`, software rasterizer, PDH/IP Helper | [`blades/pulse/AGENTS.md`](blades/pulse/AGENTS.md) |
 
 The blades and the runner are Rust, in one Cargo workspace (`Cargo.toml` at the root, toolchain
 pinned in `rust-toolchain.toml`), on `crates/pk`: what a `no_std` exe needs instead of Rust's std
