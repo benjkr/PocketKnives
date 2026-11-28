@@ -1251,18 +1251,33 @@ pub fn panel_glare(c: &mut Canvas, k: i32, pal: &Palette, item: Item, at: (f32, 
     let hy = (gy + LW_H / 2.0 - 13.0 + at.1 * 40.0).clamp(gy + 4.0, gy + LW_H - 4.0);
     let mut upper = Path::new();
     upper.poly(raster::round_rect(gx, gy, LW_W, hy - gy, 1.5));
-    pen.fill_grad(&upper, &[(gy, pal.cover_glare), (gy + (hy - gy) * 0.8, pal.cover_glare.with_alpha(0.4)), (hy, pal.cover_glare.with_alpha(0.0))]);
-    // the glint: the lit edge brighter towards the middle, in steps
-    let cx = gx + LW_W / 2.0 + at.0 * 66.0;
-    for w in [46.0, 28.0, 12.0] {
-        let (x0, x1) = ((cx - w / 2.0).max(gx + 1.0), (cx + w / 2.0).min(gx + LW_W - 1.0));
-        if x1 > x0 {
-            let mut g = Path::new();
-            g.poly(raster::rect_path(x0, gy, x1 - x0, 1.0));
-            pen.fill(&g, pal.cover_edge);
+    // fading as 1 - t^3 down to the horizon, in enough stops that no kink shows
+    let stops: Vec<(f32, Rgba)> = (0..=GLARE_STOPS)
+        .map(|i| {
+            let t = i as f32 / GLARE_STOPS as f32;
+            (gy + (hy - gy) * t, pal.cover_glare.with_alpha(1.0 - t * t * t))
+        })
+        .collect();
+    pen.fill_grad(&upper, &stops);
+    // the glint: the top edge lit most where the pointer is, falling off smoothly each side, a
+    // device pixel at a time
+    let k = pen.k;
+    let (cx, reach) = ((gx + LW_W / 2.0 + at.0 * 66.0) * k, 23.0 * k);
+    let edge = Rgba { a: (pal.cover_edge.a * GLINT).min(1.0), ..pal.cover_edge };
+    let (x0, x1) = (((gx + 1.5) * k) as i32, ((gx + LW_W - 1.5) * k) as i32);
+    for y in (gy * k) as i32..((gy + 1.0) * k) as i32 {
+        for x in x0..x1 {
+            let d = (x as f32 + 0.5 - cx) / reach;
+            if d.abs() < 1.0 {
+                pen.c.dot(x, y, edge, (1.0 - d * d) * (1.0 - d * d));
+            }
         }
     }
 }
+
+/// The colour stops of the glare's fade, and how much brighter than the lit edge the glint is.
+const GLARE_STOPS: usize = 10;
+const GLINT: f32 = 2.4;
 
 /// The colour screen's own icons, [`icons::SIZE`] square, a row a byte (bit 7 at the left): a
 /// program without a readable icon, and one that couldn't be ended.
