@@ -45,7 +45,7 @@ the mock):
 - **Graphs** (dot matrix, one design pixel a dot): CPU, a bar per core (pairs and so on merged to
   at most 14, each the busiest core in it); memory and GPU, a stepped line of the last ~45
   seconds; disk, bars; network, upload as a line in the ink above a centre axis and download filled
-  below in its own colour, on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
+  below in its own, fainter colour, on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
 - **Hot**: a meter above 70%, or network traffic of 1 MB/s or more either way. Hot pixels take
   the `hot` colour, and the metric's engraved icon takes `iconHot`.
 - **The clock**: its own window, the date in a 3×5 pixel font over a large seven-segment time.
