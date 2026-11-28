@@ -19,6 +19,8 @@ use windows_sys::Win32::System::Threading::{
 pub struct Proc {
     /// The image name without ".exe", as Windows reports it.
     pub name: String,
+    /// One of its processes, for its icon.
+    pub pid: u32,
     /// CPU, % of the whole machine (every logical processor), 0–100.
     pub cpu: f32,
     /// Private working set (Task Manager's "Memory" column), bytes.
@@ -172,7 +174,7 @@ impl Sampler {
                 Some(i) => i,
                 None => {
                     self.keys.push(key);
-                    out.push(Proc { name: String::from_utf16_lossy(name), ..Proc::default() });
+                    out.push(Proc { name: String::from_utf16_lossy(name), pid, ..Proc::default() });
                     out.len() - 1
                 }
             };

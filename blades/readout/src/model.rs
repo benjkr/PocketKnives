@@ -92,6 +92,7 @@ impl Model {
             .iter()
             .map(|&(name, mb, share, gpu, kbs)| Proc {
                 name: name.into(),
+                pid: 0,
                 cpu: share * cpu,
                 mem: (mb as f64 * 1024.0 * 1024.0) as u64,
                 gpu,

@@ -107,6 +107,16 @@ palette! {
     key_edge = "keyEdge",
     key_shadow = "keyShadow",
     key_legend = "keyLegend",
+    /// The list window's cover glass: the black printed on its back round the LCD and over the
+    /// colour screen, the reflection across it, the lit top edge.
+    cover_mask = "coverMask",
+    cover_glare = "coverGlare",
+    cover_edge = "coverEdge",
+    /// The colour screen: a selected row's lit cell, the icon of a program with none, the padlock
+    /// of a program that couldn't be ended.
+    app_sel = "appSel",
+    app_none = "appNone",
+    app_deny = "appDeny",
 }
 
 /// Parses a theme file: one flat JSON object whose values are all colour strings, with every key

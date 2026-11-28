@@ -38,5 +38,11 @@
   "keySide": "#6a7190",
   "keyEdge": "#ffffffcc",
   "keyShadow": "#04061899",
-  "keyLegend": "#1a1f3a"
+  "keyLegend": "#1a1f3a",
+  "coverMask": "#05060f",
+  "coverGlare": "#ffffff29",
+  "coverEdge": "#c8d2ff40",
+  "appSel": "#e4e9f6",
+  "appNone": "#a3acc8",
+  "appDeny": "#ffa23a"
 }

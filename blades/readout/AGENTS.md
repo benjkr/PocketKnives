@@ -18,8 +18,8 @@ commands here and in this blade's `docs/` are from `blades/readout/`.
 - **Nothing moves when values change**: every readout has fixed cells and every graph fixed
   columns. A change to a value's format keeps its width.
 - **The geometry is the approved mocks'** (the bar "M2", the process list "P4" with two presses
-  to kill; one design pixel = one CSS pixel); show a visible change with `--preview-render`
-  before and after.
+  to kill and the colour screen of "S2"; one design pixel = one CSS pixel); show a visible
+  change with `--preview-render` before and after.
 - **Lettering on the plastic is Arial Bold** (`src/letters.rs`), like a calculator's printed
   labels; text on glass is the LCD's pixel font or seven segments.
 - **What can change is on glass, what is fixed is engraved**, and a key only travels when

@@ -2,6 +2,7 @@
 //! of its way, like the taskbar), redrawn every second, with a panel under the tile the pointer is
 //! on. The panel stays while the pointer is on it, and its keys end programs.
 use crate::bar::{self, BAR_H, Item, Layout, ListView, PANEL_GAP, PANEL_MARGIN, PANEL_W, Time};
+use crate::icons::{self, Icon};
 use crate::metrics::Collector;
 use crate::model::Model;
 use crate::procs::{self, Kill};
@@ -144,6 +145,8 @@ struct App {
     on_panel: bool,
     sel_at: u64,
     denied_at: u64,
+    /// Programs' icons by name, read once each (none: no readable icon).
+    icons: Vec<(String, Option<Icon>)>,
     reload_msg: u32,
     exit_msg: u32,
 }
@@ -199,6 +202,7 @@ pub fn run() -> u32 {
         on_panel: false,
         sel_at: 0,
         denied_at: 0,
+        icons: Vec::new(),
         reload_msg: register_message(RELOAD_MSG),
         exit_msg: register_message(EXIT_MSG),
     });
@@ -371,6 +375,7 @@ impl App {
         let still = self.on_panel || self.list.sel.is_some() || self.list.down.is_some() || self.list.denied.is_some();
         if !still || self.list.rows.is_empty() {
             self.list.rows = bar::ranking(&self.model, item);
+            self.list.icons = self.list.rows.clone().iter().map(|n| self.icon(n)).collect();
         }
         if let Some(i) = self.list.sel
             && !self.running(i)
@@ -378,6 +383,20 @@ impl App {
             self.list.sel = None;
         }
         self.list.left = bar::SEL_PIPS.saturating_sub((t.saturating_sub(self.sel_at) / 1000) as u8);
+    }
+
+    /// Program `name`'s icon, read from its file the first time it's listed.
+    fn icon(&mut self, name: &str) -> Option<Icon> {
+        if let Some(e) = self.icons.iter().find(|e| e.0 == name) {
+            return e.1;
+        }
+        // a bound on what's kept: the programs that come and go over a long session
+        if self.icons.len() >= 64 {
+            self.icons.clear();
+        }
+        let icon = icons::for_rows(&[String::from(name)], &self.model.last.procs)[0];
+        self.icons.push((String::from(name), icon));
+        icon
     }
 
     /// Whether row `i`'s program is running (in the latest sample).

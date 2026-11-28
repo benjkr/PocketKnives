@@ -7,6 +7,7 @@ extern crate alloc;
 
 mod bar;
 mod cli;
+mod icons;
 mod lcd;
 mod letters;
 mod metrics;

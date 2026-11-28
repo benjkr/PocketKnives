@@ -180,7 +180,10 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         let (pw, ph) = bar::panel_size(k, item);
         let mut pc = Canvas::new(pw, ph);
         let row = |r: usize| r.checked_sub(1);
-        let view = bar::ListView { rows: bar::ranking(&m, item), sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press) };
+        let rows = bar::ranking(&m, item);
+        // the icons of this machine's programs with those names (the sample's have no processes)
+        let icons = if live > 0 { crate::icons::for_rows(&rows, &m.last.procs) } else { crate::icons::for_rows(&rows, &crate::procs::Sampler::new().sample()) };
+        let view = bar::ListView { rows, sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press), icons };
         bar::panel(&mut pc, k, &pal, &m, item, &view);
         let px = ((l.panel_x(i) - bar::PANEL_MARGIN as f32) * k as f32) as i32;
         let py = (bar::BAR_H + bar::PANEL_GAP - bar::PANEL_MARGIN) * k;

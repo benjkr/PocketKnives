@@ -2,6 +2,7 @@
 //! design pixels (the approved mock's CSS pixels); `k` device pixels make one, a whole number, so
 //! the dot matrix and the engraving stay sharp.
 use crate::lcd::{self, Bitmap, LARGE, Readout, SMALL};
+use crate::icons::{self, Icon};
 use crate::letters::Face;
 use crate::model::{BURST_KBS, HOT, Model, Series};
 use crate::procs::Proc;
@@ -153,6 +154,35 @@ impl Pen<'_> {
         let dev: Vec<(f32, Rgba)> = stops.iter().map(|&(y, c)| (y * k, c)).collect();
         let d = self.dev(p);
         self.c.fill(&d, Paint::Vertical(&dev), None);
+    }
+    /// Fills `p` inside `clip`.
+    fn fill_in(&mut self, p: &Path, col: Rgba, clip: &Mask) {
+        let d = self.dev(p);
+        self.c.fill(&d, Paint::Solid(col), Some(clip));
+    }
+    /// A program's icon, an icon pixel a design pixel, its top left at (x, y).
+    fn icon_pixels(&mut self, icon: &Icon, x: f32, y: f32) {
+        let k = self.k as i32;
+        let (ox, oy) = ((x * self.k) as i32, (y * self.k) as i32);
+        for (i, &p) in icon.iter().enumerate() {
+            if p >> 24 != 0 {
+                let ch = |sh: u32| ((p >> sh) & 255) as f32 / 255.0;
+                let (ix, iy) = ((i % icons::SIZE) as i32, (i / icons::SIZE) as i32);
+                self.c.rect(ox + ix * k, oy + iy * k, k, k, Rgba { r: ch(16), g: ch(8), b: ch(0), a: 1.0 });
+            }
+        }
+    }
+    /// A one-colour icon, a row a byte, its top left at (x, y).
+    fn glyph(&mut self, rows: &[u8; icons::SIZE], x: f32, y: f32, col: Rgba) {
+        let k = self.k as i32;
+        let (ox, oy) = ((x * self.k) as i32, (y * self.k) as i32);
+        for (iy, &r) in rows.iter().enumerate() {
+            for ix in 0..icons::SIZE {
+                if r & (0x80 >> ix) != 0 {
+                    self.c.rect(ox + ix as i32 * k, oy + iy as i32 * k, k, k, col);
+                }
+            }
+        }
     }
     fn mask(&mut self, p: &Path) -> Mask {
         let d = self.dev(p);
@@ -857,32 +887,46 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
 
 // ---- the panel's process list ----
 // What can change is on glass; what is fixed (the heading, the row numbers, the scale) is
-// engraved in the plastic; a key only travels when pressed. Design "P4", X twice.
+// engraved in the plastic; a key only travels when pressed. Design "P4", X twice, with the colour
+// screen of "S2": one cover glass over the LCD and a colour screen, a black mask printed on its back.
 
 /// The rows in a process list.
 pub const LIST_ROWS: usize = 10;
 /// The list's part of the body under the screen: the parting line, the heading, the list window,
 /// and its scale.
-const LIST_H: i32 = 137;
-/// The list window's glass (from the panel's top left) and its bitmap's width.
+const LIST_H: i32 = 161;
+/// The list window's glass (from the panel's top left).
 const LW_X: f32 = 15.0;
 const LW_Y: f32 = 114.0;
 const LW_W: f32 = 113.0;
-const LW_H: f32 = 100.0;
+const LW_H: f32 = 124.0;
+/// The LCD's bitmap: its size and its inset on the glass.
 const LB_W: usize = 109;
-/// The first row's text on the bitmap, and the row pitch.
-const ROW_Y: i32 = 12;
-const ROW_PITCH: i32 = 9;
+const LB_H: usize = 120;
+const LB_IN: f32 = 2.0;
+/// The first row's top on the bitmap, and the row pitch.
+const ROW_TOP: i32 = 10;
+const ROW_PITCH: i32 = 11;
+/// The black printed on the glass's back: its width at the left, over the colour screen, and
+/// round the rest of the edge.
+const MASK_W: f32 = 16.0;
+const MASK_EDGE: f32 = 2.0;
+/// A row's icon from the glass's left edge and from its row's top.
+const ICON_X: f32 = 4.0;
+const ICON_DY: f32 = 2.0;
 /// The keys: left edge, first key's top, size.
 const KEY_X: f32 = 134.0;
-const KEY_Y: f32 = 125.0;
+const KEY_Y: f32 = LW_Y + LB_IN + ROW_TOP as f32 + 2.0;
 const KEY_W: f32 = 11.0;
 const KEY_H: f32 = 7.0;
-/// Characters of a name; the bar's left and width; the value's right edge (bitmap columns).
-const NAME_CHARS: usize = 11;
-const BAR_X: i32 = 50;
-const BAR_W: i32 = 35;
-const VAL_R: i32 = 108;
+/// Bitmap columns: the annunciators', a name's and its characters, the bar's left and width, the
+/// value's right edge.
+const ANN_X: i32 = 15;
+const NAME_X: i32 = 16;
+const NAME_CHARS: usize = 9;
+const BAR_X: i32 = 57;
+const BAR_W: i32 = 27;
+const VAL_R: i32 = 107;
 /// Pips counting down a selection's seconds.
 pub const SEL_PIPS: u8 = 5;
 
@@ -904,6 +948,8 @@ pub struct ListView {
     pub denied: Option<usize>,
     /// The key held down.
     pub down: Option<usize>,
+    /// The rows' programs' icons, none for a program without a readable one.
+    pub icons: Vec<Option<Icon>>,
 }
 
 /// The key at a point in the panel (design pixels from the panel's top left): the row's whole
@@ -1020,8 +1066,8 @@ fn annunciator(b: &mut Bitmap, x: i32, y: i32, s: &str, on: bool) -> i32 {
 
 /// The list window's bitmap: the annunciators over a dotted rule, then a row per program.
 fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
-    let mut b = Bitmap::new(LB_W, LW_H as usize);
-    let mut x = annunciator(&mut b, 1, 2, "SEL", v.sel.is_some());
+    let mut b = Bitmap::new(LB_W, LB_H);
+    let mut x = annunciator(&mut b, ANN_X, 2, "SEL", v.sel.is_some());
     for i in 0..SEL_PIPS {
         let on = v.sel.is_some() && i < v.left;
         for y in 2..7 {
@@ -1037,13 +1083,14 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
     }
     let whole = whole(m, item);
     for (i, name) in v.rows.iter().enumerate().take(LIST_ROWS) {
-        let y = ROW_Y + i as i32 * ROW_PITCH;
+        let t = ROW_TOP + i as i32 * ROW_PITCH;
+        let y = t + 3;
         let Some(p) = m.last.procs.iter().find(|p| p.name == *name) else { continue };
         let val = proc_value(p, item);
         let share = if whole > 0.0 { (val / whole).clamp(0.0, 1.0) } else { 0.0 };
         // all programs' I/O has no capacity to run hot against
         let hot = item != Item::Dsk && share * 100.0 > HOT as f64;
-        text_at(&mut b, &fit_name(name, NAME_CHARS), 1, y, if hot { lcd::HOT_PX } else { lcd::LIT });
+        text_at(&mut b, &fit_name(name, NAME_CHARS), NAME_X, y, if hot { lcd::HOT_PX } else { lcd::LIT });
         if v.denied == Some(i) {
             text_right(&mut b, "ACCESS DENIED", VAL_R, y, lcd::LIT);
         } else {
@@ -1062,7 +1109,7 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
             text_right(&mut b, &num, VAL_R - 5, y, lcd::LIT);
         }
         if v.sel == Some(i) {
-            invert(&mut b, 0, VAL_R + 1, y - 1, y + 5);
+            invert(&mut b, NAME_X - 1, VAL_R + 2, t + 1, t + ROW_PITCH - 2);
         }
     }
     b
@@ -1102,7 +1149,7 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     pen.letter(&f, label, right(label), py + 103.0);
     for i in 0..LIST_ROWS {
         let n = format!("{}", i + 1);
-        pen.letter(&f, &n, px + 13.0 - f.width(&n), py + 126.0 + (i as i32 * ROW_PITCH) as f32);
+        pen.letter(&f, &n, px + 13.0 - f.width(&n), py + KEY_Y + 1.0 + (i as i32 * ROW_PITCH) as f32);
     }
 
     // the window: the highlight under its ring, the ring, the glass
@@ -1126,12 +1173,14 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     pen.engrave(&ticks);
 
     // the scale under the bars
-    scale(pen, &f, px + LW_X + 2.0 + BAR_X as f32, py + 218.0);
+    scale(pen, &f, px + LW_X + LB_IN + BAR_X as f32, py + LW_Y + LW_H + 4.0);
 }
 
 /// The list's moving parts: the list window's content and the keys (one may be held down).
 fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListView) {
-    pen.bitmap(&list_bitmap(m, item, v), px + LW_X + 2.0, py + LW_Y, 1);
+    let (gx, gy) = (px + LW_X, py + LW_Y);
+    pen.bitmap(&list_bitmap(m, item, v), gx + LB_IN, gy + LB_IN, 1);
+    cover(pen, gx, gy, v);
     // the keys' legend, a multiplication sign like a calculator's
     let mut x = Path::new();
     raster::stroke_polyline(&mut x, &[(0.5, 0.5), (4.5, 4.5)], 1.0);
@@ -1141,3 +1190,49 @@ fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListVi
         pen.key(px + KEY_X, y, KEY_W, KEY_H, &x, v.down == Some(i));
     }
 }
+
+/// The cover glass's print and the colour screen under it, over the LCD: the black mask (the
+/// colour screen's black is the same, so an icon has no tile round it), the icons, the lit top
+/// edge, and one reflection across all of it. (gx, gy) is the glass's top left.
+fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
+    let pal = *pen.pal;
+    let mut mask = Path::new();
+    mask.poly(raster::round_rect(gx, gy, LW_W, LW_H, 1.5));
+    let mut hole = raster::rect_path(gx + MASK_W, gy + MASK_EDGE, LW_W - MASK_W - MASK_EDGE, LW_H - 2.0 * MASK_EDGE);
+    hole.reverse();
+    mask.poly(hole);
+    pen.fill(&mask, pal.cover_mask);
+    for i in 0..LIST_ROWS.min(v.rows.len()) {
+        let t = gy + LB_IN + (ROW_TOP + i as i32 * ROW_PITCH) as f32;
+        if v.sel == Some(i) {
+            let mut cell = Path::new();
+            cell.poly(raster::rect_path(gx + MASK_EDGE, t + 1.0, MASK_W - 2.0 * MASK_EDGE, (ROW_PITCH - 2) as f32));
+            pen.fill(&cell, pal.app_sel);
+        }
+        let (x, y) = (gx + ICON_X, t + ICON_DY);
+        match v.icons.get(i).copied().flatten() {
+            _ if v.denied == Some(i) => pen.glyph(&PADLOCK, x, y, pal.app_deny),
+            Some(icon) => pen.icon_pixels(&icon, x, y),
+            // on a lit cell, the screen's own black
+            None => pen.glyph(&COG, x, y, if v.sel == Some(i) { pal.cover_mask } else { pal.app_none }),
+        }
+    }
+    let mut edge = Path::new();
+    edge.poly(raster::rect_path(gx + 1.0, gy, LW_W - 2.0, 1.0));
+    pen.fill(&edge, pal.cover_edge);
+    // the reflection: a broad band and a thin one, slanting down to the left, inside the glass
+    let mut glass = Path::new();
+    glass.poly(raster::round_rect(gx, gy, LW_W, LW_H, 1.5));
+    let clip = pen.mask(&glass);
+    let mut glare = Path::new();
+    for (left, w) in [(30.0, 24.0), (60.0, 5.0)] {
+        let slant = 36.0;
+        glare.poly(vec![(gx + left, gy), (gx + left + w, gy), (gx + left + w - slant, gy + LW_H), (gx + left - slant, gy + LW_H)]);
+    }
+    pen.fill_in(&glare, pal.cover_glare, &clip);
+}
+
+/// The colour screen's own icons, [`icons::SIZE`] square, a row a byte (bit 7 at the left): a
+/// program without a readable icon, and one that couldn't be ended.
+const COG: [u8; icons::SIZE] = [0b00011000, 0b01111110, 0b01100110, 0b11000011, 0b11000011, 0b01100110, 0b01111110, 0b00011000];
+const PADLOCK: [u8; icons::SIZE] = [0b00111100, 0b01100110, 0b01000010, 0b11111111, 0b11100111, 0b11100111, 0b11111111, 0b01111110];

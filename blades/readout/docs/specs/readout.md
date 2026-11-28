@@ -42,19 +42,26 @@ the mock):
   (and a dotted 70% line), and a footer: per-core bars and the effective clock speed (CPU);
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
   rates (disk); up and down rates (network).
-- **Top 10 processes** (design "P4"; CPU, memory, GPU and disk panels, not the network's):
+- **Top 10 processes** (design "P4" with the colour screen of "S2"; CPU, memory, GPU and disk
+  panels, not the network's):
   under the screen, behind a parting line, the panel's body holds the list. What can change is
   on glass, what is fixed is engraved in the plastic, and a key only travels when pressed.
   - Engraved: the heading `TOP 10 PROCESSES` and what the value is (`OF ALL CORES`, `PRIVATE
     MEMORY`, `OF GPU`, `I/O PER SEC`), the row numbers 1–10, a tick from each row to its key
-    and the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale). Lettering on the plastic is in capitals like a calculator's
-    printed labels: Arial Bold (every Windows has it), 5 design pixels to the capitals' top,
+    and the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale). Lettering on the
+    plastic is in capitals like a calculator's printed labels: Arial Bold (every Windows has it), 5 design pixels to the capitals' top,
     unhinted so the letters space evenly. Text on glass stays in the pixel font.
   - The keys' legend is a multiplication sign `×`.
-  - The list window: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in
-    the ghost colour), then a row per program: its name (11 characters, `~` for the rest), a bar
-    of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and its value.
-    A program over 70% of the whole is hot (not for I/O).
+  - The list window is one cover glass over two displays, with black printed on its back
+    round the LCD's opening and over a colour screen at its left; one reflection crosses it all.
+  - The LCD: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in the ghost
+    colour), then a row per program, 11 pixels apart: its name (9 characters, `~` for the
+    rest), a bar of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and
+    its value. A program over 70% of the whole is hot (not for I/O).
+  - The colour screen: each row's program's own icon, read from its file, 8 x 8 pixels of one
+    design pixel each, with no tile round it (the screen's black is the print's). A program
+    whose file can't be read (system and protected processes) or that has no icon shows a cog;
+    the program that couldn't be ended shows a padlock; the selected row's cell lights.
   - A key per row: the first press selects the program (the row in inverse, `SEL` lit, the pips
     count 5 s down); a second press on it ends every process with that name. A second press as
     quick as a double-click is ignored. A program Readout can't end shows `ACCESS DENIED` and
@@ -90,6 +97,8 @@ the same name.
 | `keyTop`, `keyBottom` | A key cap's gradient |
 | `keySide`, `keyEdge`, `keyShadow` | A key's side wall under the cap, the lit top row of the cap, its shadow on the plate |
 | `keyLegend` | The legend on a key |
+| `coverMask`, `coverGlare`, `coverEdge` | The list window's cover glass: the black printed on its back, the reflection across it, its lit top edge |
+| `appSel`, `appNone`, `appDeny` | The colour screen: a selected row's lit cell, the icon of a program with none, the padlock of one that couldn't be ended |
 
 ## Readings
 
@@ -127,5 +136,6 @@ Readout.exe --version
 
 `--preview-render` draws the bar (and a panel, under its tile) to a PNG without opening a window:
 with the design mock's sample values and programs and a fixed time, or with `--live`, that many
-seconds of this machine's readings and the time now. `--select`, `--deny` and `--press` show a
+seconds of this machine's readings and the time now. The list's icons are those of this
+machine's running programs with the rows' names. `--select`, `--deny` and `--press` show a
 list row (1–10) selected, refused, or with its key held down.
