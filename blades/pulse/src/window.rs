@@ -1,7 +1,7 @@
-//! The bar's window: an app bar along the top of the main screen (Windows moves other windows out
-//! of its way, like the taskbar) or a strip in the taskbar, redrawn every second, with a panel under the tile the pointer is
-//! on. The panel stays while the pointer is on it, and its keys end programs.
-use crate::bar::{self, BAR_H, Item, Layout, ListView, PANEL_GAP, PANEL_MARGIN, PANEL_W, Time};
+//! The bar's window: a strip in the main taskbar beside NowPlaying, redrawn every second, with a
+//! panel beside the tile the pointer is on. The panel stays while the pointer is on it, and its
+//! keys end programs.
+use crate::bar::{self, BAR_H, Item, Layout, ListView, PANEL_GAP, PANEL_MARGIN, PANEL_W};
 use crate::icons::{self, Icon};
 use crate::metrics::Collector;
 use crate::model::Model;
@@ -19,21 +19,19 @@ use pk::wide::to_wide;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetMonitorInfoW,
-    HBITMAP, HDC, HGDIOBJ, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, MonitorFromWindow, SelectObject,
+    HBITMAP, HDC, HGDIOBJ, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromWindow, SelectObject,
 };
 use windows_sys::Win32::Graphics::Gdi::{AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::SystemInformation::{GetLocalTime, GetTickCount64};
-use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI};
+use windows_sys::Win32::System::SystemInformation::GetTickCount64;
+use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, ReleaseCapture, SetCapture, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
 };
-use windows_sys::Win32::UI::Shell::{
-    ABE_TOP, ABM_NEW, ABM_QUERYPOS, ABM_REMOVE, ABM_SETPOS, ABN_FULLSCREENAPP, ABN_POSCHANGED, APPBARDATA, SHAppBarMessage,
-};
+use windows_sys::Win32::UI::Shell::{ABM_NEW, ABM_REMOVE, ABN_FULLSCREENAPP, ABN_POSCHANGED, APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA,
-    GW_HWNDPREV, GWLP_HWNDPARENT, GetCursorPos, GetMessageW, GetWindow, GetWindowLongPtrW, GetWindowRect, HWND_BOTTOM, HWND_TOPMOST, IDC_ARROW, KillTimer, LoadCursorW, MA_NOACTIVATE,
+    GW_HWNDPREV, GWLP_HWNDPARENT, GetCursorPos, GetMessageW, GetWindow, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, IDC_ARROW, KillTimer, LoadCursorW, MA_NOACTIVATE,
     MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_HIDE,
     SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
     ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP,
@@ -135,9 +133,7 @@ struct App {
     layout: Layout,
     /// The bar's top left on the screen, in device pixels.
     origin: (i32, i32),
-    /// Whether the strip along the top is reserved; the taskbar that owns the bar when it's in
-    /// the taskbar (else null); and whether the panels open above the bar.
-    claimed: bool,
+    /// The taskbar that owns the bar, and whether the panels open above it.
     tray: HWND,
     up: bool,
     canvas: Canvas,
@@ -208,12 +204,11 @@ pub fn run() -> u32 {
         pal,
         model: Model::new(),
         collector: Collector::new(),
-        layout: Layout::new(400.0, 1, &settings.items(), settings.clock),
+        layout: Layout::new(1, &settings.items()),
         settings,
         origin: (0, 0),
-        claimed: false,
         tray: null_mut(),
-        up: false,
+        up: true,
         canvas: Canvas::new(1, 1),
         back: Canvas::new(1, 1),
         back_hover: None,
@@ -241,6 +236,7 @@ pub fn run() -> u32 {
         exit_msg: register_message(EXIT_MSG),
         taskbar_msg: register_message(w!("TaskbarCreated")),
     });
+    // Registered as an app bar without claiming space, to hear of taskbar moves and full-screen apps.
     let mut abd = appbar(hwnd);
     abd.uCallbackMessage = WM_APPBAR;
     unsafe { SHAppBarMessage(ABM_NEW, &mut abd) };
@@ -250,7 +246,6 @@ pub fn run() -> u32 {
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr);
         SetWindowLongPtrW(panel_hwnd, GWLP_USERDATA, ptr);
-        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         SetTimer(hwnd, TIMER_TICK, 1000, None);
     }
     let mut msg: MSG = unsafe { core::mem::zeroed() };
@@ -293,12 +288,6 @@ fn scale(dpi: u32) -> i32 {
     ((dpi as i32 * 2 + 96) / 192).max(1)
 }
 
-pub fn now() -> Time {
-    let mut st = unsafe { core::mem::zeroed() };
-    unsafe { GetLocalTime(&mut st) };
-    Time { hour: st.wHour, minute: st.wMinute, weekday: st.wDayOfWeek, day: st.wDay, month: st.wMonth }
-}
-
 fn ms() -> u64 {
     unsafe { GetTickCount64() }
 }
@@ -314,57 +303,32 @@ impl App {
         self.model.push(s);
     }
 
-    /// Lays the bar out where the settings put it: in the strip it claims along the top of the
-    /// main screen, or in the main taskbar after NowPlaying.
+    /// Lays the bar out in the main taskbar after NowPlaying (or hides it while there is no
+    /// taskbar, e.g. as Explorer restarts).
     fn place(&mut self) {
-        let tray = if self.settings.taskbar { find_window(w!("Shell_TrayWnd")) } else { null_mut() };
+        let tray = find_window(w!("Shell_TrayWnd"));
         if tray != self.tray {
             // owned by the taskbar, the bar stays above it
             unsafe { SetWindowLongPtrW(self.hwnd, GWLP_HWNDPARENT, tray as isize) };
             self.tray = tray;
         }
+        let Some((k, origin)) = self.dock() else {
+            self.set_hover(None);
+            unsafe {
+                ShowWindow(self.panel_hwnd, SW_HIDE);
+                ShowWindow(self.hwnd, SW_HIDE);
+            }
+            return;
+        };
         let items = self.settings.items();
         let mut mi = MONITORINFO { cbSize: core::mem::size_of::<MONITORINFO>() as u32, ..unsafe { core::mem::zeroed() } };
-        let room;
-        if let Some((k, origin)) = self.dock() {
-            let mut abd = appbar(self.hwnd);
-            if self.claimed {
-                // the strip given back; still an app bar, to hear of full-screen apps
-                abd.uCallbackMessage = WM_APPBAR;
-                unsafe {
-                    SHAppBarMessage(ABM_REMOVE, &mut abd);
-                    SHAppBarMessage(ABM_NEW, &mut abd);
-                }
-                self.claimed = false;
-            }
-            unsafe { GetMonitorInfoW(MonitorFromWindow(tray, MONITOR_DEFAULTTOPRIMARY), &mut mi) };
-            let r = mi.rcMonitor;
-            self.origin = origin;
-            self.up = origin.1 > (r.top + r.bottom) / 2;
-            self.layout = Layout::taskbar(k, &items);
-            room = if self.up { origin.1 - r.top } else { r.bottom - origin.1 - self.layout.bar_h() * k } - PANEL_GAP * k;
-        } else {
-            let mon = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
-            unsafe { GetMonitorInfoW(mon, &mut mi) };
-            let (mut dx, mut dy) = (96u32, 96u32);
-            unsafe { GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &mut dx, &mut dy) };
-            let k = scale(dx);
-            let r = mi.rcMonitor;
-            let mut abd = appbar(self.hwnd);
-            abd.uEdge = ABE_TOP;
-            abd.rc = RECT { left: r.left, top: r.top, right: r.right, bottom: r.top + BAR_H * k };
-            unsafe { SHAppBarMessage(ABM_QUERYPOS, &mut abd) };
-            abd.rc.bottom = abd.rc.top + BAR_H * k;
-            unsafe { SHAppBarMessage(ABM_SETPOS, &mut abd) };
-            self.claimed = true;
-            self.up = false;
-            let width = (abd.rc.right - abd.rc.left) as f32 / k as f32;
-            self.layout = Layout::new(width, k, &items, self.settings.clock);
-            self.origin = (abd.rc.left, abd.rc.top);
-            room = r.bottom - abd.rc.bottom - PANEL_GAP * k;
-        }
+        unsafe { GetMonitorInfoW(MonitorFromWindow(tray, MONITOR_DEFAULTTOPRIMARY), &mut mi) };
+        let r = mi.rcMonitor;
+        self.origin = origin;
+        self.up = origin.1 > (r.top + r.bottom) / 2;
+        self.layout = Layout::new(k, &items);
+        let room = if self.up { origin.1 - r.top } else { r.bottom - origin.1 - BAR_H * k } - PANEL_GAP * k;
         // the panels a step smaller where the tallest wouldn't fit beside the bar
-        let k = self.layout.k;
         while self.layout.panel_halves > 2 * k && bar::panel_h(Item::Cpu) * self.layout.panel_halves > 2 * room {
             self.layout.panel_halves -= 1;
         }
@@ -378,9 +342,12 @@ impl App {
         self.panel_item = None;
         self.set_hover(None);
         self.draw();
+        if !self.fullscreen {
+            unsafe { ShowWindow(self.hwnd, SW_SHOWNOACTIVATE) };
+        }
     }
 
-    /// In the taskbar: the scale, and the bar's top left, after NowPlaying's strip (or at the
+    /// The scale and the bar's top left in the taskbar, after NowPlaying's strip (or at the
     /// taskbar's left end without it) and centred top to bottom.
     fn dock(&self) -> Option<(i32, (i32, i32))> {
         let mut tb: RECT = unsafe { core::mem::zeroed() };
@@ -388,7 +355,7 @@ impl App {
             return None;
         }
         let k = scale(unsafe { GetDpiForWindow(self.tray) });
-        let (ink, rows) = Layout::taskbar(k, &[]).ink_rows();
+        let (ink, rows) = bar::ink_rows();
         let mut left = tb.left;
         let np = find_window(NOWPLAYING_CLASS);
         let mut r: RECT = unsafe { core::mem::zeroed() };
@@ -404,8 +371,8 @@ impl App {
         Some((k, (left, tb.top + (tb.bottom - tb.top - rows * k).max(0) / 2 - ink * k)))
     }
 
-    /// The second's tick: in the taskbar, follows it and NowPlaying, and comes back above the
-    /// taskbar when it rose over the bar.
+    /// The second's tick: follows the taskbar and NowPlaying, and comes back above the taskbar
+    /// when it rose over the bar.
     fn tick(&mut self) {
         if self.procs_until != 0 && self.procs_until <= ms() {
             self.collector.set_procs(false);
@@ -415,14 +382,18 @@ impl App {
         if self.fullscreen {
             return;
         }
-        if !self.tray.is_null() {
-            if self.dock().is_some_and(|(k, o)| k != self.layout.k || o != self.origin) {
+        if self.tray.is_null() {
+            if !find_window(w!("Shell_TrayWnd")).is_null() {
                 self.place();
-                return;
             }
-            if is_below(self.hwnd, self.tray) {
-                unsafe { SetWindowPos(self.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
-            }
+            return;
+        }
+        if self.dock() != Some((self.layout.k, self.origin)) {
+            self.place();
+            return;
+        }
+        if is_below(self.hwnd, self.tray) {
+            unsafe { SetWindowPos(self.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
         }
         self.draw();
     }
@@ -433,14 +404,14 @@ impl App {
             self.back_hover = Some(self.hover);
         }
         self.canvas.px.copy_from_slice(&self.back.px);
-        bar::foreground(&mut self.canvas, &self.layout, &self.pal, &self.model, now());
+        bar::foreground(&mut self.canvas, &self.layout, &self.pal, &self.model);
         self.surface.show(self.hwnd, &self.canvas, self.origin.0, self.origin.1);
         self.draw_panel();
     }
 
-    /// The hovered tile's item, when it has a panel.
+    /// The hovered tile's item.
     fn panel_item(&self) -> Option<Item> {
-        self.hover.map(|i| self.layout.tiles[i].item).filter(|&t| t != Item::Clock)
+        self.hover.map(|i| self.layout.tiles[i].item)
     }
 
     /// The panel's body on the screen, in device pixels: left, top, right, bottom.
@@ -448,7 +419,7 @@ impl App {
         let (k, s) = (self.layout.k, self.layout.panel_scale());
         let left = self.origin.0 + (self.layout.panel_x(self.hover.unwrap_or(0)) * k as f32) as i32;
         let h = (bar::panel_h(item) as f32 * s) as i32;
-        let top = if self.up { self.origin.1 - PANEL_GAP * k - h } else { self.origin.1 + (self.layout.bar_h() + PANEL_GAP) * k };
+        let top = if self.up { self.origin.1 - PANEL_GAP * k - h } else { self.origin.1 + (BAR_H + PANEL_GAP) * k };
         (left, top, left + (PANEL_W as f32 * s) as i32, top + h)
     }
 
@@ -612,12 +583,12 @@ impl App {
     fn follow(&mut self, x: i32, y: i32) {
         let k = self.layout.k;
         let (bx, by) = (x - self.origin.0, y - self.origin.1);
-        let mut hover = if by >= 0 && by < self.layout.bar_h() * k { self.layout.hit(bx as f32 / k as f32, by as f32 / k as f32) } else { None };
+        let mut hover = if by >= 0 && by < BAR_H * k { self.layout.hit(bx as f32 / k as f32, by as f32 / k as f32) } else { None };
         let mut on_panel = false;
         if let Some(item) = self.panel_item() {
             let (l, t, r, b) = self.panel_rect(item);
             // the panel, the bar and the gap between them
-            let (top, bottom) = (t.min(self.origin.1), b.max(self.origin.1 + self.layout.bar_h() * k));
+            let (top, bottom) = (t.min(self.origin.1), b.max(self.origin.1 + BAR_H * k));
             if x >= l && x < r && y >= top && y < bottom && (hover.is_none() || hover == self.hover) {
                 hover = self.hover;
                 on_panel = y >= t && y < b;
@@ -805,14 +776,16 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             match wp as u32 {
                 ABN_POSCHANGED => app.place(),
                 ABN_FULLSCREENAPP => {
-                    // Step aside for a full-screen app, and come back on top after it.
-                    // In the taskbar, it hides, as the taskbar does.
+                    // Hide while a full-screen app is up, as the taskbar does.
                     app.fullscreen = lp != 0;
-                    if !app.tray.is_null() {
-                        unsafe { ShowWindow(hwnd, if app.fullscreen { SW_HIDE } else { SW_SHOWNOACTIVATE }) };
-                    } else {
-                        let after = if app.fullscreen { HWND_BOTTOM } else { HWND_TOPMOST };
-                        unsafe { SetWindowPos(hwnd, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+                    if app.fullscreen {
+                        app.set_hover(None);
+                        unsafe {
+                            ShowWindow(app.panel_hwnd, SW_HIDE);
+                            ShowWindow(hwnd, SW_HIDE);
+                        }
+                    } else if !app.tray.is_null() {
+                        unsafe { ShowWindow(hwnd, SW_SHOWNOACTIVATE) };
                     }
                 }
                 _ => {}

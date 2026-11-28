@@ -55,18 +55,17 @@ macro_rules! palette {
 }
 
 palette! {
-    /// The faceplate's vertical gradient, at 0%, 22%, 55% and 100% of its height.
+    /// The panel faceplate's vertical gradient, at 0%, 22%, 55% and 100% of its height.
     plate_top = "plateTop",
     plate_upper = "plateUpper",
     plate_lower = "plateLower",
     plate_bottom = "plateBottom",
-    /// The faceplate's stipple: a light dot and a dark dot in every 2x2 pixels.
+    /// The panel faceplate's stipple: a light dot and a dark dot in every 2x2 pixels.
     plate_dot_light = "plateDotLight",
     plate_dot_dark = "plateDotDark",
-    /// The faceplate's top and bottom edge lines, and its shadow on the desktop.
+    /// The panel faceplate's top and bottom edge lines (and parting line).
     plate_edge_top = "plateEdgeTop",
     plate_edge_bottom = "plateEdgeBottom",
-    plate_shadow = "plateShadow",
     /// The tint behind the tile under the pointer.
     hover = "hover",
     /// The surround the screens sit in: its gradient, and the lips half a pixel above and below it.

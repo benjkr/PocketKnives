@@ -22,7 +22,7 @@ pub struct Digits {
 
 /// The small readouts (metric values, panel figures).
 pub const SMALL: Digits = Digits { w: 4.8, h: 9.0, t: 1.25, gap: 1.8, pw: 6.4, pr: 3.0, uw: 6.5 };
-/// The large readouts (the time, a panel's headline value).
+/// The large readouts (a panel's headline value).
 pub const LARGE: Digits = Digits { w: 7.4, h: 14.0, t: 2.0, gap: 2.4, pw: 9.6, pr: 4.6, uw: 6.5 };
 
 /// The digits lean like a calculator's: skewed 9 degrees.
@@ -135,7 +135,7 @@ fn unit(lit: &mut Path, x: f32, letter: u8, hh: f32) {
 }
 
 /// Where each template cell starts, and the template's width before the lean.
-/// `8` digit, `:` colon, `.` decimal point (in the gap, takes no room), `%`, `^` the up or down
+/// `8` digit, `.` decimal point (in the gap, takes no room), `%`, `^` the up or down
 /// triangle, `U` the unit letter.
 fn layout(tpl: &str, g: &Digits) -> (Vec<f32>, f32) {
     let mut x = 0.0;
@@ -151,7 +151,6 @@ fn layout(tpl: &str, g: &Digits) -> (Vec<f32>, f32) {
         xs.push(x);
         x += match c {
             b'8' => g.w,
-            b':' => g.t,
             b'%' => g.pw,
             b'U' => g.uw,
             b'^' => 4.0,
@@ -173,7 +172,6 @@ pub fn readout(text: &str, tpl: &str, g: &Digits, up: bool, unit_letter: u8) -> 
     let has_dot = text.contains('.');
     let (mut lit, mut ghost) = (Path::new(), Path::new());
     let m = g.h / 2.0;
-    let ds = g.t.max(1.3);
     let dp = g.t.min(g.gap - 0.6);
     let dot = |p: &mut Path, x: f32, yc: f32, s: f32| {
         p.poly(raster::round_rect(x, yc - s / 2.0, s, s, s * 0.22));
@@ -186,11 +184,6 @@ pub fn readout(text: &str, tpl: &str, g: &Digits, up: bool, unit_letter: u8) -> 
                 k += 1;
             }
             b'.' => dot(if has_dot { &mut lit } else { &mut ghost }, x + (g.gap - dp) / 2.0, g.h - dp / 2.0, dp),
-            b':' => {
-                let y1 = libm::roundf(g.h * 0.3 - ds / 2.0) + ds / 2.0;
-                dot(&mut lit, x + (g.t - ds) / 2.0, y1, ds);
-                dot(&mut lit, x + (g.t - ds) / 2.0, g.h - y1, ds);
-            }
             b'%' => percent(&mut lit, x, g),
             b'^' => {
                 let tri = if up { vec![(x, m + 1.5), (x + 2.0, m - 1.5), (x + 4.0, m + 1.5)] } else { vec![(x, m - 1.5), (x + 2.0, m + 1.5), (x + 4.0, m - 1.5)] };

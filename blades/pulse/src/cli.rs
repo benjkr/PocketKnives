@@ -1,5 +1,5 @@
 //! Command-line options for `Pulse.exe`.
-use crate::bar::{self, Item, Layout, Time};
+use crate::bar::{self, Item, Layout};
 use crate::model::Model;
 use crate::raster::{self, Canvas};
 use crate::settings::{self, Settings};
@@ -13,7 +13,7 @@ macro_rules! wl {
     ($out:expr, $($t:tt)*) => {{ let _ = write!($out, $($t)*); $out.write_bytes(b"\r\n"); }};
 }
 
-const HELP: &str = "Pulse \u{2014} a calculator-style system monitor bar along the top of the screen.\r\n\
+const HELP: &str = "Pulse \u{2014} a calculator-style system monitor strip in the taskbar.\r\n\
 \r\n\
   Pulse.exe                          start the bar (single instance)\r\n\
   Pulse.exe --exit                   close the running bar\r\n\
@@ -22,8 +22,8 @@ const HELP: &str = "Pulse \u{2014} a calculator-style system monitor bar along t
   Pulse.exe --settings               print settings for PocketKnives Settings\r\n\
   Pulse.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)\r\n\
   Pulse.exe --set key=value ...      change settings\r\n\
-  Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3] [--width PX] [--panel cpu|mem|gpu|dsk|net]\r\n                       \
-[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]\r\n                                     \
+  Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--panel cpu|mem|gpu|dsk|net]\r\n                       \
+[--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]\r\n                                     \
 draw the bar with the design's sample values to a PNG\r\n\
   Pulse.exe --version                print the version";
 
@@ -103,22 +103,15 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         wl!(out, "Usage: Pulse.exe --preview-render <path.png> [options]");
         return 2;
     };
-    let (mut theme_arg, mut k, mut width, mut panel, mut live) = (String::from("ivory"), 1i32, 728.0f32, None, 0u32);
+    let (mut theme_arg, mut k, mut panel, mut live) = (String::from("ivory"), 1i32, None, 0u32);
     // The list's states, by row from 1: selected, refused, a key held down.
     let (mut select, mut deny, mut press) = (0usize, 0usize, 0usize);
-    let mut taskbar = false;
     let mut i = 1;
     while i < args.len() {
-        if args[i] == "--taskbar" {
-            taskbar = true;
-            i += 1;
-            continue;
-        }
         let v = args.get(i + 1).map(String::as_str).unwrap_or("");
         match args[i].as_str() {
             "--theme" => theme_arg = String::from(v),
             "--scale" => k = v.parse().unwrap_or(0),
-            "--width" => width = v.parse().unwrap_or(0.0),
             "--live" => live = v.parse().unwrap_or(0).min(64),
             "--select" => select = v.parse().unwrap_or(0),
             "--deny" => deny = v.parse().unwrap_or(0),
@@ -143,8 +136,8 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         }
         i += 2;
     }
-    if !(1..=4).contains(&k) || width < 200.0 || [select, deny, press].iter().any(|&r| r > bar::LIST_ROWS) {
-        wl!(out, "--scale is 1 to 4, --width at least 200, and --select, --deny and --press a row from 1 to {}", bar::LIST_ROWS);
+    if !(1..=4).contains(&k) || [select, deny, press].iter().any(|&r| r > bar::LIST_ROWS) {
+        wl!(out, "--scale is 1 to 4, and --select, --deny and --press a row from 1 to {}", bar::LIST_ROWS);
         return 2;
     }
     let pal = if theme_arg.ends_with(".json") {
@@ -162,8 +155,8 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
             return 2;
         }
     };
-    let (m, t) = if live > 0 {
-        // this machine's readings, a second apart, and the time now
+    let m = if live > 0 {
+        // this machine's readings, a second apart
         let mut m = Model::new();
         let mut c = crate::metrics::Collector::new();
         c.set_procs(true);
@@ -171,17 +164,17 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
             unsafe { windows_sys::Win32::System::Threading::Sleep(1000) };
             m.push(c.sample());
         }
-        (m, crate::window::now())
+        m
     } else {
-        (Model::mock(), Time { hour: 10, minute: 18, weekday: 5, day: 27, month: 11 })
+        Model::mock()
     };
     let items = Settings::default().items();
-    let l = if taskbar { Layout::taskbar(k, &items) } else { Layout::new(width, k, &items, true) };
+    let l = Layout::new(k, &items);
     let (bw, bh) = l.size();
     let mut c = Canvas::new(bw, bh);
     let hover = panel.and_then(|p| l.tiles.iter().position(|t| t.item == p));
-    bar::bar(&mut c, &l, &pal, &m, t, hover);
-    // A panel is drawn under the bar where the window would put it.
+    bar::bar(&mut c, &l, &pal, &m, hover);
+    // A panel is drawn above the bar where the window would put it.
     let img = if let (Some(item), Some(i)) = (panel, hover) {
         let (pk, halve) = l.panel_draw();
         let (pw, ph) = bar::panel_size(pk, item);
@@ -200,12 +193,10 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         }
         let margin = (bar::PANEL_MARGIN as f32 * l.panel_scale()) as i32;
         let px = (l.panel_x(i) * k as f32) as i32 - margin;
-        // in the taskbar, above the bar
         let body = (bar::panel_h(item) as f32 * l.panel_scale()) as i32;
-        let py = if taskbar { -bar::PANEL_GAP * k - body } else { (l.bar_h() + bar::PANEL_GAP) * k } - margin;
-        // in the taskbar, all of the panel; along the top, cut at the screen's edges like the window
-        let (ox, oy) = if taskbar { ((-px).max(0), -py) } else { (0, 0) };
-        let w = if taskbar { (px + ox + pc.w as i32).max(bw as i32 + ox) as usize } else { bw };
+        let py = -bar::PANEL_GAP * k - body - margin;
+        let (ox, oy) = ((-px).max(0), -py);
+        let w = (px + ox + pc.w as i32).max(bw as i32 + ox) as usize;
         let h = (py + oy + pc.h as i32).max(bh as i32 + oy) as usize;
         let mut all = Canvas::new(w, h);
         compose(&mut all, &c, ox, oy);

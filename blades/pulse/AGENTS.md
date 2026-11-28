@@ -1,8 +1,8 @@
 # AGENTS.md: Pulse
 
-Pulse: a calculator-style system monitor bar along the top of the main screen. CPU, memory,
-GPU, disk and network as seven-segment readouts over dot-matrix graphs on one LCD glass, and the
-time; hovering a metric shows its last minute. Rust, `no_std` on `pk`, one small exe.
+Pulse: a calculator-style system monitor strip in the taskbar. CPU, memory,
+GPU, disk and network as seven-segment readouts over dot-matrix graphs on one LCD glass;
+hovering a metric shows its last minute. Rust, `no_std` on `pk`, one small exe.
 
 **The suite's [`AGENTS.md`](../../AGENTS.md) comes first**: its rules hold here too. Paths and
 commands here and in this blade's `docs/` are from `blades/pulse/`.
@@ -28,8 +28,7 @@ commands here and in this blade's `docs/` are from `blades/pulse/`.
   system tool), never on the user's programs: one kill ends every process with that name.
 - **Budget**: one exe under 0.25 MB importing only Windows DLLs; a second's sample and redraw
   under 1% of one core.
-- **Live runs**: a running bar reserves the top of the screen and moves the user's windows. Don't
-  start one on the user's desktop without asking; use `--preview-render`.
+- **Live runs**: don't start a live bar on the user's taskbar without asking; use `--preview-render`.
 
 ## Running things
 

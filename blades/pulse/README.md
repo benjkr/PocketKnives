@@ -1,14 +1,14 @@
 # Pulse
 
-A calculator-style system monitor bar along the top of the screen: CPU, memory, GPU, disk and
-network as seven-segment readouts over dot-matrix graphs, and the time.
+A calculator-style system monitor strip in the taskbar: CPU, memory, GPU, disk and
+network as seven-segment readouts over dot-matrix graphs.
 
 ## What it does
 
 - **One LCD glass**: each metric has its own seven-segment window, and its graph runs on one
   continuous dot-matrix glass under them all: a bar per CPU core, lines for memory and GPU, bars
   for disk, and a mirrored upload/download graph for the network.
-- **Engraved icons**: each metric's icon is cut into the faceplate beside its window, and turns
+- **Metric icons**: each metric's icon sits beside its digit window and turns
   orange when the metric runs hot (over 70%, or a network burst over 1 MB/s).
 - **Panels**: hover a metric to see its last minute, with details (per-core load and clock
   speed, memory and video memory used, disk read and write, network up and down).
@@ -29,7 +29,7 @@ Pulse.exe --status [seconds]       print live readings
 Pulse.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O
 Pulse.exe --settings               print settings for PocketKnives Settings
 Pulse.exe --set key=value ...      change settings
-Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale N] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]
+Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale N] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]
 Pulse.exe --version
 ```
 

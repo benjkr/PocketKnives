@@ -4,51 +4,46 @@ What it does now. Keep it current in the same change, and lean.
 
 ## Window
 
-- **An app bar along the top of the main screen** (`SHAppBarMessage`, `ABE_TOP`): Windows keeps
-  other windows out from under it, like the taskbar. Full screen width, 37 design pixels tall.
-  A layered window (`UpdateLayeredWindow`) that never takes focus, with a 4-pixel shadow drawn
-  under the reserved strip. It steps behind full-screen apps and comes back after them.
-- **Or in the taskbar** (setting `taskbar`): just the metric tiles, no clock (the taskbar has
-  one) and no faceplate or shadow, so the glass and its surround sit in the taskbar itself, and
-  a graph row 6 dot rows taller (19), so the bar fills more of the taskbar (4 pixels above and
-  below on a 48-pixel taskbar). It goes in the main taskbar right after NowPlaying's strip (at its left end without NowPlaying),
-  centred top to bottom, reserving nothing. Owned by `Shell_TrayWnd` so it stays above the
-  taskbar, raised again when the taskbar rises over it, and it follows the taskbar and
-  NowPlaying each second and a restarted Explorer. Its panels open above it (below it in a
-  taskbar along the top). It hides while an app is full screen.
-- **Scaling**: every design pixel is a whole number of device pixels, the nearest to the screen's
+- **In the main taskbar**: a layered window (`UpdateLayeredWindow`) that never takes focus,
+  showing just the metric tiles with no faceplate or shadow so the glass and its surround sit in
+  the taskbar itself, and a 19-dot-row graph so the bar fills the taskbar (4 pixels above and below
+  on a 48-pixel taskbar). It goes in the main taskbar right after NowPlaying's strip (at its left
+  end without NowPlaying), centred top to bottom, reserving nothing. Owned by `Shell_TrayWnd` so it
+  stays above the taskbar, raised again when the taskbar rises over it, and it follows the taskbar
+  and NowPlaying each second and a restarted Explorer (hiding while no taskbar exists). It
+  registers with `SHAppBarMessage` (`ABM_NEW`, claiming no space) to hear taskbar moves and
+  full-screen apps, hiding while an app is full screen.
+- **Scaling**: every design pixel is a whole number of device pixels, the nearest to the taskbar's
   scaling and at least 1 (100% and 125%: 1; 150% to 225%: 2; 250%: 3), so the dot matrix and the
   engraving stay sharp. The panels are half again the bar's size (at 100%, 1.5 device pixels a
-  design pixel; at 150%, 3), half a step less at a time where the tallest wouldn't fit under the
+  design pixel; at 150%, 3), half a step less at a time where the tallest wouldn't fit beside the
   bar. A scale of a whole and a half is drawn at twice that and halved, so every design pixel
   spans the same device pixels.
-- **Once a second** it samples the system and redraws. Hovering a metric shows its panel under
-  it; the panel stays while the pointer crosses to it and is on it, and goes when the pointer
-  leaves both. The panel never takes focus; its keys take clicks. Right-click the bar: Theme
-  (every theme, the current one checked) and Exit.
+- **Once a second** it samples the system and redraws. Hovering a metric shows its panel above it
+  (below it in a taskbar along the top); the panel stays while the pointer crosses to it and is on
+  it, and goes when the pointer leaves both. The panel never takes focus; its keys take clicks.
+  Right-click the bar: Theme (every theme, the current one checked) and Exit.
 
 ## Look
 
 The approved design "M2" (`src/bar.rs` holds its geometry; one design pixel = one CSS pixel of
 the mock):
 
-- A faceplate with, from the left, the metric tiles CPU, memory, GPU, disk and network (each can
-  be hidden), then the clock at the right end.
+- From the left, the metric tiles CPU, memory, GPU, disk and network (each can be hidden), with no
+  faceplate or shadow so the glass and surround sit directly in the taskbar.
 - **Metric tiles share one surround and one glass**: the surround is a band along the bottom with
   a tower for each tile's digit window; the glass under all the graphs is one piece, with a dotted
-  divider between metrics. Each metric's icon is engraved in the faceplate in the gap left of its
-  tower.
+  divider between metrics. Each metric's icon sits in the gap left of its tower.
 - **Digit windows**: seven-segment readouts leaning 9°, with unlit (ghost) segments; every digit
   has the same cell and a 1 sits in its middle, so nothing moves as values change. Meters show
   `0`–`100` and a `%` drawn on the glass; the network shows up and down rates as at most three
   digits and K, M or G (KB/s, MB/s, GB/s).
-- **Graphs** (dot matrix, one design pixel a dot): CPU, a bar per core (pairs and so on merged to
+- **Graphs** (dot matrix, one design pixel a dot, 19 rows tall): CPU, a bar per core (pairs and so on merged to
   at most 14, each the busiest core in it); memory and GPU, a stepped line of the last ~45
   seconds; disk, bars; network, upload as a line in the ink above a centre axis and download filled
   below in its own, fainter colour, on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
 - **Hot**: a meter above 70%, or network traffic of 1 MB/s or more either way. Hot pixels take
-  the `hot` colour, and the metric's engraved icon takes `iconHot`.
-- **The clock**: its own window, the date in a 3×5 pixel font over a large seven-segment time.
+  the `hot` colour, and the metric's icon takes `iconHot`.
 - **The panel**: the metric's name and value, the last minute at twice the dot size with axes
   (and a dotted 70% line), and a footer: per-core bars and the effective clock speed (CPU);
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
@@ -96,9 +91,9 @@ the same name.
 
 | Key | Role |
 |---|---|
-| `plateTop`, `plateUpper`, `plateLower`, `plateBottom` | The faceplate's gradient at 0%, 22%, 55% and 100% of its height |
-| `plateDotLight`, `plateDotDark` | The faceplate's stipple dots |
-| `plateEdgeTop`, `plateEdgeBottom`, `plateShadow` | The faceplate's top and bottom edge lines, its shadow |
+| `plateTop`, `plateUpper`, `plateLower`, `plateBottom` | The panel faceplate's gradient at 0%, 22%, 55% and 100% of its height |
+| `plateDotLight`, `plateDotDark` | The panel faceplate's stipple dots |
+| `plateEdgeTop`, `plateEdgeBottom` | The panel faceplate's top and bottom edge lines (and parting line) |
 | `hover` | The tint behind the tile under the pointer |
 | `surroundTop`, `surroundBottom` | The surround's gradient |
 | `surroundLipAbove`, `surroundLipBelow` | The lips half a pixel above and below the surround |
@@ -138,8 +133,8 @@ administrator rights, so the network panel has no list.
 ## Settings and command line
 
 Settings (`%APPDATA%\Pulse\settings.ini`; next to the exe in preview mode):
-`theme` (a choice of every theme), `cpu`, `memory`, `gpu`, `disk`, `network` and `clock`
-(toggles, all on), and `taskbar` (a toggle, off). Printed and changed through the [blade settings](../../../../docs/specs/blade-settings.md)
+`theme` (a choice of every theme), and `cpu`, `memory`, `gpu`, `disk` and `network`
+(toggles, all on). Printed and changed through the [blade settings](../../../../docs/specs/blade-settings.md)
 contract; a running bar applies a change at once.
 
 ```text
@@ -150,13 +145,12 @@ Pulse.exe --status [seconds]       print live readings, one line a second (defau
 Pulse.exe --top [seconds]          print the top 10 programs by CPU, memory, GPU and I/O (default 2)
 Pulse.exe --settings               print settings for PocketKnives Settings
 Pulse.exe --set key=value ...      change settings
-Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--width PX] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW] [--taskbar]
+Pulse.exe --preview-render PATH [--theme NAME|FILE.json] [--scale 1|2|3|4] [--panel cpu|mem|gpu|dsk|net] [--live SECONDS] [--select ROW] [--deny ROW] [--press ROW]
 Pulse.exe --version
 ```
 
-`--preview-render` draws the bar (and a panel, under its tile) to a PNG without opening a window:
-with the design mock's sample values and programs and a fixed time, or with `--live`, that many
-seconds of this machine's readings and the time now. The list's icons are those of this
+`--preview-render` draws the bar (and a panel, above its tile) to a PNG without opening a window:
+with the design mock's sample values and programs, or with `--live`, that many
+seconds of this machine's readings. The list's icons are those of this
 machine's running programs with the rows' names. `--select`, `--deny` and `--press` show a
-list row (1–10) selected, refused, or with its key held down. `--taskbar` draws the bar as it is
-in the taskbar, with its panel above it.
+list row (1–10) selected, refused, or with its key held down.
