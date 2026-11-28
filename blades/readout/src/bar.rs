@@ -84,8 +84,9 @@ pub struct Tile {
 pub struct Layout {
     /// Device pixels per design pixel.
     pub k: i32,
-    /// The same for the panels: a step larger than the bar, so they read at a glance.
-    pub panel_k: i32,
+    /// The panels' scale in half device pixels a design pixel: half again the bar's, so they read
+    /// at a glance.
+    pub panel_halves: i32,
     /// The bar's width in design pixels.
     pub width: f32,
     pub tiles: Vec<Tile>,
@@ -106,7 +107,7 @@ impl Layout {
             let w = Item::Clock.digits_w() + 22.0;
             tiles.push(Tile { item: Item::Clock, x: width - PAD - w, w });
         }
-        Layout { k, panel_k: k + 1, width, tiles }
+        Layout { k, panel_halves: 3 * k, width, tiles }
     }
 
     /// The tile under a point (design pixels from the bar's top left).
@@ -122,9 +123,20 @@ impl Layout {
         ((self.width * self.k as f32) as usize, ((BAR_H + SHADOW_H) * self.k) as usize)
     }
 
+    /// Device pixels per design pixel on the panels.
+    pub fn panel_scale(&self) -> f32 {
+        self.panel_halves as f32 / 2.0
+    }
+
+    /// How the panels are drawn: at a whole scale, and whether that's then halved (for a scale
+    /// of a whole and a half, so every design pixel still spans the same device pixels).
+    pub fn panel_draw(&self) -> (i32, bool) {
+        if self.panel_halves % 2 == 0 { (self.panel_halves / 2, false) } else { (self.panel_halves, true) }
+    }
+
     /// Where tile `i`'s panel goes, its left edge in design pixels from the bar's left.
     pub fn panel_x(&self, i: usize) -> f32 {
-        let w = (PANEL_W * self.panel_k) as f32 / self.k as f32;
+        let w = PANEL_W as f32 * self.panel_scale() / self.k as f32;
         (self.tiles[i].x - 1.0).clamp(4.0, (self.width - w - 4.0).max(4.0))
     }
 
@@ -157,11 +169,6 @@ impl Pen<'_> {
         let dev: Vec<(f32, Rgba)> = stops.iter().map(|&(y, c)| (y * k, c)).collect();
         let d = self.dev(p);
         self.c.fill(&d, Paint::Vertical(&dev), None);
-    }
-    /// Fills `p` inside `clip`.
-    fn fill_in(&mut self, p: &Path, col: Rgba, clip: &Mask) {
-        let d = self.dev(p);
-        self.c.fill(&d, Paint::Solid(col), Some(clip));
     }
     /// A program's icon, an icon pixel a design pixel, its top left at (x, y).
     fn icon_pixels(&mut self, icon: &Icon, x: f32, y: f32) {
@@ -1223,16 +1230,30 @@ fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
     let mut edge = Path::new();
     edge.poly(raster::rect_path(gx + 1.0, gy, LW_W - 2.0, 1.0));
     pen.fill(&edge, pal.cover_edge);
-    // the reflection: a broad band and a thin one, slanting down to the left, inside the glass
-    let mut glass = Path::new();
-    glass.poly(raster::round_rect(gx, gy, LW_W, LW_H, 1.5));
-    let clip = pen.mask(&glass);
+    // the reflection: a broad band and a thin one, slanting down to the left, cut at the glass's
+    // left edge
     let mut glare = Path::new();
     for (left, w) in [(30.0, 24.0), (60.0, 5.0)] {
         let slant = 36.0;
-        glare.poly(vec![(gx + left, gy), (gx + left + w, gy), (gx + left + w - slant, gy + LW_H), (gx + left - slant, gy + LW_H)]);
+        glare.poly(clip_left(&[(gx + left, gy), (gx + left + w, gy), (gx + left + w - slant, gy + LW_H), (gx + left - slant, gy + LW_H)], gx));
     }
-    pen.fill_in(&glare, pal.cover_glare, &clip);
+    pen.fill(&glare, pal.cover_glare);
+}
+
+/// The part of polygon `pts` right of `x0`.
+fn clip_left(pts: &[Pt], x0: f32) -> Vec<Pt> {
+    let mut out = Vec::new();
+    for i in 0..pts.len() {
+        let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+        if a.0 >= x0 {
+            out.push(a);
+        }
+        if (a.0 >= x0) != (b.0 >= x0) {
+            let t = (x0 - a.0) / (b.0 - a.0);
+            out.push((x0, a.1 + (b.1 - a.1) * t));
+        }
+    }
+    out
 }
 
 /// The colour screen's own icons, [`icons::SIZE`] square, a row a byte (bit 7 at the left): a

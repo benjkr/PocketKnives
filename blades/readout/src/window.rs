@@ -130,6 +130,8 @@ struct App {
     back: Canvas,
     back_hover: Option<Option<usize>>,
     surface: Surface,
+    /// The panel as drawn (at its whole drawing scale), and as shown.
+    panel_draw: Canvas,
     panel_canvas: Canvas,
     /// The panel's part that never changes, for `panel_item` (`None` when it must be drawn again).
     panel_back: Canvas,
@@ -190,6 +192,7 @@ pub fn run() -> u32 {
         back: Canvas::new(1, 1),
         back_hover: None,
         surface: Surface::new(1, 1),
+        panel_draw: Canvas::new(1, 1),
         panel_canvas: Canvas::new(1, 1),
         panel_back: Canvas::new(1, 1),
         panel_surface: Surface::new(1, 1),
@@ -298,8 +301,8 @@ impl App {
         self.layout = Layout::new(width, k, &self.settings.items(), self.settings.clock);
         // the panels a step smaller where the tallest wouldn't fit under the bar
         let room = r.bottom - abd.rc.bottom - PANEL_GAP * k;
-        while self.layout.panel_k > k && bar::panel_h(Item::Cpu) * self.layout.panel_k > room {
-            self.layout.panel_k -= 1;
+        while self.layout.panel_halves > 2 * k && bar::panel_h(Item::Cpu) * self.layout.panel_halves > 2 * room {
+            self.layout.panel_halves -= 1;
         }
         self.origin = (abd.rc.left, abd.rc.top);
         let (w, h) = self.layout.size();
@@ -332,10 +335,10 @@ impl App {
 
     /// The panel's body on the screen, in device pixels: left, top, right, bottom.
     fn panel_rect(&self, item: Item) -> (i32, i32, i32, i32) {
-        let (k, pk) = (self.layout.k, self.layout.panel_k);
+        let (k, s) = (self.layout.k, self.layout.panel_scale());
         let left = self.origin.0 + (self.layout.panel_x(self.hover.unwrap_or(0)) * k as f32) as i32;
         let top = self.origin.1 + (BAR_H + PANEL_GAP) * k;
-        (left, top, left + PANEL_W * pk, top + bar::panel_h(item) * pk)
+        (left, top, left + (PANEL_W as f32 * s) as i32, top + (bar::panel_h(item) as f32 * s) as i32)
     }
 
     fn draw_panel(&mut self) {
@@ -343,22 +346,30 @@ impl App {
             unsafe { ShowWindow(self.panel_hwnd, SW_HIDE) };
             return;
         };
-        let k = self.layout.panel_k;
+        let (k, halve) = self.layout.panel_draw();
         if self.panel_item != Some(item) {
             let (pw, ph) = bar::panel_size(k, item);
-            if self.panel_canvas.w != pw || self.panel_canvas.h != ph {
-                self.panel_canvas = Canvas::new(pw, ph);
+            if self.panel_draw.w != pw || self.panel_draw.h != ph {
+                self.panel_draw = Canvas::new(pw, ph);
                 self.panel_back = Canvas::new(pw, ph);
-                self.panel_surface = Surface::new(pw, ph);
+                let (sw, sh) = if halve { (pw.div_ceil(2), ph.div_ceil(2)) } else { (pw, ph) };
+                self.panel_canvas = Canvas::new(sw, sh);
+                self.panel_surface = Surface::new(sw, sh);
             }
             bar::panel_back(&mut self.panel_back, k, &self.pal, item);
             self.panel_item = Some(item);
         }
         self.update_list(item);
-        self.panel_canvas.px.copy_from_slice(&self.panel_back.px);
-        bar::panel_front(&mut self.panel_canvas, k, &self.pal, &self.model, item, &self.list);
+        self.panel_draw.px.copy_from_slice(&self.panel_back.px);
+        bar::panel_front(&mut self.panel_draw, k, &self.pal, &self.model, item, &self.list);
+        if halve {
+            self.panel_draw.halve_into(&mut self.panel_canvas);
+        } else {
+            self.panel_canvas.px.copy_from_slice(&self.panel_draw.px);
+        }
         let (left, top, _, _) = self.panel_rect(item);
-        self.panel_surface.show(self.panel_hwnd, &self.panel_canvas, left - PANEL_MARGIN * k, top - PANEL_MARGIN * k);
+        let margin = (PANEL_MARGIN as f32 * self.layout.panel_scale()) as i32;
+        self.panel_surface.show(self.panel_hwnd, &self.panel_canvas, left - margin, top - margin);
         unsafe { ShowWindow(self.panel_hwnd, SW_SHOWNOACTIVATE) };
     }
 
@@ -486,7 +497,7 @@ impl App {
     /// The key under a point in the panel window (device pixels).
     fn key_at(&self, lp: LPARAM) -> Option<usize> {
         let item = self.panel_item()?;
-        let k = self.layout.panel_k as f32;
+        let k = self.layout.panel_scale();
         let (x, y) = point(lp);
         bar::key_at(item, x as f32 / k - PANEL_MARGIN as f32, y as f32 / k - PANEL_MARGIN as f32)
     }

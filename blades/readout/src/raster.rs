@@ -138,6 +138,23 @@ impl Canvas {
         Canvas { w, h, px: vec![0; w * h], acc: Vec::new() }
     }
 
+    /// Each 2x2 block of this canvas averaged into one pixel of `out` (half the size, rounded up).
+    pub fn halve_into(&self, out: &mut Canvas) {
+        for oy in 0..out.h {
+            for ox in 0..out.w {
+                let mut sum = [0u32; 4];
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let (x, y) = (2 * ox + dx, 2 * oy + dy);
+                    let p = if x < self.w && y < self.h { self.px[y * self.w + x] } else { 0 };
+                    for (c, s) in sum.iter_mut().enumerate() {
+                        *s += (p >> (8 * c)) & 255;
+                    }
+                }
+                out.px[oy * out.w + ox] = sum.iter().enumerate().fold(0, |v, (c, &s)| v | ((s + 2) / 4) << (8 * c));
+            }
+        }
+    }
+
     pub fn clear(&mut self) {
         self.px.fill(0);
     }
