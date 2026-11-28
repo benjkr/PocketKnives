@@ -44,8 +44,8 @@ the mock):
   digits and K, M or G (KB/s, MB/s, GB/s).
 - **Graphs** (dot matrix, one design pixel a dot): CPU, a bar per core (pairs and so on merged to
   at most 14, each the busiest core in it); memory and GPU, a stepped line of the last ~45
-  seconds; disk, bars; network, upload as a line above a centre axis and download filled below,
-  on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
+  seconds; disk, bars; network, upload as a line in the ink above a centre axis and download filled
+  below in its own colour, on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
 - **Hot**: a meter above 70%, or network traffic of 1 MB/s or more either way. Hot pixels take
   the `hot` colour, and the metric's engraved icon takes `iconHot`.
 - **The clock**: its own window, the date in a 3×5 pixel font over a large seven-segment time.
@@ -108,6 +108,7 @@ the same name.
 | `ink`, `inkGhost`, `inkShadow` | Lit pixels and segments, unlit segments, the shadow lit ink casts |
 | `fill` | The body of a bar or filled area under its lit top row |
 | `hot`, `divider` | Hot pixels; the dotted dividers |
+| `netDown`, `netDownFill` | The network graph's download: its outer row, the area between that and the axis |
 | `iconGroove`, `iconHot` | An engraved icon, and the icon of a hot metric |
 | `iconLipAbove`, `iconLipBelow` | The lips one pixel above and below an engraving |
 | `panelShadow`, `panelRing`, `panelRingLip` | The panel's shadow, the ring round its screens, the highlight under that ring |

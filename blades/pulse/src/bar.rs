@@ -353,6 +353,8 @@ impl Pen<'_> {
                     lcd::DIVIDER => pal.divider,
                     lcd::FILL => pal.fill,
                     lcd::GHOST => pal.ink_ghost,
+                    lcd::DOWN => pal.net_down,
+                    lcd::DOWN_FILL => pal.net_down_fill,
                     _ => continue,
                 };
                 self.c.rect(ox + bx as i32 * s, oy + by as i32 * s, s, s, col);

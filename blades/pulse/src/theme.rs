@@ -91,6 +91,10 @@ palette! {
     fill = "fill",
     hot = "hot",
     divider = "divider",
+    /// The network graph's download, so it reads apart from the upload (in `ink`): its outer row,
+    /// and the area between that and the axis.
+    net_down = "netDown",
+    net_down_fill = "netDownFill",
     /// The engraved icons: the groove, the groove when the metric is hot, and the lips one pixel above and below.
     icon_groove = "iconGroove",
     icon_hot = "iconHot",

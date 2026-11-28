@@ -241,6 +241,9 @@ pub const DIVIDER: u8 = 3;
 pub const FILL: u8 = 4;
 /// An unlit annunciator or cursor: there, in the ghost colour, so nothing shifts when it lights.
 pub const GHOST: u8 = 5;
+/// The network graph's download: its outer row, and the area between it and the axis.
+pub const DOWN: u8 = 6;
+pub const DOWN_FILL: u8 = 7;
 
 pub struct Bitmap {
     pub w: usize,
@@ -415,11 +418,11 @@ pub fn net(b: &mut Bitmap, up: &Series, dn: &Series, n: usize, step: i32, x0: i3
             if u > 0 && u <= t {
                 b.ps(x, mid - u, LIT);
             }
-            if d > 0 {
-                col_fill(b, x, mid + 1, mid + d.min(t), false);
+            for y in mid + 1..=mid + d.min(t) {
+                b.ps(x, y, DOWN_FILL);
             }
             if d > 0 && d <= t {
-                b.ps(x, mid + d, LIT);
+                b.ps(x, mid + d, DOWN);
             }
             for y in t + 1..=d {
                 b.ps(x, mid + y, HOT_PX);
