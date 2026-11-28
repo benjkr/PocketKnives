@@ -764,7 +764,7 @@ pub fn panel_back(c: &mut Canvas, k: i32, pal: &Palette, item: Item) {
     pen.plate(&body, py, py + ph);
 
     if has_list(item) {
-        list_back(&mut pen, px, py, item);
+        list_back(&mut pen, px, py);
     }
 
     // the screen, in its ring
@@ -900,15 +900,14 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
 }
 
 // ---- the panel's process list ----
-// What can change is on glass; what is fixed (the heading, the row numbers, the scale) is
-// engraved in the plastic; a key only travels when pressed. Design "P4", X twice, with the colour
+// What can change is on glass; what is fixed (the heading, the row numbers) is engraved in the plastic; a key only travels when pressed. Design "P4", X twice, with the colour
 // screen of "S2": one cover glass over the LCD and a colour screen, a black mask printed on its back.
 
 /// The rows in a process list.
 pub const LIST_ROWS: usize = 10;
-/// The list's part of the body under the screen: the parting line, the heading, the list window,
-/// and its scale.
-const LIST_H: i32 = 151;
+/// The list's part of the body under the screen: the parting line, the heading and the list
+/// window.
+const LIST_H: i32 = 140;
 /// The list window's glass (from the panel's top left).
 const LW_X: f32 = 15.0;
 const LW_Y: f32 = 114.0;
@@ -1098,28 +1097,10 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
     b
 }
 
-/// The scale under the bars, engraved at (x, y): ticks at 0, 1, 5, 10, 25, 50 and 100% on the
-/// bars' square-root scale, three of them longer and labelled, each number centred on its tick
-/// (one that would touch the number before it, on short bars, left out).
-fn scale(pen: &mut Pen, f: &Face, x: f32, y: f32, bar_w: i32) {
-    let mut ticks = Path::new();
-    let mut free = f32::MIN;
-    for (t, label) in [(0.0, "0"), (0.01, ""), (0.05, ""), (0.1, "10"), (0.25, ""), (0.5, ""), (1.0, "100%")] {
-        let tx = x + (libm::round(libm::sqrt(t) * bar_w as f64) as i32).min(bar_w - 1) as f32;
-        ticks.poly(raster::rect_path(tx, y, 1.0, if label.is_empty() { 1.0 } else { 2.0 }));
-        let lx = tx + 0.5 - f.width(label.trim_end_matches('%')) / 2.0;
-        if !label.is_empty() && lx >= free {
-            pen.letter(f, label, lx, y + 3.0);
-            free = lx + f.width(label) + 2.0;
-        }
-    }
-    pen.engrave(&ticks);
-}
-
 /// The list's part of the body that never changes: a parting line under the screen, the
 /// engraved heading and row numbers, the list window's ring and glass, the engraved tick before
-/// each key, the engraved scale. (px, py) is the panel's top left.
-fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
+/// each key. (px, py) is the panel's top left.
+fn list_back(pen: &mut Pen, px: f32, py: f32) {
     let pal = *pen.pal;
     let line = |y: f32| {
         let mut p = Path::new();
@@ -1154,9 +1135,6 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
         ticks.poly(raster::rect_path(px + 130.0, py + KEY_Y + (i as i32 * ROW_PITCH) as f32 + 3.0, 3.0, 1.0));
     }
     pen.engrave(&ticks);
-
-    // the scale under the bars
-    scale(pen, &f, px + LW_X + LB_IN + BAR_X as f32, py + LW_Y + LW_H + 4.0, bar_w(item));
 }
 
 /// The list's moving parts: the list window's content and the keys (one may be held down).
