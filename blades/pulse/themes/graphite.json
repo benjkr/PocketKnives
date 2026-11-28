@@ -26,6 +26,8 @@
   "fill": "#d6e4ff",
   "hot": "#ff7a4d",
   "divider": "#d6e4ff80",
+  "netDown": "#5ed8ff",
+  "netDownFill": "#5ed8ff4d",
   "iconGroove": "#e8e6dc",
   "iconHot": "#ff7a4d",
   "iconLipAbove": "#0000008c",
