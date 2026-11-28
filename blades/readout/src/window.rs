@@ -61,6 +61,12 @@ const GLARE_EASE: f32 = 0.35;
 /// A selection lasts this long; a refusal shows this long.
 const SEL_MS: u64 = 5000;
 const DENIED_MS: u64 = 2500;
+/// Programs are read from when the pointer comes to the bar until it has been away this long.
+const PROCS_LINGER_MS: u64 = 10_000;
+/// A list that opens this soon after the reading began is read again this long after it began,
+/// when there's time enough to tell the programs' loads apart.
+const PROCS_SETTLE_MS: u64 = 300;
+const TIMER_PROCS: usize = 3;
 const MENU_EXIT: usize = 1;
 const MENU_THEME: usize = 100;
 
@@ -159,6 +165,9 @@ struct App {
     list_item: Option<Item>,
     on_panel: bool,
     sel_at: u64,
+    /// While programs are read: since when, and until when without the pointer coming back.
+    procs_from: u64,
+    procs_until: u64,
     denied_at: u64,
     /// Programs' icons by name, read once each (none: no readable icon).
     icons: Vec<(String, Option<Icon>)>,
@@ -224,6 +233,8 @@ pub fn run() -> u32 {
         list_item: None,
         on_panel: false,
         sel_at: 0,
+        procs_from: 0,
+        procs_until: 0,
         denied_at: 0,
         icons: Vec::new(),
         reload_msg: register_message(RELOAD_MSG),
@@ -233,8 +244,6 @@ pub fn run() -> u32 {
     let mut abd = appbar(hwnd);
     abd.uCallbackMessage = WM_APPBAR;
     unsafe { SHAppBarMessage(ABM_NEW, &mut abd) };
-    // every program sampled each second, so a list has its rows the moment it opens
-    app.collector.set_procs(true);
     app.sample();
     app.place();
     let ptr = Box::into_raw(app) as isize;
@@ -398,6 +407,10 @@ impl App {
     /// The second's tick: in the taskbar, follows it and NowPlaying, and comes back above the
     /// taskbar when it rose over the bar.
     fn tick(&mut self) {
+        if self.procs_until != 0 && self.procs_until <= ms() {
+            self.collector.set_procs(false);
+            self.procs_until = 0;
+        }
         self.sample();
         if self.fullscreen {
             return;
@@ -513,8 +526,11 @@ impl App {
         if self.list.denied.is_some() && t.saturating_sub(self.denied_at) >= DENIED_MS {
             self.list.denied = None;
         }
+        if bar::has_list(item) && self.model.last.procs.is_empty() {
+            self.fill_procs();
+        }
         let still = self.on_panel || self.list.sel.is_some() || self.list.down.is_some() || self.list.denied.is_some();
-        if !still || self.list.rows.is_empty() {
+        if !still || self.list.rows.iter().all(String::is_empty) {
             self.list.rows = bar::ranking(&self.model, item);
             self.list.icons = self.list.rows.clone().iter().map(|n| self.icon(n)).collect();
         }
@@ -522,6 +538,37 @@ impl App {
             && !self.running(i)
         {
             self.list.sel = None;
+        }
+    }
+
+    /// The pointer is at the bar or its panel: programs are read from now (a first reading
+    /// taken, so the next has their loads) until it has been away a while.
+    fn wake_procs(&mut self) {
+        let t = ms();
+        if self.procs_until <= t {
+            self.collector.set_procs(true);
+            self.procs_from = t;
+        }
+        self.procs_until = t + PROCS_LINGER_MS;
+    }
+
+    /// A list opened before a second's sample had the programs: they're read now, and again
+    /// once enough time has passed since the first reading to tell their loads apart.
+    fn fill_procs(&mut self) {
+        self.wake_procs();
+        self.model.last.procs = self.collector.sample_procs();
+        let age = ms().saturating_sub(self.procs_from);
+        if age < PROCS_SETTLE_MS {
+            unsafe { SetTimer(self.hwnd, TIMER_PROCS, (PROCS_SETTLE_MS - age) as u32, None) };
+        }
+    }
+
+    /// The second reading [`fill_procs`] asked for.
+    fn settle_procs(&mut self) {
+        unsafe { KillTimer(self.hwnd, TIMER_PROCS) };
+        if self.procs_until > ms() {
+            self.model.last.procs = self.collector.sample_procs();
+            self.draw_panel();
         }
     }
 
@@ -595,6 +642,7 @@ impl App {
 
     /// The pointer timer: where the pointer went, and the list's countdowns.
     fn pointer_tick(&mut self) {
+        self.wake_procs();
         if self.list.down.is_none() {
             self.follow_cursor();
         }
@@ -611,6 +659,7 @@ impl App {
     }
 
     fn mouse(&mut self, lp: LPARAM) {
+        self.wake_procs();
         if !self.tracking {
             let mut tme = TRACKMOUSEEVENT { cbSize: core::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: self.hwnd, dwHoverTime: 0 };
             unsafe { TrackMouseEvent(&mut tme) };
@@ -728,6 +777,10 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
     match msg {
         WM_TIMER if wp == TIMER_TICK => {
             app.tick();
+            0
+        }
+        WM_TIMER if wp == TIMER_PROCS => {
+            app.settle_procs();
             0
         }
         WM_TIMER if wp == TIMER_POINTER => {

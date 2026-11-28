@@ -124,8 +124,10 @@ speed; memory in use; GPU load (the busiest engine type, as Task Manager shows i
 video memory; disk active time and read and write rates; network bytes up and down on the
 connected physical adapters. No administrator rights; temperatures aren't shown.
 
-Per program (`src/procs.rs`), all the time, so a list has its rows the moment its panel opens
-(about 0.3% of one core more than without): one `NtQuerySystemInformation` snapshot a second gives each process's CPU time, private working set
+Per program (`src/procs.rs`), from when the pointer comes to the bar until it has been away
+10 seconds, so a list opens with its rows: a list that opens before the second's sample read
+them reads them at once, and again 0.3 seconds after the reading began when that was sooner
+(their GPU shows from the next second). One `NtQuerySystemInformation` snapshot a second gives each process's CPU time, private working set
 (Task Manager's memory column) and I/O bytes; GPU comes from the same GPU engine counter, per
 process, the busiest engine type. Processes with one image name are summed. Ending a program
 opens each of its processes for termination; one that can't be (elevated, protected, another

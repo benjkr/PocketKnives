@@ -174,6 +174,12 @@ impl Collector {
         }
     }
 
+    /// Every program now, between seconds (none while `set_procs` has it off). Their GPU shows
+    /// from the next `sample`.
+    pub fn sample_procs(&mut self) -> Vec<Proc> {
+        self.procs.as_mut().map(|p| p.sample()).unwrap_or_default()
+    }
+
     fn collect(&mut self) {
         for q in [self.query, self.gpu_query] {
             if !q.is_null() {
