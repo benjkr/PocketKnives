@@ -186,6 +186,7 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         let icons = if live > 0 { crate::icons::for_rows(&rows, &m.last.procs) } else { crate::icons::for_rows(&rows, &crate::procs::Sampler::new().sample()) };
         let view = bar::ListView { rows, sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press), icons };
         bar::panel(&mut pc, pk, &pal, &m, item, &view);
+        bar::panel_glare(&mut pc, pk, &pal, item, (0.0, 0.0));
         if halve {
             let mut half = Canvas::new(pw.div_ceil(2), ph.div_ceil(2));
             pc.halve_into(&mut half);

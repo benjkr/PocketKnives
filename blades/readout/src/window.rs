@@ -51,9 +51,11 @@ const WM_APPBAR: u32 = WM_APP + 1;
 const WM_MOUSELEAVE: u32 = 0x02A3;
 const TIMER_TICK: usize = 1;
 /// While a tile is hovered: where the pointer is (it may cross the gap to the panel, where
-/// neither window hears it leave), and the list's countdowns.
+/// neither window hears it leave), the list's countdowns, and the glare following the pointer.
 const TIMER_POINTER: usize = 2;
-const POINTER_MS: u32 = 100;
+const POINTER_MS: u32 = 33;
+/// How far the glare moves towards the pointer each tick.
+const GLARE_EASE: f32 = 0.35;
 /// A selection lasts this long; a refusal shows this long.
 const SEL_MS: u64 = 5000;
 const DENIED_MS: u64 = 2500;
@@ -130,8 +132,12 @@ struct App {
     back: Canvas,
     back_hover: Option<Option<usize>>,
     surface: Surface,
-    /// The panel as drawn (at its whole drawing scale), and as shown.
+    /// The panel as drawn (at its whole drawing scale), with its glare, and as shown.
     panel_draw: Canvas,
+    panel_lit: Canvas,
+    /// Where the glare is, and where the pointer would take it (see `bar::panel_glare`).
+    glare: (f32, f32),
+    glare_to: (f32, f32),
     panel_canvas: Canvas,
     /// The panel's part that never changes, for `panel_item` (`None` when it must be drawn again).
     panel_back: Canvas,
@@ -193,6 +199,9 @@ pub fn run() -> u32 {
         back_hover: None,
         surface: Surface::new(1, 1),
         panel_draw: Canvas::new(1, 1),
+        panel_lit: Canvas::new(1, 1),
+        glare: (0.0, 0.0),
+        glare_to: (0.0, 0.0),
         panel_canvas: Canvas::new(1, 1),
         panel_back: Canvas::new(1, 1),
         panel_surface: Surface::new(1, 1),
@@ -351,6 +360,7 @@ impl App {
             let (pw, ph) = bar::panel_size(k, item);
             if self.panel_draw.w != pw || self.panel_draw.h != ph {
                 self.panel_draw = Canvas::new(pw, ph);
+                self.panel_lit = Canvas::new(pw, ph);
                 self.panel_back = Canvas::new(pw, ph);
                 let (sw, sh) = if halve { (pw.div_ceil(2), ph.div_ceil(2)) } else { (pw, ph) };
                 self.panel_canvas = Canvas::new(sw, sh);
@@ -362,15 +372,41 @@ impl App {
         self.update_list(item);
         self.panel_draw.px.copy_from_slice(&self.panel_back.px);
         bar::panel_front(&mut self.panel_draw, k, &self.pal, &self.model, item, &self.list);
+        self.show_panel(item);
+        unsafe { ShowWindow(self.panel_hwnd, SW_SHOWNOACTIVATE) };
+    }
+
+    /// Puts the drawn panel on the screen with its glare where it is now.
+    fn show_panel(&mut self, item: Item) {
+        let (k, halve) = self.layout.panel_draw();
+        self.panel_lit.px.copy_from_slice(&self.panel_draw.px);
+        bar::panel_glare(&mut self.panel_lit, k, &self.pal, item, self.glare);
         if halve {
-            self.panel_draw.halve_into(&mut self.panel_canvas);
+            self.panel_lit.halve_into(&mut self.panel_canvas);
         } else {
-            self.panel_canvas.px.copy_from_slice(&self.panel_draw.px);
+            self.panel_canvas.px.copy_from_slice(&self.panel_lit.px);
         }
         let (left, top, _, _) = self.panel_rect(item);
         let margin = (PANEL_MARGIN as f32 * self.layout.panel_scale()) as i32;
         self.panel_surface.show(self.panel_hwnd, &self.panel_canvas, left - margin, top - margin);
-        unsafe { ShowWindow(self.panel_hwnd, SW_SHOWNOACTIVATE) };
+    }
+
+    /// Eases the glare towards where the pointer would put it, and shows it when it moved.
+    fn move_glare(&mut self, item: Item) {
+        let mut pt = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut pt) };
+        let (left, top, _, _) = self.panel_rect(item);
+        let s = self.layout.panel_scale();
+        let (gx, gy, gw, gh) = bar::list_glass();
+        let (cx, cy) = (left as f32 + (gx + gw / 2.0) * s, top as f32 + (gy + gh / 2.0) * s);
+        // the reach, in design pixels, that takes the glare to its ends
+        self.glare_to = (((pt.x as f32 - cx) / s / 133.0).clamp(-1.0, 1.0), ((pt.y as f32 - cy) / s / 167.0).clamp(-1.0, 1.0));
+        let (dx, dy) = (self.glare_to.0 - self.glare.0, self.glare_to.1 - self.glare.1);
+        if dx.abs() + dy.abs() < 0.004 {
+            return;
+        }
+        self.glare = (self.glare.0 + dx * GLARE_EASE, self.glare.1 + dy * GLARE_EASE);
+        self.show_panel(item);
     }
 
     /// The list's rows and states for `item` now. The rows hold still while the pointer is on
@@ -480,6 +516,9 @@ impl App {
             self.update_list(item);
             if (self.list.sel, self.list.left, self.list.denied) != (sel, left, denied) {
                 self.draw_panel();
+            }
+            if bar::has_list(item) {
+                self.move_glare(item);
             }
         }
     }

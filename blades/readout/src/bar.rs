@@ -1203,7 +1203,7 @@ fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListVi
 
 /// The cover glass's print and the colour screen under it, over the LCD: the black mask (the
 /// colour screen's black is the same, so an icon has no tile round it), the icons, the lit top
-/// edge, and one reflection across all of it. (gx, gy) is the glass's top left.
+/// edge ([`panel_glare`] adds the reflection). (gx, gy) is the glass's top left.
 fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
     let pal = *pen.pal;
     let mut mask = Path::new();
@@ -1230,30 +1230,38 @@ fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
     let mut edge = Path::new();
     edge.poly(raster::rect_path(gx + 1.0, gy, LW_W - 2.0, 1.0));
     pen.fill(&edge, pal.cover_edge);
-    // the reflection: a broad band and a thin one, slanting down to the left, cut at the glass's
-    // left edge
-    let mut glare = Path::new();
-    for (left, w) in [(30.0, 24.0), (60.0, 5.0)] {
-        let slant = 36.0;
-        glare.poly(clip_left(&[(gx + left, gy), (gx + left + w, gy), (gx + left + w - slant, gy + LW_H), (gx + left - slant, gy + LW_H)], gx));
-    }
-    pen.fill(&glare, pal.cover_glare);
 }
 
-/// The part of polygon `pts` right of `x0`.
-fn clip_left(pts: &[Pt], x0: f32) -> Vec<Pt> {
-    let mut out = Vec::new();
-    for i in 0..pts.len() {
-        let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
-        if a.0 >= x0 {
-            out.push(a);
-        }
-        if (a.0 >= x0) != (b.0 >= x0) {
-            let t = (x0 - a.0) / (b.0 - a.0);
-            out.push((x0, a.1 + (b.1 - a.1) * t));
+/// The list window's glass on its panel (design pixels from the panel's top left): x, y, width,
+/// height.
+pub fn list_glass() -> (f32, f32, f32, f32) {
+    (LW_X, LW_Y, LW_W, LW_H)
+}
+
+/// The reflection on the list window's cover glass, over `item`'s panel as drawn on `c`: like a
+/// window behind the viewer, the upper glass a shade lighter, fading out at a horizon, and a
+/// glint on the top edge. `at` is where the pointer is from the glass's middle, -1..=1 each way
+/// (0, 0 at rest): the horizon rises and falls with it, the glint follows it across.
+pub fn panel_glare(c: &mut Canvas, k: i32, pal: &Palette, item: Item, at: (f32, f32)) {
+    if !has_list(item) {
+        return;
+    }
+    let mut pen = Pen { c, k: k as f32, pal };
+    let (gx, gy) = (PANEL_MARGIN as f32 + LW_X, PANEL_MARGIN as f32 + LW_Y);
+    let hy = (gy + LW_H / 2.0 - 13.0 + at.1 * 40.0).clamp(gy + 4.0, gy + LW_H - 4.0);
+    let mut upper = Path::new();
+    upper.poly(raster::round_rect(gx, gy, LW_W, hy - gy, 1.5));
+    pen.fill_grad(&upper, &[(gy, pal.cover_glare), (gy + (hy - gy) * 0.8, pal.cover_glare.with_alpha(0.4)), (hy, pal.cover_glare.with_alpha(0.0))]);
+    // the glint: the lit edge brighter towards the middle, in steps
+    let cx = gx + LW_W / 2.0 + at.0 * 66.0;
+    for w in [46.0, 28.0, 12.0] {
+        let (x0, x1) = ((cx - w / 2.0).max(gx + 1.0), (cx + w / 2.0).min(gx + LW_W - 1.0));
+        if x1 > x0 {
+            let mut g = Path::new();
+            g.poly(raster::rect_path(x0, gy, x1 - x0, 1.0));
+            pen.fill(&g, pal.cover_edge);
         }
     }
-    out
 }
 
 /// The colour screen's own icons, [`icons::SIZE`] square, a row a byte (bit 7 at the left): a

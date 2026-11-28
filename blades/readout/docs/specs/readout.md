@@ -56,7 +56,11 @@ the mock):
     unhinted so the letters space evenly. Text on glass stays in the pixel font.
   - The keys' legend is a multiplication sign `×`.
   - The list window is one cover glass over two displays, with black printed on its back
-    round the LCD's opening and over a colour screen at its left; one reflection crosses it all.
+    round the LCD's opening and over a colour screen at its left. It reflects a window behind
+    the viewer (design "G3"): the upper glass a shade lighter, fading out at a horizon, and a
+    glint on its top edge. While the panel is open the horizon rises and falls with the pointer
+    and the glint follows it across, easing there about 30 times a second; only the glare is
+    redrawn, and nothing when it has settled.
   - The LCD: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in the ghost
     colour), then a row per program, 11 pixels apart: its name (9 characters, `~` for the
     rest), a bar of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and
