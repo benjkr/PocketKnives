@@ -856,14 +856,14 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
 }
 
 // ---- the panel's process list ----
-// What can change is on glass; what is fixed (the heading, the row numbers, the scale, the
-// footer) is engraved in the plastic; a key only travels when pressed. Design "P4", X twice.
+// What can change is on glass; what is fixed (the heading, the row numbers, the scale) is
+// engraved in the plastic; a key only travels when pressed. Design "P4", X twice.
 
 /// The rows in a process list.
 pub const LIST_ROWS: usize = 10;
 /// The list's part of the body under the screen: the parting line, the heading, the list window,
-/// its scale and the footer.
-const LIST_H: i32 = 147;
+/// and its scale.
+const LIST_H: i32 = 137;
 /// The list window's glass (from the panel's top left) and its bitmap's width.
 const LW_X: f32 = 15.0;
 const LW_Y: f32 = 114.0;
@@ -1085,7 +1085,7 @@ fn scale(pen: &mut Pen, f: &Face, x: f32, y: f32) {
 
 /// The list's part of the body that never changes: a parting line under the screen, the
 /// engraved heading and row numbers, the list window's ring and glass, the engraved tick before
-/// each key, the engraved scale and footer. (px, py) is the panel's top left.
+/// each key, the engraved scale. (px, py) is the panel's top left.
 fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     let pal = *pen.pal;
     let line = |y: f32| {
@@ -1125,11 +1125,8 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     }
     pen.engrave(&ticks);
 
-    // the scale under the bars, and the footer
+    // the scale under the bars
     scale(pen, &f, px + LW_X + 2.0 + BAR_X as f32, py + 218.0);
-    pen.letter(&f, "BAR: OF TOTAL", px + 5.0, py + 221.0);
-    pen.letter(&f, "X SELECTS", px + 5.0, py + 231.0);
-    pen.letter(&f, "X AGAIN KILLS", right("X AGAIN KILLS"), py + 231.0);
 }
 
 /// The list's moving parts: the list window's content and the keys (one may be held down).
