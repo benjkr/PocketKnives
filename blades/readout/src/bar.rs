@@ -865,16 +865,20 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
         Item::Dsk => vec![
             Foot::Text(lcd::text("RD", false, 0)),
             Foot::Seg(size_rate(s.disk_read / 1024.0)),
+            Foot::Text(lcd::text("/S", false, 0)),
             Foot::Spacer,
             Foot::Text(lcd::text("WR", false, 0)),
             Foot::Seg(size_rate(s.disk_write / 1024.0)),
+            Foot::Text(lcd::text("/S", false, 0)),
         ],
         _ => vec![
             Foot::Text(lcd::text("NOW", false, 0)),
             Foot::Spacer,
             Foot::Seg(lcd::rate(true, m.up.now())),
+            Foot::Text(lcd::text("/S", false, 0)),
             Foot::Gap(4.0),
             Foot::Seg(lcd::rate(false, m.dn.now())),
+            Foot::Text(lcd::text("/S", false, 0)),
         ],
     };
     let fixed: f32 = foot.iter().map(Foot::w).sum::<f32>() + 2.0 * (foot.len() as f32 - 1.0);
@@ -904,18 +908,18 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
 pub const LIST_ROWS: usize = 10;
 /// The list's part of the body under the screen: the parting line, the heading, the list window,
 /// and its scale.
-const LIST_H: i32 = 161;
+const LIST_H: i32 = 151;
 /// The list window's glass (from the panel's top left).
 const LW_X: f32 = 15.0;
 const LW_Y: f32 = 114.0;
 const LW_W: f32 = 113.0;
-const LW_H: f32 = 124.0;
+const LW_H: f32 = 114.0;
 /// The LCD's bitmap: its size and its inset on the glass.
 const LB_W: usize = 109;
-const LB_H: usize = 120;
+const LB_H: usize = 110;
 const LB_IN: f32 = 2.0;
 /// The first row's top on the bitmap, and the row pitch.
-const ROW_TOP: i32 = 10;
+const ROW_TOP: i32 = 0;
 const ROW_PITCH: i32 = 11;
 /// The black printed on the glass's back: its width at the left, over the colour screen, and
 /// round the rest of the edge.
@@ -929,16 +933,13 @@ const KEY_X: f32 = 134.0;
 const KEY_Y: f32 = LW_Y + LB_IN + ROW_TOP as f32 + 2.0;
 const KEY_W: f32 = 11.0;
 const KEY_H: f32 = 7.0;
-/// Bitmap columns: the annunciators', a name's and its characters, the bar's left and width, the
-/// value's right edge.
-const ANN_X: i32 = 15;
+/// Bitmap columns: a name's and its characters, the bar's left and (for a one-letter unit) width,
+/// the value's right edge.
 const NAME_X: i32 = 16;
 const NAME_CHARS: usize = 9;
 const BAR_X: i32 = 57;
 const BAR_W: i32 = 27;
 const VAL_R: i32 = 107;
-/// Pips counting down a selection's seconds.
-pub const SEL_PIPS: u8 = 5;
 
 /// Whether `item`'s panel lists processes (the network's can't: Windows doesn't count traffic
 /// per process without administrator rights).
@@ -951,9 +952,8 @@ pub fn has_list(item: Item) -> bool {
 pub struct ListView {
     /// The programs on the rows, top first; a program that has ended leaves its row blank.
     pub rows: Vec<String>,
-    /// The selected row, and its seconds left (pips lit).
+    /// The selected row.
     pub sel: Option<usize>,
-    pub left: u8,
     /// A row whose program couldn't be ended.
     pub denied: Option<usize>,
     /// The key held down.
@@ -997,13 +997,10 @@ fn whole(m: &Model, item: Item) -> f64 {
     }
 }
 
-fn list_label(item: Item) -> &'static str {
-    match item {
-        Item::Cpu => "OF ALL CORES",
-        Item::Mem => "PRIVATE MEMORY",
-        Item::Gpu => "OF GPU",
-        _ => "I/O PER SEC",
-    }
+/// The bars' width for `item`: what its unit's width leaves (a rate's `/S` takes from it).
+fn bar_w(item: Item) -> i32 {
+    let unit = proc_text(0.0, item).1;
+    BAR_W - (lcd::text_w(unit) as i32 - lcd::text_w("%") as i32)
 }
 
 /// A value as at most three digits and a point, and its unit.
@@ -1015,7 +1012,7 @@ fn proc_text(v: f64, item: Item) -> (String, &'static str) {
         }
         Item::Dsk => {
             let (t, u) = lcd::fmt3((v / 1024.0) as f32);
-            (t, ["K", "M", "G"][u])
+            (t, ["K/S", "M/S", "G/S"][u])
         }
         _ => (if v < 99.95 { lcd::fixed1(v as f32) } else { String::from("100") }, "%"),
     }
@@ -1063,35 +1060,10 @@ fn invert(b: &mut Bitmap, x0: i32, x1: i32, y0: i32, y1: i32) {
     }
 }
 
-/// An annunciator: a word at a fixed place on the glass, a ghost when off, in inverse when on.
-/// Returns the next one's x.
-fn annunciator(b: &mut Bitmap, x: i32, y: i32, s: &str, on: bool) -> i32 {
-    let w = lcd::text_w(s) as i32 + 4;
-    text_at(b, s, x + 2, y, if on { lcd::LIT } else { lcd::GHOST });
-    if on {
-        invert(b, x, x + w, y - 1, y + 5);
-    }
-    x + w + 3
-}
-
-/// The list window's bitmap: the annunciators over a dotted rule, then a row per program.
+/// The list window's bitmap: a row per program.
 fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
     let mut b = Bitmap::new(LB_W, LB_H);
-    let mut x = annunciator(&mut b, ANN_X, 2, "SEL", v.sel.is_some());
-    for i in 0..SEL_PIPS {
-        let on = v.sel.is_some() && i < v.left;
-        for y in 2..7 {
-            for dx in 0..2 {
-                b.ps(x + i as i32 * 4 + dx, y, if on { lcd::LIT } else { lcd::GHOST });
-            }
-        }
-    }
-    x += SEL_PIPS as i32 * 4 + 1;
-    annunciator(&mut b, x, 2, "DENIED", v.denied.is_some());
-    for x in (0..LB_W as i32).step_by(2) {
-        b.ps(x, 8, lcd::DIVIDER);
-    }
-    let whole = whole(m, item);
+    let (whole, bar_w) = (whole(m, item), bar_w(item));
     for (i, name) in v.rows.iter().enumerate().take(LIST_ROWS) {
         let t = ROW_TOP + i as i32 * ROW_PITCH;
         let y = t + 3;
@@ -1105,18 +1077,19 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
             text_right(&mut b, "ACCESS DENIED", VAL_R, y, lcd::LIT);
         } else {
             // three rows of bar over a dotted track, its length the share on a square-root scale
-            for x in (0..BAR_W).step_by(2) {
+            for x in (0..bar_w).step_by(2) {
                 b.ps(BAR_X + x, y + 4, lcd::DIVIDER);
             }
-            let len = (libm::round(libm::sqrt(share) * BAR_W as f64) as i32).clamp(1, BAR_W);
+            let len = (libm::round(libm::sqrt(share) * bar_w as f64) as i32).clamp(1, bar_w);
             for x in BAR_X..BAR_X + len {
                 for r in 1..=3 {
                     b.ps(x, y + r, if hot { lcd::HOT_PX } else if r == 1 { lcd::LIT } else { lcd::FILL });
                 }
             }
             let (num, unit) = proc_text(val, item);
-            text_at(&mut b, unit, VAL_R - 4, y, lcd::LIT);
-            text_right(&mut b, &num, VAL_R - 5, y, lcd::LIT);
+            let ux = VAL_R - 1 - lcd::text_w(unit) as i32;
+            text_at(&mut b, unit, ux, y, lcd::LIT);
+            text_right(&mut b, &num, ux - 1, y, lcd::LIT);
         }
         if v.sel == Some(i) {
             invert(&mut b, NAME_X - 1, VAL_R + 2, t + 1, t + ROW_PITCH - 2);
@@ -1126,15 +1099,18 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
 }
 
 /// The scale under the bars, engraved at (x, y): ticks at 0, 1, 5, 10, 25, 50 and 100% on the
-/// bars' square-root scale, three of them longer and labelled, each number centred on its tick.
-fn scale(pen: &mut Pen, f: &Face, x: f32, y: f32) {
+/// bars' square-root scale, three of them longer and labelled, each number centred on its tick
+/// (one that would touch the number before it, on short bars, left out).
+fn scale(pen: &mut Pen, f: &Face, x: f32, y: f32, bar_w: i32) {
     let mut ticks = Path::new();
+    let mut free = f32::MIN;
     for (t, label) in [(0.0, "0"), (0.01, ""), (0.05, ""), (0.1, "10"), (0.25, ""), (0.5, ""), (1.0, "100%")] {
-        let tx = x + (libm::round(libm::sqrt(t) * BAR_W as f64) as i32).min(BAR_W - 1) as f32;
+        let tx = x + (libm::round(libm::sqrt(t) * bar_w as f64) as i32).min(bar_w - 1) as f32;
         ticks.poly(raster::rect_path(tx, y, 1.0, if label.is_empty() { 1.0 } else { 2.0 }));
-        if !label.is_empty() {
-            let num = label.trim_end_matches('%');
-            pen.letter(f, label, tx + 0.5 - f.width(num) / 2.0, y + 3.0);
+        let lx = tx + 0.5 - f.width(label.trim_end_matches('%')) / 2.0;
+        if !label.is_empty() && lx >= free {
+            pen.letter(f, label, lx, y + 3.0);
+            free = lx + f.width(label) + 2.0;
         }
     }
     pen.engrave(&ticks);
@@ -1153,10 +1129,7 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     pen.fill(&line(96.0), pal.plate_edge_bottom);
     pen.fill(&line(97.0), pal.plate_edge_top);
     let f = Face::new();
-    let right = |s: &str| px + PANEL_W as f32 - 5.0 - f.width(s);
     pen.letter(&f, "TOP 10 PROCESSES", px + 5.0, py + 103.0);
-    let label = list_label(item);
-    pen.letter(&f, label, right(label), py + 103.0);
     for i in 0..LIST_ROWS {
         let n = format!("{}", i + 1);
         pen.letter(&f, &n, px + 13.0 - f.width(&n), py + KEY_Y + 1.0 + (i as i32 * ROW_PITCH) as f32);
@@ -1183,7 +1156,7 @@ fn list_back(pen: &mut Pen, px: f32, py: f32, item: Item) {
     pen.engrave(&ticks);
 
     // the scale under the bars
-    scale(pen, &f, px + LW_X + LB_IN + BAR_X as f32, py + LW_Y + LW_H + 4.0);
+    scale(pen, &f, px + LW_X + LB_IN + BAR_X as f32, py + LW_Y + LW_H + 4.0, bar_w(item));
 }
 
 /// The list's moving parts: the list window's content and the keys (one may be held down).

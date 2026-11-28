@@ -184,7 +184,7 @@ fn preview(out: &mut Writer, args: &[String]) -> u32 {
         let rows = bar::ranking(&m, item);
         // the icons of this machine's programs with those names (the sample's have no processes)
         let icons = if live > 0 { crate::icons::for_rows(&rows, &m.last.procs) } else { crate::icons::for_rows(&rows, &crate::procs::Sampler::new().sample()) };
-        let view = bar::ListView { rows, sel: row(select), left: bar::SEL_PIPS, denied: row(deny), down: row(press), icons };
+        let view = bar::ListView { rows, sel: row(select), denied: row(deny), down: row(press), icons };
         bar::panel(&mut pc, pk, &pal, &m, item, &view);
         bar::panel_glare(&mut pc, pk, &pal, item, (0.0, 0.0));
         if halve {

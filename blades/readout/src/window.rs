@@ -434,7 +434,6 @@ impl App {
         {
             self.list.sel = None;
         }
-        self.list.left = bar::SEL_PIPS.saturating_sub((t.saturating_sub(self.sel_at) / 1000) as u8);
     }
 
     /// Program `name`'s icon, read from its file the first time it's listed.
@@ -511,10 +510,10 @@ impl App {
         if self.list.down.is_none() {
             self.follow_cursor();
         }
-        let (sel, left, denied) = (self.list.sel, self.list.left, self.list.denied);
+        let (sel, denied) = (self.list.sel, self.list.denied);
         if let Some(item) = self.panel_item() {
             self.update_list(item);
-            if (self.list.sel, self.list.left, self.list.denied) != (sel, left, denied) {
+            if (self.list.sel, self.list.denied) != (sel, denied) {
                 self.draw_panel();
             }
             if bar::has_list(item) {

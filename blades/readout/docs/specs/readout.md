@@ -44,16 +44,17 @@ the mock):
 - **The panel**: the metric's name and value, the last minute at twice the dot size with axes
   (and a dotted 70% line), and a footer: per-core bars and the effective clock speed (CPU);
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
-  rates (disk); up and down rates (network).
+  rates (disk); up and down rates (network). Rates in the panels carry `/S` (K/S, M/S, G/S:
+  KB, MB and GB a second).
 - **Top 10 processes** (design "P4" with the colour screen of "S2"; CPU, memory, GPU and disk
   panels, not the network's):
   under the screen, behind a parting line, the panel's body holds the list. What can change is
   on glass, what is fixed is engraved in the plastic, and a key only travels when pressed.
-  - Engraved: the heading `TOP 10 PROCESSES` and what the value is (`OF ALL CORES`, `PRIVATE
-    MEMORY`, `OF GPU`, `I/O PER SEC`), the row numbers 1–10, a tick from each row to its key
-    and the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale). Lettering on the
-    plastic is in capitals like a calculator's printed labels: Arial Bold (every Windows has it), 5 design pixels to the capitals' top,
-    unhinted so the letters space evenly. Text on glass stays in the pixel font.
+  - Engraved: the heading `TOP 10 PROCESSES`, the row numbers 1–10, a tick from each row to
+    its key and the bars' scale (0, 1, 5, 10, 25, 50, 100% on a square-root scale; a number
+    that would touch the one before it on short bars is left out). Lettering on the plastic is
+    in capitals like a calculator's printed labels: Arial Bold (every Windows has it), 5 design
+    pixels to the capitals' top, unhinted so the letters space evenly. Text on glass stays in the pixel font.
   - The keys' legend is a multiplication sign `×`.
   - The list window is one cover glass over two displays, with black printed on its back
     round the LCD's opening and over a colour screen at its left. It reflects a window behind
@@ -61,18 +62,17 @@ the mock):
     glint on its top edge. While the panel is open the horizon rises and falls with the pointer
     and the glint follows it across, easing there about 30 times a second; only the glare is
     redrawn, and nothing when it has settled.
-  - The LCD: the annunciators `SEL`, five countdown pips and `DENIED` (unlit ones in the ghost
-    colour), then a row per program, 11 pixels apart: its name (9 characters, `~` for the
-    rest), a bar of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and
-    its value. A program over 70% of the whole is hot (not for I/O).
+  - The LCD: a row per program, 11 pixels apart: its name (9 characters, `~` for the rest), a
+    bar of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and its
+    value (disk rates with `/S`, their bars shorter by its width). A program over 70% of the
+    whole is hot (not for I/O).
   - The colour screen: each row's program's own icon, read from its file, 8 x 8 pixels of one
     design pixel each, with no tile round it (the screen's black is the print's). A program
     whose file can't be read (system and protected processes) or that has no icon shows a cog;
     the program that couldn't be ended shows a padlock; the selected row's cell lights.
-  - A key per row: the first press selects the program (the row in inverse, `SEL` lit, the pips
-    count 5 s down); a second press on it ends every process with that name. A second press as
-    quick as a double-click is ignored. A program Readout can't end shows `ACCESS DENIED` and
-    lights `DENIED`.
+  - A key per row: the first press selects the program (its row in inverse, its icon's cell lit,
+    for 5 s); a second press on it ends every process with that name. A second press as quick as
+    a double-click is ignored. A program Readout can't end shows `ACCESS DENIED` and a padlock.
   - The rows hold still while the pointer is on the panel or a row is selected, held or refused;
     a program that ends meanwhile leaves its row blank.
 
