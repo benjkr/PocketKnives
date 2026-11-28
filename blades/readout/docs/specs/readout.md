@@ -33,19 +33,19 @@ the mock):
 - **Digit windows**: seven-segment readouts leaning 9°, with unlit (ghost) segments; every digit
   has the same cell and a 1 sits in its middle, so nothing moves as values change. Meters show
   `0`–`100` and a `%` drawn on the glass; the network shows up and down rates as at most three
-  digits and K, M or G (KB/s, MB/s, GB/s).
+  digits and K, M or G (kbps, Mbps, Gbps: bits a second, in thousands).
 - **Graphs** (dot matrix, one design pixel a dot): CPU, a bar per core (pairs and so on merged to
   at most 14, each the busiest core in it); memory and GPU, a stepped line of the last ~45
   seconds; disk, bars; network, upload as a line above a centre axis and download filled below,
-  on a log scale to 10 MB/s. While the history fills up, graphs end at the right edge (now).
-- **Hot**: a meter above 70%, or network traffic of 1 MB/s or more either way. Hot pixels take
+  on a log scale to 10 MB/s (80 Mbps). While the history fills up, graphs end at the right edge (now).
+- **Hot**: a meter above 70%, or network traffic of 10 Mbps or more either way. Hot pixels take
   the `hot` colour, and the metric's engraved icon takes `iconHot`.
 - **The clock**: its own window, the date in a 3×5 pixel font over a large seven-segment time.
 - **The panel**: the metric's name and value, the last minute at twice the dot size with axes
   (and a dotted 70% line), and a footer: per-core bars and the effective clock speed (CPU);
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
-  rates (disk); up and down rates (network). Rates in the panels carry `/S` (K/S, M/S, G/S:
-  KB, MB and GB a second).
+  rates (disk); up and down rates (network). Rates are in bits a second (kbps, Mbps, Gbps, in
+  thousands); in the panels they carry `bps`.
 - **Top 10 processes** (design "P4" with the colour screen of "S2"; CPU, memory, GPU and disk
   panels, not the network's):
   under the screen, behind a parting line, the panel's body holds the list. What can change is
@@ -64,7 +64,7 @@ the mock):
     redrawn, and nothing when it has settled.
   - The LCD: a row per program, 11 pixels apart: its name (9 characters, `~` for the rest), a
     bar of its share of the whole (the CPU, all memory, the GPU, all programs' I/O) and its
-    value (disk rates with `/S`, their bars shorter by its width). A program over 70% of the
+    value (disk rates in kbps, Mbps or Gbps, their bars shorter by the unit's width). A program over 70% of the
     whole is hot (not for I/O).
   - The colour screen: each row's program's own icon, read from its file, 8 x 8 pixels of one
     design pixel each, with no tile round it (the screen's black is the print's). A program

@@ -708,8 +708,9 @@ fn gb(bytes: u64) -> String {
     if v < 99.95 { lcd::fixed1(v) } else { format!("{}", libm::roundf(v) as u32) }
 }
 
+/// A rate of `kbs` KB/s in bits a second: three digit cells and the unit letter (`bps` follows).
 fn size_rate(kbs: f64) -> Readout {
-    let (text, u) = lcd::fmt3(kbs as f32);
+    let (text, u) = lcd::bits(kbs as f32);
     lcd::readout(&text, "88.8U", &SMALL, false, lcd::KMG[u])
 }
 
@@ -783,7 +784,7 @@ pub fn panel_back(c: &mut Canvas, k: i32, pal: &Palette, item: Item) {
     pen.grid(cx, cy + 17.0, 66, 20, 2);
 
     // the axis labels
-    let (a0, a1, a2) = (lcd::text("60S", false, 0), lcd::text(if net { "1M/S" } else { "70%" }, false, 0), lcd::text("NOW", false, 0));
+    let (a0, a1, a2) = (lcd::text("60S", false, 0), lcd::text(if net { "10Mbps" } else { "70%" }, false, 0), lcd::text("NOW", false, 0));
     let free = cw - (a0.w + a1.w + a2.w) as f32;
     let ay = cy + 59.0;
     pen.bitmap(&a0, cx, ay, 1);
@@ -865,20 +866,20 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
         Item::Dsk => vec![
             Foot::Text(lcd::text("RD", false, 0)),
             Foot::Seg(size_rate(s.disk_read / 1024.0)),
-            Foot::Text(lcd::text("/S", false, 0)),
+            Foot::Text(lcd::text(lcd::BPS, false, 0)),
             Foot::Spacer,
             Foot::Text(lcd::text("WR", false, 0)),
             Foot::Seg(size_rate(s.disk_write / 1024.0)),
-            Foot::Text(lcd::text("/S", false, 0)),
+            Foot::Text(lcd::text(lcd::BPS, false, 0)),
         ],
         _ => vec![
             Foot::Text(lcd::text("NOW", false, 0)),
             Foot::Spacer,
             Foot::Seg(lcd::rate(true, m.up.now())),
-            Foot::Text(lcd::text("/S", false, 0)),
+            Foot::Text(lcd::text(lcd::BPS, false, 0)),
             Foot::Gap(4.0),
             Foot::Seg(lcd::rate(false, m.dn.now())),
-            Foot::Text(lcd::text("/S", false, 0)),
+            Foot::Text(lcd::text(lcd::BPS, false, 0)),
         ],
     };
     let fixed: f32 = foot.iter().map(Foot::w).sum::<f32>() + 2.0 * (foot.len() as f32 - 1.0);
@@ -1007,12 +1008,12 @@ fn bar_w(item: Item) -> i32 {
 fn proc_text(v: f64, item: Item) -> (String, &'static str) {
     match item {
         Item::Mem => {
-            let (t, u) = lcd::fmt3((v / (1024.0 * 1024.0)) as f32);
+            let (t, u) = lcd::fmt3((v / (1024.0 * 1024.0)) as f32, 1024.0);
             (t, ["M", "G", "T"][u])
         }
         Item::Dsk => {
-            let (t, u) = lcd::fmt3((v / 1024.0) as f32);
-            (t, ["K/S", "M/S", "G/S"][u])
+            let (t, u) = lcd::bits((v / 1024.0) as f32);
+            (t, ["Kbps", "Mbps", "Gbps"][u])
         }
         _ => (if v < 99.95 { lcd::fixed1(v as f32) } else { String::from("100") }, "%"),
     }

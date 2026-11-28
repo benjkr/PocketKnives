@@ -206,12 +206,12 @@ pub fn readout(text: &str, tpl: &str, g: &Digits, up: bool, unit_letter: u8) -> 
 }
 
 /// At most three characters of number and a unit index: 0..999, then 1.0..9.9 and 10..999 of the
-/// next unit (K, M, G for a rate in KB/s).
-pub fn fmt3(x: f32) -> (String, usize) {
+/// next unit, `step` times larger (K, M, G).
+pub fn fmt3(x: f32, step: f32) -> (String, usize) {
     let mut x = x.max(0.0);
     let mut u = 0;
     while x >= 999.5 && u < 2 {
-        x /= 1024.0;
+        x /= step;
         u += 1;
     }
     if u > 0 && x < 9.95 { (fixed1(x), u) } else { (alloc::format!("{}", libm::roundf(x).min(999.0) as u32), u) }
@@ -224,9 +224,17 @@ pub fn fixed1(x: f32) -> String {
 
 pub const KMG: [u8; 3] = [b'K', b'M', b'G'];
 
-/// One direction of a rate readout: triangle, three digit cells, unit letter.
+/// A rate of `kbs` KB/s in bits a second, as [`fmt3`] gives it: kbps, Mbps or Gbps (thousands).
+pub fn bits(kbs: f32) -> (String, usize) {
+    fmt3(kbs * 1024.0 * 8.0 / 1000.0, 1000.0)
+}
+
+/// What follows a bit rate's unit letter.
+pub const BPS: &str = "bps";
+
+/// One direction of a rate readout, in bits a second: triangle, three digit cells, unit letter.
 pub fn rate(up: bool, kbs: f32) -> Readout {
-    let (text, u) = fmt3(kbs);
+    let (text, u) = bits(kbs);
     readout(&text, "^88.8U", &SMALL, up, KMG[u])
 }
 
@@ -288,6 +296,8 @@ fn glyph(c: u8) -> Option<&'static [u8; 5]> {
         b'.' => b"00002", b'/' => b"11244", b':' => b"02020", b'-' => b"00700", b'%' => b"51245", b'*' => b"25200",
         // `~` stands for the rest of a name cut short.
         b'~' => b"00005", b'_' => b"00007", b'?' => b"61202", b'(' => b"24442", b')' => b"42224",
+        // lower case, for "bps"
+        b'b' => b"44656", b'p' => b"06564", b's' => b"03416",
         _ => return None,
     })
 }

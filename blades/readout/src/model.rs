@@ -9,8 +9,8 @@ use alloc::vec::Vec;
 pub const HISTORY: usize = 64;
 /// A meter above this % is hot.
 pub const HOT: f32 = 70.0;
-/// Network traffic at or above this many KB/s, either way, is a burst (hot).
-pub const BURST_KBS: f32 = 1024.0;
+/// Network traffic at or above this many KB/s (10 Mbps), either way, is a burst (hot).
+pub const BURST_KBS: f32 = 10e6 / 8.0 / 1024.0;
 
 /// A fixed-length series, oldest first.
 #[derive(Clone)]
