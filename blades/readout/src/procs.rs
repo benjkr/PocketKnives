@@ -21,6 +21,8 @@ pub struct Proc {
     pub name: String,
     /// One of its processes, for its icon.
     pub pid: u32,
+    /// Its processes run in session 0, where services and the system run, not in a user's.
+    pub service: bool,
     /// CPU, % of the whole machine (every logical processor), 0–100.
     pub cpu: f32,
     /// Private working set (Task Manager's "Memory" column), bytes.
@@ -169,12 +171,14 @@ impl Sampler {
             }
             let gpu = self.gpu.binary_search_by_key(&pid, |g| g.0).map_or(0.0, |i| self.gpu[i].1);
             let name = image(p);
-            let key = crate::metrics::hash(name.iter().map(|&c| fold(c)));
+            // the same name in a user's session and in session 0 is two programs
+            let service = p.session == 0;
+            let key = crate::metrics::hash(name.iter().map(|&c| fold(c))).wrapping_mul(2) | service as u64;
             let i = match self.keys.iter().position(|&k| k == key) {
                 Some(i) => i,
                 None => {
                     self.keys.push(key);
-                    out.push(Proc { name: String::from_utf16_lossy(name), pid, ..Proc::default() });
+                    out.push(Proc { name: String::from_utf16_lossy(name), pid, service, ..Proc::default() });
                     out.len() - 1
                 }
             };
@@ -232,7 +236,7 @@ struct SysProc {
     pid: usize,
     _parent_pid: usize,
     _handles: u32,
-    _session: u32,
+    session: u32,
     _key: usize,
     /// Peak and current virtual size.
     _virtual: [usize; 2],
@@ -252,6 +256,7 @@ const _: () = {
     assert!(size_of::<SysProc>() == 256);
     assert!(core::mem::offset_of!(SysProc, image) == 56);
     assert!(core::mem::offset_of!(SysProc, pid) == 80);
+    assert!(core::mem::offset_of!(SysProc, session) == 100);
     assert!(core::mem::offset_of!(SysProc, read_bytes) == 232);
 };
 

@@ -93,6 +93,7 @@ impl Model {
             .map(|&(name, mb, share, gpu, kbs)| Proc {
                 name: name.into(),
                 pid: 0,
+                service: MOCK_SERVICES.contains(&name),
                 cpu: share * cpu,
                 mem: (mb as f64 * 1024.0 * 1024.0) as u64,
                 gpu,
@@ -120,6 +121,9 @@ const MOCK_PROCS: [(&str, f32, f32, f32, f32); 14] = [
     ("System", 0.2, 0.04, 0.0, 1400.0),
     ("RuntimeBroker", 96.0, 0.006, 0.0, 3.0),
 ];
+
+/// Which of the sample programs are services.
+const MOCK_SERVICES: [&str; 4] = ["MsMpEng", "SearchIndexer", "svchost", "System"];
 
 /// The design mock's random walk (`tick()` in bar-mocks-16.html), 8 cores.
 struct Mock {

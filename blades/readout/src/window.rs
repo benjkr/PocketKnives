@@ -452,7 +452,7 @@ impl App {
 
     /// Whether row `i`'s program is running (in the latest sample).
     fn running(&self, i: usize) -> bool {
-        self.list.rows.get(i).is_some_and(|n| self.model.last.procs.iter().any(|p| p.name == *n))
+        bar::row_proc(&self.model, &self.list.rows, i).is_some()
     }
 
     /// Hovers tile `hover` (or none): per-program sampling and the pointer timer run only while a

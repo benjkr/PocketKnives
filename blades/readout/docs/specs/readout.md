@@ -46,16 +46,19 @@ the mock):
   used and total memory (memory); used and total dedicated video memory (GPU); read and write
   rates (disk); up and down rates (network). Rates in the panels carry `/S` (K/S, M/S, G/S:
   KB, MB and GB a second).
-- **Top 10 processes** (design "P4" with the colour screen of "S2"; CPU, memory, GPU and disk
-  panels, not the network's):
-  under the screen, behind a parting line, the panel's body holds the list. What can change is
-  on glass, what is fixed is engraved in the plastic, and a key only travels when pressed.
-  - Engraved: the heading `TOP 10 PROCESSES`, the row numbers 1–10 and a tick from each row to
-    its key. Lettering on the plastic is
-    in capitals like a calculator's printed labels: Arial Bold (every Windows has it), 5 design
-    pixels to the capitals' top, unhinted so the letters space evenly. Text on glass stays in the pixel font.
+- **Top processes and services** (design "P4" with the colour screen of "S2"; CPU, memory, GPU
+  and disk panels, not the network's): under the screen, behind a parting line, the panel's
+  body holds two windows: the top 7 programs, and under them the top 3 services (programs whose
+  processes run in session 0, where services and the system run; the same name in a user's
+  session and in session 0 counts as two). A part with fewer programs has blank rows. What can
+  change is on glass, what is fixed is engraved in the plastic, and a key only travels when
+  pressed.
+  - Engraved: each window's heading (`TOP PROCESSES`, `TOP SERVICES`), its row numbers (1–7,
+    1–3) and a tick from each row to its key. Lettering on the plastic is in capitals like a
+    calculator's printed labels: Arial Bold (every Windows has it), 5 design pixels to the
+    capitals' top, unhinted so the letters space evenly. Text on glass stays in the pixel font.
   - The keys' legend is a multiplication sign `×`.
-  - The list window is one cover glass over two displays, with black printed on its back
+  - Each window is one cover glass over two displays, with black printed on its back
     round the LCD's opening and over a colour screen at its left. It reflects a window behind
     the viewer (design "G3"): the upper glass a shade lighter, fading out at a horizon, and a
     glint on its top edge. While the panel is open the horizon rises and falls with the pointer

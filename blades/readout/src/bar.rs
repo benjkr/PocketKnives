@@ -900,25 +900,37 @@ pub fn panel_front(c: &mut Canvas, k: i32, pal: &Palette, m: &Model, item: Item,
 }
 
 // ---- the panel's process list ----
-// What can change is on glass; what is fixed (the heading, the row numbers) is engraved in the plastic; a key only travels when pressed. Design "P4", X twice, with the colour
-// screen of "S2": one cover glass over the LCD and a colour screen, a black mask printed on its back.
+// What can change is on glass; what is fixed (the headings, the row numbers) is engraved in the
+// plastic; a key only travels when pressed. Design "P4", X twice, with the colour screen of "S2":
+// a cover glass over the LCD and a colour screen, a black mask printed on its back. Programs are
+// in one window and services (session 0) in a second under it.
 
-/// The rows in a process list.
+/// The rows in a process list: the programs', then the services'.
 pub const LIST_ROWS: usize = 10;
-/// The list's part of the body under the screen: the parting line, the heading and the list
-/// window.
-const LIST_H: i32 = 140;
-/// The list window's glass (from the panel's top left).
+const APP_ROWS: usize = 7;
+/// The list's part of the body under the screen: the parting line, each window under its heading.
+const LIST_H: i32 = 162;
+/// A window of the list: its engraved heading, its glass's top (from the panel's top left), its
+/// first row and how many.
+struct Window {
+    heading: &'static str,
+    y: f32,
+    first: usize,
+    rows: usize,
+}
+const WINDOWS: [Window; 2] = [
+    Window { heading: "TOP PROCESSES", y: 114.0, first: 0, rows: APP_ROWS },
+    Window { heading: "TOP SERVICES", y: 114.0 + glass_h(APP_ROWS) + WINDOW_GAP + HEADING_UP, first: APP_ROWS, rows: LIST_ROWS - APP_ROWS },
+];
+/// A heading's top above its window's glass, and the plastic between a window and the next heading.
+const HEADING_UP: f32 = 11.0;
+const WINDOW_GAP: f32 = 7.0;
+/// The windows' glass: left edge and width.
 const LW_X: f32 = 15.0;
-const LW_Y: f32 = 114.0;
 const LW_W: f32 = 113.0;
-const LW_H: f32 = 114.0;
-/// The LCD's bitmap: its size and its inset on the glass.
+/// The LCD's bitmap: its width and its inset on the glass.
 const LB_W: usize = 109;
-const LB_H: usize = 110;
 const LB_IN: f32 = 2.0;
-/// The first row's top on the bitmap, and the row pitch.
-const ROW_TOP: i32 = 0;
 const ROW_PITCH: i32 = 11;
 /// The black printed on the glass's back: its width at the left, over the colour screen, and
 /// round the rest of the edge.
@@ -927,9 +939,9 @@ const MASK_EDGE: f32 = 2.0;
 /// A row's icon from the glass's left edge and from its row's top.
 const ICON_X: f32 = 4.0;
 const ICON_DY: f32 = 2.0;
-/// The keys: left edge, first key's top, size.
+/// The keys: left edge, top from its row's top, size.
 const KEY_X: f32 = 134.0;
-const KEY_Y: f32 = LW_Y + LB_IN + ROW_TOP as f32 + 2.0;
+const KEY_DY: f32 = 2.0;
 const KEY_W: f32 = 11.0;
 const KEY_H: f32 = 7.0;
 /// Bitmap columns: a name's and its characters, the bar's left and (for a one-letter unit) width,
@@ -940,6 +952,22 @@ const BAR_X: i32 = 57;
 const BAR_W: i32 = 27;
 const VAL_R: i32 = 107;
 
+/// A window's glass height for `rows` rows.
+const fn glass_h(rows: usize) -> f32 {
+    (rows as i32 * ROW_PITCH) as f32 + 2.0 * LB_IN
+}
+
+/// Row `i`'s window.
+fn window_of(i: usize) -> &'static Window {
+    WINDOWS.iter().find(|w| i < w.first + w.rows).unwrap_or(&WINDOWS[WINDOWS.len() - 1])
+}
+
+/// Row `i`'s top, from the panel's top left.
+fn row_top(i: usize) -> f32 {
+    let w = window_of(i);
+    w.y + LB_IN + ((i - w.first) as i32 * ROW_PITCH) as f32
+}
+
 /// Whether `item`'s panel lists processes (the network's can't: Windows doesn't count traffic
 /// per process without administrator rights).
 pub fn has_list(item: Item) -> bool {
@@ -949,7 +977,8 @@ pub fn has_list(item: Item) -> bool {
 /// What the list shows besides the readings.
 #[derive(Clone, Default)]
 pub struct ListView {
-    /// The programs on the rows, top first; a program that has ended leaves its row blank.
+    /// The programs on the rows, top first: [`APP_ROWS`] programs, then services; a row with no
+    /// program, or whose program has ended, is blank.
     pub rows: Vec<String>,
     /// The selected row.
     pub sel: Option<usize>,
@@ -967,15 +996,29 @@ pub fn key_at(item: Item, x: f32, y: f32) -> Option<usize> {
     if !has_list(item) || !(KEY_X - 4.0..KEY_X + KEY_W + 1.0).contains(&x) {
         return None;
     }
-    let r = libm::floorf((y - KEY_Y + 1.0) / ROW_PITCH as f32);
-    (r >= 0.0 && (r as usize) < LIST_ROWS).then_some(r as usize)
+    (0..LIST_ROWS).find(|&i| (row_top(i) + 1.0..row_top(i) + 1.0 + ROW_PITCH as f32).contains(&y))
 }
 
-/// The list's rows as the readings stand: the top [`LIST_ROWS`] programs by `item`.
+/// The list's rows as the readings stand: the top programs by `item`, then the top services,
+/// each part filled out with blank rows.
 pub fn ranking(m: &Model, item: Item) -> Vec<String> {
-    let mut v: Vec<(f64, &str)> = m.last.procs.iter().map(|p| (proc_value(p, item), p.name.as_str())).collect();
-    v.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal).then(a.1.cmp(b.1)));
-    v.into_iter().take(LIST_ROWS).map(|(_, n)| String::from(n)).collect()
+    let top = |service: bool, n: usize| {
+        let mut v: Vec<(f64, &str)> = m.last.procs.iter().filter(|p| p.service == service).map(|p| (proc_value(p, item), p.name.as_str())).collect();
+        v.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal).then(a.1.cmp(b.1)));
+        let mut names: Vec<String> = v.into_iter().take(n).map(|(_, n)| String::from(n)).collect();
+        names.resize(n, String::new());
+        names
+    };
+    let mut rows = top(false, APP_ROWS);
+    rows.extend(top(true, LIST_ROWS - APP_ROWS));
+    rows
+}
+
+/// Row `i`'s program in the latest readings: a program for the programs' rows, a service for the
+/// services'.
+pub fn row_proc<'a>(m: &'a Model, rows: &[String], i: usize) -> Option<&'a Proc> {
+    let name = rows.get(i)?;
+    m.last.procs.iter().find(|p| p.name == *name && p.service == (i >= APP_ROWS))
 }
 
 fn proc_value(p: &Proc, item: Item) -> f64 {
@@ -1059,19 +1102,19 @@ fn invert(b: &mut Bitmap, x0: i32, x1: i32, y0: i32, y1: i32) {
     }
 }
 
-/// The list window's bitmap: a row per program.
-fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
-    let mut b = Bitmap::new(LB_W, LB_H);
+/// Window `w`'s LCD bitmap: a row per program.
+fn list_bitmap(m: &Model, item: Item, v: &ListView, w: &Window) -> Bitmap {
+    let mut b = Bitmap::new(LB_W, w.rows * ROW_PITCH as usize);
     let (whole, bar_w) = (whole(m, item), bar_w(item));
-    for (i, name) in v.rows.iter().enumerate().take(LIST_ROWS) {
-        let t = ROW_TOP + i as i32 * ROW_PITCH;
+    for i in w.first..w.first + w.rows {
+        let t = (i - w.first) as i32 * ROW_PITCH;
         let y = t + 3;
-        let Some(p) = m.last.procs.iter().find(|p| p.name == *name) else { continue };
+        let Some(p) = row_proc(m, &v.rows, i) else { continue };
         let val = proc_value(p, item);
         let share = if whole > 0.0 { (val / whole).clamp(0.0, 1.0) } else { 0.0 };
         // all programs' I/O has no capacity to run hot against
         let hot = item != Item::Dsk && share * 100.0 > HOT as f64;
-        text_at(&mut b, &fit_name(name, NAME_CHARS), NAME_X, y, if hot { lcd::HOT_PX } else { lcd::LIT });
+        text_at(&mut b, &fit_name(&p.name, NAME_CHARS), NAME_X, y, if hot { lcd::HOT_PX } else { lcd::LIT });
         if v.denied == Some(i) {
             text_right(&mut b, "ACCESS DENIED", VAL_R, y, lcd::LIT);
         } else {
@@ -1097,8 +1140,8 @@ fn list_bitmap(m: &Model, item: Item, v: &ListView) -> Bitmap {
     b
 }
 
-/// The list's part of the body that never changes: a parting line under the screen, the
-/// engraved heading and row numbers, the list window's ring and glass, the engraved tick before
+/// The list's part of the body that never changes: a parting line under the screen; for each
+/// window its engraved heading and row numbers, its ring and glass; the engraved tick before
 /// each key. (px, py) is the panel's top left.
 fn list_back(pen: &mut Pen, px: f32, py: f32) {
     let pal = *pen.pal;
@@ -1110,61 +1153,67 @@ fn list_back(pen: &mut Pen, px: f32, py: f32) {
     pen.fill(&line(96.0), pal.plate_edge_bottom);
     pen.fill(&line(97.0), pal.plate_edge_top);
     let f = Face::new();
-    pen.letter(&f, "TOP 10 PROCESSES", px + 5.0, py + 103.0);
-    for i in 0..LIST_ROWS {
-        let n = format!("{}", i + 1);
-        pen.letter(&f, &n, px + 13.0 - f.width(&n), py + KEY_Y + 1.0 + (i as i32 * ROW_PITCH) as f32);
-    }
-
-    // the window: the highlight under its ring, the ring, the glass
-    let (wx, wy) = (px + LW_X, py + LW_Y);
     let rr = |x: f32, y: f32, w: f32, h: f32, r: f32| {
         let mut p = Path::new();
         p.poly(raster::round_rect(x, y, w, h, r));
         p
     };
-    pen.fill(&rr(wx, wy + 1.5, LW_W, LW_H, 1.5), pal.panel_ring_lip);
-    pen.fill(&rr(wx - 1.0, wy - 1.0, LW_W + 2.0, LW_H + 2.0, 2.5), pal.panel_ring);
-    let gls = rr(wx, wy, LW_W, LW_H, 1.5);
-    pen.fill_grad(&gls, &[(wy, pal.glass_top), (wy + LW_H, pal.glass_bottom)]);
-    pen.glass_detail(&gls);
+    for w in &WINDOWS {
+        pen.letter(&f, w.heading, px + 5.0, py + w.y - HEADING_UP);
+        for i in w.first..w.first + w.rows {
+            let n = format!("{}", i - w.first + 1);
+            pen.letter(&f, &n, px + 13.0 - f.width(&n), py + row_top(i) + 3.0);
+        }
+        // the window: the highlight under its ring, the ring, the glass
+        let (wx, wy, h) = (px + LW_X, py + w.y, glass_h(w.rows));
+        pen.fill(&rr(wx, wy + 1.5, LW_W, h, 1.5), pal.panel_ring_lip);
+        pen.fill(&rr(wx - 1.0, wy - 1.0, LW_W + 2.0, h + 2.0, 2.5), pal.panel_ring);
+        let gls = rr(wx, wy, LW_W, h, 1.5);
+        pen.fill_grad(&gls, &[(wy, pal.glass_top), (wy + h, pal.glass_bottom)]);
+        pen.glass_detail(&gls);
+    }
 
     // the ticks tying each key to its row
     let mut ticks = Path::new();
     for i in 0..LIST_ROWS {
-        ticks.poly(raster::rect_path(px + 130.0, py + KEY_Y + (i as i32 * ROW_PITCH) as f32 + 3.0, 3.0, 1.0));
+        ticks.poly(raster::rect_path(px + 130.0, py + row_top(i) + KEY_DY + 3.0, 3.0, 1.0));
     }
     pen.engrave(&ticks);
 }
 
-/// The list's moving parts: the list window's content and the keys (one may be held down).
+/// The list's moving parts: the windows' content and the keys (one may be held down).
 fn list_front(pen: &mut Pen, px: f32, py: f32, m: &Model, item: Item, v: &ListView) {
-    let (gx, gy) = (px + LW_X, py + LW_Y);
-    pen.bitmap(&list_bitmap(m, item, v), gx + LB_IN, gy + LB_IN, 1);
-    cover(pen, gx, gy, v);
+    for w in &WINDOWS {
+        let (gx, gy) = (px + LW_X, py + w.y);
+        pen.bitmap(&list_bitmap(m, item, v, w), gx + LB_IN, gy + LB_IN, 1);
+        cover(pen, gx, gy, v, w);
+    }
     // the keys' legend, a multiplication sign like a calculator's
     let mut x = Path::new();
     raster::stroke_polyline(&mut x, &[(0.5, 0.5), (4.5, 4.5)], 1.0);
     raster::stroke_polyline(&mut x, &[(4.5, 0.5), (0.5, 4.5)], 1.0);
     for i in 0..LIST_ROWS {
-        let y = py + KEY_Y + (i as i32 * ROW_PITCH) as f32;
-        pen.key(px + KEY_X, y, KEY_W, KEY_H, &x, v.down == Some(i));
+        pen.key(px + KEY_X, py + row_top(i) + KEY_DY, KEY_W, KEY_H, &x, v.down == Some(i));
     }
 }
 
-/// The cover glass's print and the colour screen under it, over the LCD: the black mask (the
-/// colour screen's black is the same, so an icon has no tile round it), the icons, the lit top
-/// edge ([`panel_glare`] adds the reflection). (gx, gy) is the glass's top left.
-fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
+/// Window `w`'s cover glass print and the colour screen under it, over the LCD: the black mask
+/// (the colour screen's black is the same, so an icon has no tile round it), the icons, the lit
+/// top edge ([`panel_glare`] adds the reflection). (gx, gy) is the glass's top left.
+fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView, w: &Window) {
     let pal = *pen.pal;
+    let h = glass_h(w.rows);
     let mut mask = Path::new();
-    mask.poly(raster::round_rect(gx, gy, LW_W, LW_H, 1.5));
-    let mut hole = raster::rect_path(gx + MASK_W, gy + MASK_EDGE, LW_W - MASK_W - MASK_EDGE, LW_H - 2.0 * MASK_EDGE);
+    mask.poly(raster::round_rect(gx, gy, LW_W, h, 1.5));
+    let mut hole = raster::rect_path(gx + MASK_W, gy + MASK_EDGE, LW_W - MASK_W - MASK_EDGE, h - 2.0 * MASK_EDGE);
     hole.reverse();
     mask.poly(hole);
     pen.fill(&mask, pal.cover_mask);
-    for i in 0..LIST_ROWS.min(v.rows.len()) {
-        let t = gy + LB_IN + (ROW_TOP + i as i32 * ROW_PITCH) as f32;
+    for i in w.first..(w.first + w.rows).min(v.rows.len()) {
+        if v.rows[i].is_empty() {
+            continue;
+        }
+        let t = gy + LB_IN + ((i - w.first) as i32 * ROW_PITCH) as f32;
         if v.sel == Some(i) {
             let mut cell = Path::new();
             cell.poly(raster::rect_path(gx + MASK_EDGE, t + 1.0, MASK_W - 2.0 * MASK_EDGE, (ROW_PITCH - 2) as f32));
@@ -1183,23 +1232,31 @@ fn cover(pen: &mut Pen, gx: f32, gy: f32, v: &ListView) {
     pen.fill(&edge, pal.cover_edge);
 }
 
-/// The list window's glass on its panel (design pixels from the panel's top left): x, y, width,
-/// height.
+/// The list's windows together on their panel (design pixels from the panel's top left): x, y,
+/// width, height.
 pub fn list_glass() -> (f32, f32, f32, f32) {
-    (LW_X, LW_Y, LW_W, LW_H)
+    let last = &WINDOWS[WINDOWS.len() - 1];
+    (LW_X, WINDOWS[0].y, LW_W, last.y + glass_h(last.rows) - WINDOWS[0].y)
 }
 
-/// The reflection on the list window's cover glass, over `item`'s panel as drawn on `c`: like a
+/// The reflection on the list windows' cover glass, over `item`'s panel as drawn on `c`: like a
 /// window behind the viewer, the upper glass a shade lighter, fading out at a horizon, and a
-/// glint on the top edge. `at` is where the pointer is from the glass's middle, -1..=1 each way
-/// (0, 0 at rest): the horizon rises and falls with it, the glint follows it across.
+/// glint on the top edge. `at` is where the pointer is from the windows' middle, -1..=1 each way
+/// (0, 0 at rest): the horizons rise and fall with it, the glints follow it across.
 pub fn panel_glare(c: &mut Canvas, k: i32, pal: &Palette, item: Item, at: (f32, f32)) {
     if !has_list(item) {
         return;
     }
     let mut pen = Pen { c, k: k as f32, pal };
-    let (gx, gy) = (PANEL_MARGIN as f32 + LW_X, PANEL_MARGIN as f32 + LW_Y);
-    let hy = (gy + LW_H / 2.0 - 13.0 + at.1 * 40.0).clamp(gy + 4.0, gy + LW_H - 4.0);
+    for w in &WINDOWS {
+        reflection(&mut pen, PANEL_MARGIN as f32 + LW_X, PANEL_MARGIN as f32 + w.y, glass_h(w.rows), at);
+    }
+}
+
+/// One window's reflection: its glass's top left and height.
+fn reflection(pen: &mut Pen, gx: f32, gy: f32, h: f32, at: (f32, f32)) {
+    let pal = *pen.pal;
+    let hy = (gy + h * (0.395 + 0.32 * at.1)).clamp(gy + 4.0, gy + h - 4.0);
     let mut upper = Path::new();
     upper.poly(raster::round_rect(gx, gy, LW_W, hy - gy, 1.5));
     // fading as 1 - t^3 down to the horizon, in enough stops that no kink shows
